@@ -1,0 +1,18 @@
+# vim plugins (dont think these are working :/)
+git clone https://github.com/rust-lang/rust.vim ~/.vim/pack/plugins/start/rust.vim
+git clone https://github.com/racer-rust/vim-racer ~/.vim/pack/plugins/start/vim-racer
+
+# install rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# new "server"/binary
+cargo new api_server --bin --vcs none
+(wonder if way to share dependencies for different servers binaries. actually maybe thats bad idea)
+
+# docker shit
+sudo apt install docker.io
+
+
+Notes:
+- https://leward.eu/2018/09/23/diesel-rust-notes.html
+- https://github.com/seanmonstar/warp/issues/42#issuecomment-412265288
