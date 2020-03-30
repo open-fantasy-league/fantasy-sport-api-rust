@@ -1,9 +1,12 @@
+use std::collections::HashMap;
 use warp::{self, Filter, get, post, path, body, reject};
 use futures::future;
 mod db_pool;
 use db_pool::{pg_pool, PgPool, PgConn};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Value, json};
+use diesel::*;
+use diesel::sql_types::Text;
 
 #[derive(Deserialize, Serialize)]
 struct Player {
@@ -50,6 +53,11 @@ struct League {
     end: u32,
     meta: Option<Value>
 }
+#[derive(Queryable, QueryableByName)]
+struct Version {
+    #[sql_type = "Text"]
+    version: String
+}
 
 #[derive(Debug)]
 struct PgPoolError;
@@ -58,28 +66,12 @@ impl reject::Reject for PgPoolError {}
 
 #[tokio::main]
 async fn main() {
-    /*let pool = pg_pool();
-    let pool2 = pool.get();
+    let pool = pg_pool();
 
-    let pg_conn = warp::any().map(move || pool.clone()).and_then(|pool: PgPool| match pool.get(){
+    let pg_conn = warp::any().map(move || pool.clone()).and_then(|pool: PgPool| async move{ match pool.get(){
         Ok(conn) => Ok(conn),
-        Err(_) => Err("cat"),
-    });*/
-    let route = warp::path::param()
-    .and_then(|id: u32| {
-        if id == 0 {
-            future::ok::<std::result::Result<&str, warp::reject::Rejection>, std::convert::Infallible>(Err(warp::reject::not_found()))
-        } else {
-            future::ok::<std::result::Result<&str, warp::reject::Rejection>, std::convert::Infallible>(Ok("something since id is valid"))
-        }
-    });
-
-    /*let pg_conn = warp::any().map(|| "c").and_then(|x| match Ok(x){
-        Ok(conn) => "a",
-        //Err(_) => Err(reject::custom(PgPoolError)),
-        Err(_) => "b",
-    });*/
-    //let pg_conn = warp::any().map(|| pool).and_then(|pool: PgPool| futures::future::poll_fn(move || {Err(reject::custom(PgPoolError))}));
+        Err(_) => Err(reject::custom(PgPoolError)),
+    }});
     /*let db_filter = warp::path::index().and(pg).and_then(|db: PooledPg| {
      futures::future::poll_fn(move || {
           let result = futures::try_ready!(tokio_threadpool::blocking(|| { /* do some stuff */ }));
@@ -98,7 +90,14 @@ async fn main() {
     let post_league = post()
         .and(path("league"))
         .and(body::json())
-        .map(|league: League|{
+        .and(pg_conn)
+        .map(|mut league: League, conn: PgConn|{
+            let sql = "SELECT version();";
+            let result = sql_query(sql)
+    //.bind::<Text, _>("version()")
+    .load::<Version>(&conn);
+            //let result = sql_query(sql).get_results(&conn);
+            league.meta = Some(json!(vec![(String::from("version"), result.unwrap()[0].version.clone())].into_iter().collect::<HashMap<_, _>>()));
             warp::reply::json(&league)
     });
     // https://github.com/seanmonstar/warp/blob/master/examples/body.rs
