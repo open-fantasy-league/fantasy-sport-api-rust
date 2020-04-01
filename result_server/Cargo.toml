@@ -9,8 +9,11 @@ edition = "2018"
 [dependencies]
 tokio = { version = "0.2", features = ["macros"] }
 warp = "0.2"
-futures = "*"
+dotenv = ">=0.8, <0.11"
 #warp =  { git = "https://github.com/seanmonstar/warp.git" }
 serde = { version = "1.0.105", features = ["derive"] }
 serde_json = "1.0"
-diesel = { version = "*", features = ["postgres", "r2d2"] }
+diesel = { version = "1.4.4", features = ["postgres", "r2d2", "serde_json", "chrono", "uuid", "numeric"] }
+chrono = "0.4"
+uuid = { version = ">=0.2.0, <0.7.0", features = ["use_std"] }
+uuidv07 = { version = ">=0.7.0, <0.9.0", package = "uuid"}

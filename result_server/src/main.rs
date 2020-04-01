@@ -1,12 +1,21 @@
+#[macro_use]
+extern crate diesel;
+extern crate dotenv;
+extern crate chrono;
 use std::collections::HashMap;
 use warp::{self, Filter, get, post, path, body, reject};
-use futures::future;
 mod db_pool;
 use db_pool::{pg_pool, PgPool, PgConn};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use diesel::*;
+use diesel::prelude::*;
 use diesel::sql_types::Text;
+mod schema;
+mod models;
+use models::*;
+mod db;
+use db::*;
 
 #[derive(Deserialize, Serialize)]
 struct Player {
@@ -98,6 +107,7 @@ async fn main() {
     .load::<Version>(&conn);
             //let result = sql_query(sql).get_results(&conn);
             league.meta = Some(json!(vec![(String::from("version"), result.unwrap()[0].version.clone())].into_iter().collect::<HashMap<_, _>>()));
+            let competition = create_competition(&conn, &league.code, &league.name);//, &league.meta, &league.timespan);
             warp::reply::json(&league)
     });
     // https://github.com/seanmonstar/warp/blob/master/examples/body.rs
