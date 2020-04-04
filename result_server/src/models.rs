@@ -1,7 +1,7 @@
 use super::schema::*;
 use serde::{Deserialize, Serialize};
 use serde_json;
-use chrono::{DateTime, Utc, TimeZone};
+use chrono::{DateTime, Utc};
 use std::collections::Bound;
 use uuid::Uuid;
 

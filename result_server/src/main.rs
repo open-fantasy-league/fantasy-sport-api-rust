@@ -1,15 +1,12 @@
 #[macro_use]
 extern crate diesel;
 extern crate dotenv;
-use std::collections::HashMap;
+//use std::collections::HashMap;
 use warp::{self, Filter, get, post, path, body, reject};
 mod db_pool;
 use db_pool::{pg_pool, PgPool, PgConn};
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
-use diesel::*;
-use diesel::prelude::*;
-use diesel::sql_types::Text;
+use serde_json::Value;
 mod schema;
 mod models;
 use models::*;
@@ -61,11 +58,12 @@ struct League {
     end: chrono::DateTime::<chrono::prelude::Utc>,
     meta: Option<Value>
 }
-#[derive(Queryable, QueryableByName)]
+
+/*#[derive(Queryable, QueryableByName)]
 struct Version {
     #[sql_type = "Text"]
     version: String
-}
+}*/
 
 #[derive(Debug)]
 struct PgPoolError;
@@ -98,7 +96,7 @@ async fn main() {
         .and(path("competitions"))
         .and(body::json())
         .and(pg_conn)
-        .map(|mut comp: NewCompetition, conn: PgConn|{
+        .map(|comp: NewCompetition, conn: PgConn|{
             /*let sql = "SELECT version();";
             let result = sql_query(sql)
     //.bind::<Text, _>("version()")

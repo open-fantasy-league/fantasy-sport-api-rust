@@ -1,11 +1,6 @@
 use crate::models::*;
 use diesel::pg::PgConnection;
 use diesel::RunQueryDsl;
-use serde_json::{Value, json};
-use chrono::Utc;
-use chrono::TimeZone;
-use std::ops::Bound::Included;
-use std::error;
 
 //pub fn create_competition<'a>(
 ////    conn: &PgConnection, code: &'a str, name: &'a str, meta: Option<Value>,
