@@ -5,15 +5,13 @@ use chrono::{DateTime, Utc, TimeZone};
 use std::collections::Bound;
 use uuid::Uuid;
 
-#[derive(Queryable, Serialize, Deserialize)]
+#[derive(Queryable, Serialize)]
 pub struct Competition {
     pub competition_id: Uuid,
     pub code: String,
     pub name: String,
     pub meta: serde_json::Value,
-    //pub meta: Jsonb,
-    //pub timespan: Range<Timestamptz>,
-    #[serde(with = "my_timerange_format")]
+    #[serde(with = "my_timespan_format")]
     pub timespan: (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>),
 }
 
@@ -24,46 +22,111 @@ pub struct NewCompetition{
     //pub name: &'a str, // This didnt work. think similar to https://stackoverflow.com/a/57977257/3920439
     pub name: String,
     pub meta: serde_json::Value,
-    #[serde(with = "my_timerange_format")]
+    #[serde(with = "my_timespan_format")]
     pub timespan: (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>),
 }
 
-#[derive(Queryable, Serialize, Deserialize)]
+#[derive(Queryable, Serialize)]
+pub struct Series {
+    pub series_id: Uuid,
+    pub competition_id: Uuid,
+    pub code: String,
+    pub name: String,
+    pub meta: serde_json::Value,
+    #[serde(with = "my_timespan_format")]
+    pub timespan: (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>),
+}
+
+#[derive(Insertable, Deserialize)]
+#[table_name="series"]
+pub struct NewSeries{
+    pub code: String,
+    pub name: String,
+    pub meta: serde_json::Value,
+    #[serde(with = "my_timespan_format")]
+    pub timespan: (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>),
+}
+
+#[derive(Queryable, Serialize)]
+pub struct Match {
+    pub match_id: Uuid,
+    pub series_id: Uuid,
+    pub code: String,
+    pub name: String,
+    pub meta: serde_json::Value,
+    #[serde(with = "my_timespan_format")]
+    pub timespan: (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>),
+}
+
+#[derive(Insertable, Deserialize)]
+#[table_name="matches"]
+pub struct NewMatch{
+    pub code: String,
+    pub name: String,
+    pub meta: serde_json::Value,
+    #[serde(with = "my_timespan_format")]
+    pub timespan: (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>),
+}
+
+#[derive(Queryable, Serialize)]
+pub struct Team {
+    pub team_id: Uuid,
+    pub code: String,
+    pub name: String,
+    pub meta: serde_json::Value,
+    #[serde(with = "my_timespan_format")]
+    pub timespan: (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>),
+}
+
+#[derive(Insertable, Deserialize)]
+#[table_name="teams"]
+pub struct NewTeam{
+    pub code: String,
+    pub name: String,
+    pub meta: serde_json::Value,
+    #[serde(with = "my_timespan_format")]
+    pub timespan: (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>),
+}
+
+#[derive(Queryable, Serialize)]
 pub struct Player {
     pub player_id: Uuid,
     pub code: String,
     pub name: String,
     pub meta: serde_json::Value,
-    #[serde(with = "my_timerange_format")]
+    #[serde(with = "my_timespan_format")]
     pub timespan: (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>),
 }
 
-#[derive(Insertable, Deserialize, Serialize)]
+#[derive(Insertable, Deserialize)]
 #[table_name="players"]
-pub struct NewPlayer<'a>{
-    pub code: &'a str,
-    pub name: &'a str,
+pub struct NewPlayer{
+    pub code: String,
+    pub name: String,
     pub meta: serde_json::Value,
-    #[serde(with = "my_timerange_format")]
+    #[serde(with = "my_timespan_format")]
     pub timespan: (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>),
 }
 
 
 #[derive(Queryable)]
-pub struct Series {
+pub struct SeriesTeam {
     pub series_id: Uuid,
-    pub code: String,
-    pub name: String,
-    pub competition_id: Uuid,
-    pub meta: serde_json::Value,
-    #[serde(with = "my_timerange_format")]
-    pub timespan: (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>),
+    pub team_id: Uuid,
+}
+
+#[derive(Insertable, Deserialize)]
+#[table_name="series_teams"]
+pub struct NewSeriesTeam{
+    pub series_id: Uuid,
+    pub team_id: Uuid,
 }
 
 
-mod my_timerange_format{
+mod my_timespan_format{
     // similar to https://serde.rs/custom-date-format.html
-    use serde::{self, Deserialize, Serializer, Deserializer};
+    use serde::{self, de, Deserialize, Serializer, Deserializer};
+    use serde::ser::{SerializeSeq};
     use chrono::{DateTime, Utc};
     use std::collections::Bound::{self, Included};
 
@@ -76,10 +139,30 @@ mod my_timerange_format{
         // I need to understand and create "visitors"
         //let parts: (DateTime::<Utc>, DateTime::<Utc>) = Deserializer::deserialize_tuple(2, deserializer)?;
         let parts = Vec::<DateTime::<Utc>>::deserialize(deserializer)?;
-        let start = parts[0];
-        let end = parts[1];
-        Ok((Included(start), Included(end)))
+        if parts.len() != 2{
+            // Seems like a should be able to just instantiate my serde-error,
+            // rather than having to map it.....but dont know how
+            Err("Must specify start and end of timespan. I.e. \"timespan\": [\"2019-08-15T17:41:18+00:00\", \"2019-08-15T17:41:18+00:00\"]").map_err(de::Error::custom)
+        }
+        else{
+            let start = parts[0];
+            let end = parts[1];
+            Ok((Included(start), Included(end)))
+        }
     }
+
+    pub fn serialize<S>(timespan: &(Bound<DateTime<Utc>>, Bound<DateTime<Utc>>), serializer: S) ->
+        Result<S::Ok, S::Error> where S: Serializer,
+        {
+            let (start, end) = match timespan{
+                (Included(dt0), Included(dt1)) => Ok((dt0, dt1)),
+                _ => Err("Incorrect timerange format. THis should never happen!")
+            }.map_err(serde::ser::Error::custom)?;
+            let mut seq = serializer.serialize_seq(Some(2))?;
+            seq.serialize_element(start)?;
+            seq.serialize_element(end)?;
+            seq.end()
+        }
 }
 
 
