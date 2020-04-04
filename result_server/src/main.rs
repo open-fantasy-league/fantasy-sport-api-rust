@@ -1,7 +1,6 @@
 #[macro_use]
 extern crate diesel;
 extern crate dotenv;
-extern crate chrono;
 use std::collections::HashMap;
 use warp::{self, Filter, get, post, path, body, reject};
 mod db_pool;
@@ -58,8 +57,8 @@ struct Match {
 struct League {
     code: String,
     name: String,
-    start: u32,
-    end: u32,
+    start: chrono::DateTime::<chrono::prelude::Utc>,
+    end: chrono::DateTime::<chrono::prelude::Utc>,
     meta: Option<Value>
 }
 #[derive(Queryable, QueryableByName)]
@@ -91,24 +90,28 @@ async fn main() {
 
     // .and(pg_conn).map(|conn: PgConn|{})
 
-    // GET /hello/warp => 200 OK with body "Hello, warp!"
     let hello = warp::path!("hello" / String).map(|name| format!("Hello, {}!", name));
     let league_results = warp::path!("league" / u32).map(|league_id| format!("League id {}", league_id));
     let series_results = warp::path!("series" / u64).map(|series_id| format!("Series id {}", series_id));
-    //curl -X POST -H "Content-Type: application/json" -d '{"code": "chumpions_leageu", "name": "The champsions league 2020", "start": 0, "end": 22, "meta": {"extra": "info", "you": [2, 3, 4]}}' -v '127.0.0.1:3030/league'
+    //curl -X POST -H "Content-Type: application/json" -d '{"code": "chumpions_leageu", "name": "The champsions league 2020", "start": 0, "end": 22, "meta": {"extra": "info", "you": [2, 3, 4]}}' -v '127.0.0.1:3030/competition'
     let post_league = post()
-        .and(path("league"))
+        .and(path("competitions"))
         .and(body::json())
         .and(pg_conn)
-        .map(|mut league: League, conn: PgConn|{
-            let sql = "SELECT version();";
+        .map(|mut comp: NewCompetition, conn: PgConn|{
+            /*let sql = "SELECT version();";
             let result = sql_query(sql)
     //.bind::<Text, _>("version()")
     .load::<Version>(&conn);
             //let result = sql_query(sql).get_results(&conn);
-            league.meta = Some(json!(vec![(String::from("version"), result.unwrap()[0].version.clone())].into_iter().collect::<HashMap<_, _>>()));
-            let competition = create_competition(&conn, &league.code, &league.name);//, &league.meta, &league.timespan);
-            warp::reply::json(&league)
+            league.meta = Some(json!(vec![(String::from("version"), result.unwrap()[0].version.clone())].into_iter().collect::<HashMap<_, _>>()));*/
+            // Not just passing whole comp in as single arg, as for creating comps in tests and
+            // stuff might be more akward
+            let created = create_competition(&conn, &comp);//, &league.meta, &league.timespan);
+            match created{
+                Ok(c) => warp::reply::json(&c),
+                Err(e) => warp::reply::json(&e.to_string())
+            }
     });
     // https://github.com/seanmonstar/warp/blob/master/examples/body.rs
     let get_routes = get().and(league_results.or(series_results).or(hello));

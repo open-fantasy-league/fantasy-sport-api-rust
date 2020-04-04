@@ -1,21 +1,18 @@
 use crate::models::*;
 use diesel::pg::PgConnection;
 use diesel::RunQueryDsl;
-use serde_json;
+use serde_json::{Value, json};
 use chrono::Utc;
 use chrono::TimeZone;
-use std::ops::Bound::{Included, Excluded, Unbounded};
-use std::error::Error;
+use std::ops::Bound::Included;
+use std::error;
 
-pub fn create_competition<'a>(conn: &PgConnection, code: &'a str, name: &'a str) -> Result<Competition, Box<dyn Error>>{
+//pub fn create_competition<'a>(
+////    conn: &PgConnection, code: &'a str, name: &'a str, meta: Option<Value>,
+////     start: chrono::DateTime::<chrono::prelude::Utc>, end: chrono::DateTime::<chrono::prelude::Utc>
+////    ) -> Result<Competition, diesel::result::Error>{
+pub fn create_competition<'a>(conn: &PgConnection, comp: &NewCompetition) -> Result<Competition, diesel::result::Error>{
     use crate::schema::competitions;
-    let meta = serde_json::from_str(r#"{}"#)?;//.unwrap();
-    let new_competition = NewCompetition{
-        code: code,
-        name: name,
-        meta: meta,
-        timespan: (Included(Utc.ymd(1970, 1, 1).and_hms_milli(0, 0, 0, 0)), Unbounded),
-    };
-
-    diesel::insert_into(competitions::table).values(&new_competition).get_result(conn).map_err(|e| Box::new(e))
+    //meta: meta.unwrap_or(json!({})),
+    diesel::insert_into(competitions::table).values(comp).get_result(conn)
 }
