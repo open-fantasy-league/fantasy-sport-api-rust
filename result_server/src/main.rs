@@ -1,17 +1,21 @@
 #[macro_use]
 extern crate diesel;
 extern crate dotenv;
+#[macro_use] // for the hlist macro
+extern crate frunk;
+//extern crate frunk_core;
 //use std::collections::HashMap;
-use warp::{self, Filter, get, post, path, body, reject};
+use warp::*;
 mod db_pool;
 use db_pool::{pg_pool, PgPool, PgConn};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 mod schema;
 mod models;
-use models::*;
 mod db;
-use db::*;
+mod handlers;
+use handlers::*;
+mod utils;
 
 #[derive(Deserialize, Serialize)]
 struct Player {
@@ -69,7 +73,6 @@ struct Version {
 struct PgPoolError;
 impl reject::Reject for PgPoolError {}
 
-
 #[tokio::main]
 async fn main() {
     let pool = pg_pool();
@@ -96,21 +99,7 @@ async fn main() {
         .and(path("competitions"))
         .and(body::json())
         .and(pg_conn)
-        .map(|comp: NewCompetition, conn: PgConn|{
-            /*let sql = "SELECT version();";
-            let result = sql_query(sql)
-    //.bind::<Text, _>("version()")
-    .load::<Version>(&conn);
-            //let result = sql_query(sql).get_results(&conn);
-            league.meta = Some(json!(vec![(String::from("version"), result.unwrap()[0].version.clone())].into_iter().collect::<HashMap<_, _>>()));*/
-            // Not just passing whole comp in as single arg, as for creating comps in tests and
-            // stuff might be more akward
-            let created = create_competition(&conn, &comp);//, &league.meta, &league.timespan);
-            match created{
-                Ok(c) => warp::reply::json(&c),
-                Err(e) => warp::reply::json(&e.to_string())
-            }
-    });
+        .and_then(|comp: ApiNewCompetition, conn: PgConn| create_competition(comp, conn));
     // https://github.com/seanmonstar/warp/blob/master/examples/body.rs
     let get_routes = get().and(league_results.or(series_results).or(hello));
     let post_routes = post_league;
