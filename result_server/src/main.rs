@@ -3,7 +3,7 @@ extern crate diesel;
 extern crate dotenv;
 #[macro_use] // for the hlist macro
 extern crate frunk;
-//extern crate frunk_core;
+extern crate frunk_core;
 //use std::collections::HashMap;
 use warp::*;
 mod db_pool;
@@ -54,15 +54,6 @@ struct Match {
     result: Option<String>
 }
 
-#[derive(Deserialize, Serialize)]
-struct League {
-    code: String,
-    name: String,
-    start: chrono::DateTime::<chrono::prelude::Utc>,
-    end: chrono::DateTime::<chrono::prelude::Utc>,
-    meta: Option<Value>
-}
-
 /*#[derive(Queryable, QueryableByName)]
 struct Version {
     #[sql_type = "Text"]
@@ -95,13 +86,23 @@ async fn main() {
     let league_results = warp::path!("league" / u32).map(|league_id| format!("League id {}", league_id));
     let series_results = warp::path!("series" / u64).map(|series_id| format!("Series id {}", series_id));
     //curl -X POST -H "Content-Type: application/json" -d '{"code": "chumpions_leageu", "name": "The champsions league 2020", "start": 0, "end": 22, "meta": {"extra": "info", "you": [2, 3, 4]}}' -v '127.0.0.1:3030/competition'
+    // couldnt simplify the boilerplater of middle-two ands
     let post_league = post()
         .and(path("competitions"))
         .and(body::json())
-        .and(pg_conn)
-        .and_then(|comp: ApiNewCompetition, conn: PgConn| create_competition(comp, conn));
-    // https://github.com/seanmonstar/warp/blob/master/examples/body.rs
+        .and(pg_conn.clone())
+        .and_then(|body: ApiNewCompetition, conn: PgConn| create_competition(body, conn));
+    let post_series = post()
+        .and(path("series"))
+        .and(body::json())
+        .and(pg_conn.clone())
+        .and_then(|body: ApiNewSeries, conn: PgConn| create_series(body, conn));
+    let post_team = post()
+        .and(path("teams"))
+        .and(body::json())
+        .and(pg_conn.clone())
+        .and_then(|body: ApiNewTeam, conn: PgConn| create_team(body, conn));
     let get_routes = get().and(league_results.or(series_results).or(hello));
-    let post_routes = post_league;
+    let post_routes = post_league.or(post_series).or(post_team);
     warp::serve(get_routes.or(post_routes)).run(([127, 0, 0, 1], 3030)).await;
 }

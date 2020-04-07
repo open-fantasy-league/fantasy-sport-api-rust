@@ -1,7 +1,6 @@
 table! {
     competitions (competition_id) {
         competition_id -> Uuid,
-        code -> Text,
         name -> Text,
         meta -> Jsonb,
         timespan -> Tstzrange,
@@ -11,7 +10,6 @@ table! {
 table! {
     matches (match_id) {
         match_id -> Uuid,
-        code -> Text,
         name -> Text,
         series_id -> Uuid,
         meta -> Jsonb,
@@ -32,7 +30,6 @@ table! {
 table! {
     players (player_id) {
         player_id -> Uuid,
-        code -> Text,
         name -> Text,
         meta -> Jsonb,
         timespan -> Tstzrange,
@@ -42,7 +39,6 @@ table! {
 table! {
     series (series_id) {
         series_id -> Uuid,
-        code -> Text,
         name -> Text,
         competition_id -> Uuid,
         meta -> Jsonb,
@@ -78,7 +74,6 @@ table! {
 table! {
     teams (team_id) {
         team_id -> Uuid,
-        code -> Text,
         name -> Text,
         meta -> Jsonb,
         timespan -> Tstzrange,

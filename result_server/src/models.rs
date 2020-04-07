@@ -9,7 +9,6 @@ use crate::utils::my_timespan_format;
 #[derive(Queryable, Serialize)]
 pub struct DbCompetition {
     pub competition_id: Uuid,
-    pub code: String,
     pub name: String,
     pub meta: serde_json::Value,
     #[serde(with = "my_timespan_format")]
@@ -19,7 +18,7 @@ pub struct DbCompetition {
 #[derive(Insertable, Deserialize, LabelledGeneric)]
 #[table_name="competitions"]
 pub struct DbNewCompetition{
-    pub code: String,
+    pub competition_id: Option<Uuid>,
     //pub name: &'a str, // This didnt work. think similar to https://stackoverflow.com/a/57977257/3920439
     pub name: String,
     pub meta: serde_json::Value,
@@ -30,7 +29,6 @@ pub struct DbNewCompetition{
 #[derive(Queryable, Serialize)]
 pub struct DbSeries {
     pub series_id: Uuid,
-    pub code: String,
     pub name: String,
     pub competition_id: Uuid,
     pub meta: serde_json::Value,
@@ -41,8 +39,8 @@ pub struct DbSeries {
 #[derive(Insertable, Deserialize, LabelledGeneric)]
 #[table_name="series"]
 pub struct DbNewSeries{
+    pub series_id: Option<Uuid>,
     pub competition_id: Uuid,
-    pub code: String,
     pub name: String,
     pub meta: serde_json::Value,
     #[serde(with = "my_timespan_format")]
@@ -53,17 +51,16 @@ pub struct DbNewSeries{
 pub struct DbMatch {
     pub match_id: Uuid,
     pub series_id: Uuid,
-    pub code: String,
     pub name: String,
     pub meta: serde_json::Value,
     #[serde(with = "my_timespan_format")]
     pub timespan: (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>),
 }
 
-#[derive(Insertable, Deserialize)]
+#[derive(Insertable, Deserialize, LabelledGeneric)]
 #[table_name="matches"]
 pub struct DbNewMatch{
-    pub code: String,
+    pub match_id: Option<Uuid>,
     pub name: String,
     pub meta: serde_json::Value,
     #[serde(with = "my_timespan_format")]
@@ -73,17 +70,16 @@ pub struct DbNewMatch{
 #[derive(Queryable, Serialize)]
 pub struct DbTeam {
     pub team_id: Uuid,
-    pub code: String,
     pub name: String,
     pub meta: serde_json::Value,
     #[serde(with = "my_timespan_format")]
     pub timespan: (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>),
 }
 
-#[derive(Insertable, Deserialize)]
+#[derive(Insertable, Deserialize, LabelledGeneric)]
 #[table_name="teams"]
 pub struct DbNewTeam{
-    pub code: String,
+    pub team_id: Option<Uuid>,
     pub name: String,
     pub meta: serde_json::Value,
     #[serde(with = "my_timespan_format")]
@@ -93,17 +89,16 @@ pub struct DbNewTeam{
 #[derive(Queryable, Serialize)]
 pub struct DbPlayer {
     pub player_id: Uuid,
-    pub code: String,
     pub name: String,
     pub meta: serde_json::Value,
     #[serde(with = "my_timespan_format")]
     pub timespan: (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>),
 }
 
-#[derive(Insertable, Deserialize)]
+#[derive(Insertable, Deserialize, LabelledGeneric)]
 #[table_name="players"]
 pub struct DbNewPlayer{
-    pub code: String,
+    pub player_id: Option<Uuid>,
     pub name: String,
     pub meta: serde_json::Value,
     #[serde(with = "my_timespan_format")]
