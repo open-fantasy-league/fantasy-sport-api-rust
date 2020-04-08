@@ -102,7 +102,23 @@ async fn main() {
         .and(body::json())
         .and(pg_conn.clone())
         .and_then(|body: ApiNewTeam, conn: PgConn| create_team(body, conn));
+    let post_match = post()
+        .and(path("matches"))
+        .and(body::json())
+        .and(pg_conn.clone())
+        .and_then(|body: models::DbNewMatch, conn: PgConn| create_match(body, conn));
+    let post_player = post()
+        .and(path("players"))
+        .and(body::json())
+        .and(pg_conn.clone())
+        .and_then(|body: models::DbNewPlayer, conn: PgConn| create_player(body, conn));
+    let post_team_players = post()
+        .and(path("team_players"))
+        .and(body::json())
+        .and(pg_conn.clone())
+        .and_then(|body: Vec<models::DbNewTeamPlayer>, conn: PgConn| create_team_players(body, conn));
     let get_routes = get().and(league_results.or(series_results).or(hello));
-    let post_routes = post_league.or(post_series).or(post_team);
+    let post_routes = post_league.or(post_series).or(post_team).or(post_match)
+        .or(post_player).or(post_team_players);
     warp::serve(get_routes.or(post_routes)).run(([127, 0, 0, 1], 3030)).await;
 }

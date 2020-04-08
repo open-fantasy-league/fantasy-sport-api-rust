@@ -31,7 +31,7 @@ pub struct ApiNewSeries{
     pub meta: serde_json::Value,
     #[serde(with = "my_timespan_format")]
     pub timespan: (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>),
-    pub teams: Vec<String>,
+    pub teams: Vec<Uuid>,
 }
 
 #[derive(Deserialize, LabelledGeneric)]
@@ -68,7 +68,16 @@ fn handle_handling_the_handler<T: Serialize>(what_happened: Result<T, diesel::re
 pub async fn create_series(series: ApiNewSeries, conn: PgConn) -> Result<impl warp::Reply, warp::Rejection>{
     //let teams = db::find_teams(&conn, series.teams);
     //team_ids 7337c529-2972-422f-94a0-247f3a58d001, 7337c529-2972-422f-94a0-247f3a58d002
-    let created = db::create_series(&conn, &transform_from(series));
+    let teams = series.teams.clone();
+    let created = db::create_series(&conn, &transform_from(series)).and_then(|s|{
+        match db::create_series_teams(&conn, &s.series_id, teams){
+            Ok(_) => Ok(s), // still want to return series, with series-id
+            Err(fuuu) => Err(fuuu)
+        }
+        /*for team_id in teams.iter(){
+            db::create_series_team(&conn, &s.series_id, team_id);
+        }*/
+    });
     handle_handling_the_handler::<DbSeries>(created)
 }
 
@@ -83,3 +92,17 @@ pub async fn create_team(team: ApiNewTeam, conn: PgConn) -> Result<impl warp::Re
     handle_handling_the_handler::<DbTeam>(created)
 }
 
+pub async fn create_player(new: DbNewPlayer, conn: PgConn) -> Result<impl warp::Reply, warp::Rejection>{
+    let created = db::create_player(&conn, &new);
+    handle_handling_the_handler::<DbPlayer>(created)
+}
+
+pub async fn create_match(new: DbNewMatch, conn: PgConn) -> Result<impl warp::Reply, warp::Rejection>{
+    let created = db::create_match(&conn, &new);
+    handle_handling_the_handler::<DbMatch>(created)
+}
+
+pub async fn create_team_players(new: Vec<DbNewTeamPlayer>, conn: PgConn) -> Result<impl warp::Reply, warp::Rejection>{
+    let created = db::create_team_players(&conn, new);
+    handle_handling_the_handler::<usize>(created)
+}

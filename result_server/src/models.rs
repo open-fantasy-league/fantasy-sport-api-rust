@@ -50,8 +50,8 @@ pub struct DbNewSeries{
 #[derive(Queryable, Serialize)]
 pub struct DbMatch {
     pub match_id: Uuid,
-    pub series_id: Uuid,
     pub name: String,
+    pub series_id: Uuid,
     pub meta: serde_json::Value,
     #[serde(with = "my_timespan_format")]
     pub timespan: (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>),
@@ -61,6 +61,7 @@ pub struct DbMatch {
 #[table_name="matches"]
 pub struct DbNewMatch{
     pub match_id: Option<Uuid>,
+    pub series_id: Uuid,
     pub name: String,
     pub meta: serde_json::Value,
     #[serde(with = "my_timespan_format")]
@@ -119,3 +120,11 @@ pub struct DbNewSeriesTeam{
     pub team_id: Uuid,
 }
 
+#[derive(Insertable, Deserialize)]
+#[table_name="team_players"]
+pub struct DbNewTeamPlayer{
+    pub team_id: Uuid,
+    pub player_id: Uuid,
+    #[serde(with = "my_timespan_format")]
+    pub timespan: (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>),
+}
