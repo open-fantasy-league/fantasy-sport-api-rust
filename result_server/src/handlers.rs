@@ -3,10 +3,11 @@ use crate::utils::my_timespan_format;
 use crate::db;
 use chrono::{DateTime, Utc};
 use crate::db_pool::PgConn;
-use std::collections::Bound;
+use std::collections::{Bound, HashMap};
 use frunk::labelled::transform_from;
 use crate::models::*;
 use uuid::Uuid;
+use itertools::Itertools;
 
 #[derive(Serialize)]
 struct ErrorResp {
@@ -48,15 +49,7 @@ pub struct ApiNewTeam{
     fn from(x: ApiNewCompetition) -> Self{
         DbNewCompetition{code: x.code, name: x.name, meta: x.meta, timespan: x.timespan}
     }
-}
-
-impl From<ApiNewSeries> for DbNewSeries{
-    fn from(x: ApiNewSeries) -> Self{
-        DbNewSeries{competition_id: x.competition_id, code: x.code, name: x.name, meta: x.meta, timespan: x.timespan}
-    }
 }*/
-
-//impl to other type
 
 fn handle_handling_the_handler<T: Serialize>(what_happened: Result<T, diesel::result::Error>) -> Result<impl warp::Reply, warp::Rejection>{
     match what_happened{
@@ -65,41 +58,57 @@ fn handle_handling_the_handler<T: Serialize>(what_happened: Result<T, diesel::re
     }
 }
 
-pub async fn create_series(series: ApiNewSeries, conn: PgConn) -> Result<impl warp::Reply, warp::Rejection>{
-    //let teams = db::find_teams(&conn, series.teams);
+pub async fn create_serieses(mut new: Vec<ApiNewSeries>, conn: PgConn) -> Result<impl warp::Reply, warp::Rejection>{
+    // This just returns list of raw-series created (without the info on teams for each series)
+    // Due to simplicity meaning either teams-in-series either match the input, or an error
+    // happened
+
     //team_ids 7337c529-2972-422f-94a0-247f3a58d001, 7337c529-2972-422f-94a0-247f3a58d002
-    let teams = series.teams.clone();
-    let created = db::create_series(&conn, &transform_from(series)).and_then(|s|{
-        match db::create_series_teams(&conn, &s.series_id, teams){
-            Ok(_) => Ok(s), // still want to return series, with series-id
-            Err(fuuu) => Err(fuuu)
-        }
-        /*for team_id in teams.iter(){
-            db::create_series_team(&conn, &s.series_id, team_id);
-        }*/
+    // Not leaving uuid gen to postgresql, so that can tie the teams to individual series created.
+    // However for simple cases like this, returning order should match insertion order
+    // https://dba.stackexchange.com/questions/95822/does-postgres-preserve-insertion-order-of-records
+    // Therefore TODO just enumerate returning, indexing new to find teams
+    new.iter_mut().for_each(|s| {s.series_id = s.series_id.or(Some(Uuid::new_v4()))});
+    // Cloning and pulling out here is necessary, 
+    // because the frunk `transform_from` consumes the old struct
+    // unwrap safe due to above uuidv4 generation
+    let series_teams: HashMap<Uuid, Vec<Uuid>> = new.iter().map(|s| (s.series_id.unwrap(), s.teams.clone())).collect();
+    let created = conn.build_transaction().run(|| {db::create_serieses(&conn, new.into_iter().map(transform_from).collect_vec()).and_then(|ser|{
+        let num_results = ser.len();
+        ser.into_iter().map(|s| {
+            match db::create_series_teams(&conn, &s.series_id, &series_teams[&s.series_id]){
+                Ok(_) => Ok(s), // still want to return series, with series-id
+                Err(fuuu) => Err(fuuu)
+            }
+        })
+        // I dunno how efficient this is, think map will do all the maps, then fold stops first
+        // error.
+        // Ideally would want to stop `map`ing as soon as hit error
+        .fold_results(Vec::with_capacity(num_results), |mut v, r| {v.push(r); v})
+    })
     });
-    handle_handling_the_handler::<DbSeries>(created)
+    handle_handling_the_handler::<Vec<DbSeries>>(created)
 }
 
-pub async fn create_competition(comp: ApiNewCompetition, conn: PgConn) -> Result<impl warp::Reply, warp::Rejection>{
-    let created = db::create_competition(&conn, &transform_from(comp));
-    handle_handling_the_handler::<DbCompetition>(created)
+pub async fn create_competitions(new: Vec<ApiNewCompetition>, conn: PgConn) -> Result<impl warp::Reply, warp::Rejection>{
+    let created = db::create_competitions(&conn, new.into_iter().map(transform_from).collect_vec());
+    handle_handling_the_handler::<Vec<DbCompetition>>(created)
 }
 
 
-pub async fn create_team(team: ApiNewTeam, conn: PgConn) -> Result<impl warp::Reply, warp::Rejection>{
-    let created = db::create_team(&conn, &transform_from(team));
-    handle_handling_the_handler::<DbTeam>(created)
+pub async fn create_teams(new: Vec<ApiNewTeam>, conn: PgConn) -> Result<impl warp::Reply, warp::Rejection>{
+    let created = db::create_teams(&conn, new.into_iter().map(transform_from).collect_vec());
+    handle_handling_the_handler::<Vec<DbTeam>>(created)
 }
 
-pub async fn create_player(new: DbNewPlayer, conn: PgConn) -> Result<impl warp::Reply, warp::Rejection>{
-    let created = db::create_player(&conn, &new);
-    handle_handling_the_handler::<DbPlayer>(created)
+pub async fn create_players(new: Vec<DbNewPlayer>, conn: PgConn) -> Result<impl warp::Reply, warp::Rejection>{
+    let created = db::create_players(&conn, new);
+    handle_handling_the_handler::<Vec<DbPlayer>>(created)
 }
 
-pub async fn create_match(new: DbNewMatch, conn: PgConn) -> Result<impl warp::Reply, warp::Rejection>{
-    let created = db::create_match(&conn, &new);
-    handle_handling_the_handler::<DbMatch>(created)
+pub async fn create_matches(new: Vec<DbNewMatch>, conn: PgConn) -> Result<impl warp::Reply, warp::Rejection>{
+    let created = db::create_matches(&conn, new);
+    handle_handling_the_handler::<Vec<DbMatch>>(created)
 }
 
 pub async fn create_team_players(new: Vec<DbNewTeamPlayer>, conn: PgConn) -> Result<impl warp::Reply, warp::Rejection>{

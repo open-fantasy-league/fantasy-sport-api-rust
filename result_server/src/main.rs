@@ -87,38 +87,38 @@ async fn main() {
     let series_results = warp::path!("series" / u64).map(|series_id| format!("Series id {}", series_id));
     //curl -X POST -H "Content-Type: application/json" -d '{"code": "chumpions_leageu", "name": "The champsions league 2020", "start": 0, "end": 22, "meta": {"extra": "info", "you": [2, 3, 4]}}' -v '127.0.0.1:3030/competition'
     // couldnt simplify the boilerplater of middle-two ands
-    let post_league = post()
+    let post_competitions = post()
         .and(path("competitions"))
         .and(body::json())
         .and(pg_conn.clone())
-        .and_then(|body: ApiNewCompetition, conn: PgConn| create_competition(body, conn));
-    let post_series = post()
+        .and_then(|body: Vec<ApiNewCompetition>, conn: PgConn| create_competitions(body, conn));
+    let post_serieses = post()
         .and(path("series"))
         .and(body::json())
         .and(pg_conn.clone())
-        .and_then(|body: ApiNewSeries, conn: PgConn| create_series(body, conn));
-    let post_team = post()
+        .and_then(|body: Vec<ApiNewSeries>, conn: PgConn| create_serieses(body, conn));
+    let post_teams = post()
         .and(path("teams"))
         .and(body::json())
         .and(pg_conn.clone())
-        .and_then(|body: ApiNewTeam, conn: PgConn| create_team(body, conn));
-    let post_match = post()
+        .and_then(|body: Vec<ApiNewTeam>, conn: PgConn| create_teams(body, conn));
+    let post_matches = post()
         .and(path("matches"))
         .and(body::json())
         .and(pg_conn.clone())
-        .and_then(|body: models::DbNewMatch, conn: PgConn| create_match(body, conn));
-    let post_player = post()
+        .and_then(|body: Vec<models::DbNewMatch>, conn: PgConn| create_matches(body, conn));
+    let post_players = post()
         .and(path("players"))
         .and(body::json())
         .and(pg_conn.clone())
-        .and_then(|body: models::DbNewPlayer, conn: PgConn| create_player(body, conn));
+        .and_then(|body: Vec<models::DbNewPlayer>, conn: PgConn| create_players(body, conn));
     let post_team_players = post()
         .and(path("team_players"))
         .and(body::json())
         .and(pg_conn.clone())
         .and_then(|body: Vec<models::DbNewTeamPlayer>, conn: PgConn| create_team_players(body, conn));
     let get_routes = get().and(league_results.or(series_results).or(hello));
-    let post_routes = post_league.or(post_series).or(post_team).or(post_match)
-        .or(post_player).or(post_team_players);
+    let post_routes = post_competitions.or(post_serieses).or(post_teams).or(post_matches)
+        .or(post_players).or(post_team_players);
     warp::serve(get_routes.or(post_routes)).run(([127, 0, 0, 1], 3030)).await;
 }
