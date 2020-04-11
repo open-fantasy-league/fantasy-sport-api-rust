@@ -5,7 +5,9 @@ extern crate dotenv;
 extern crate frunk;
 extern crate frunk_core;
 //use std::collections::HashMap;
+use futures::{FutureExt, StreamExt};
 use warp::*;
+use tokio::sync::{mpsc};
 mod db_pool;
 use db_pool::{pg_pool, PgPool, PgConn};
 use serde::{Deserialize, Serialize};
@@ -60,6 +62,53 @@ struct Version {
     version: String
 }*/
 
+fn handle_ws_msg(msg: ws::Message) -> ws::Message{
+    // No json-websocket response exists in warp yet
+    match serde_json::to_string(&Series{league_id: 1, series_id: 2, result: None}){
+        Ok(text) => ws::Message::text(text),
+        Err(e) => {
+            ws::Message::text(
+                serde_json::to_string(
+                    &ErrorResp{code: 500, message: e.to_string()}
+                ).unwrap_or("Error serializing error message!".to_string())
+            )
+        }
+    }
+}
+
+
+async fn handle_ws_conn(ws: ws::WebSocket){
+    // https://github.com/seanmonstar/warp/blob/master/examples/websockets_chat.rs
+    let (ws_send, mut ws_recv) = ws.split();
+    let (tx, rx) = mpsc::unbounded_channel();
+    tokio::task::spawn(rx.forward(ws_send).map(|result| {
+        if let Err(e) = result {
+            eprintln!("websocket send error: {}", e);
+        }
+    }));
+
+    while let Some(result) = ws_recv.next().await {
+        // Wrapping in OK looks weird, but warps error handling is a bit....hmmmm
+        // and this does kind of make sense to a user. you just get a ws msg through
+        // you dont get a success/failure like http
+        // https://github.com/seanmonstar/warp/issues/388
+        let resp = Ok(match result {
+            Ok(msg) => handle_ws_msg(msg),
+            Err(e) => {
+                eprintln!("websocket error(uid=): {}", e);
+                // If the websocket recv is broken, is it viable to try and send back through there was
+                // an error? (Don't send actual error, maybe sensitive info? Who knows?
+                tx.send(Ok(ws::Message::text("Unexpected recv error")));
+                break;
+            }
+        });
+        //let new_msg = format!("<User#>: {}", msg.to_str().unwrap_or("Well fuck"));
+        //tx.send(Ok(ws::Message::text(new_msg.clone())));
+        tx.send(resp);
+        //user_message(my_id, msg, &users).await;
+    }
+}
+
 #[derive(Debug)]
 struct PgPoolError;
 impl reject::Reject for PgPoolError {}
@@ -82,6 +131,9 @@ async fn main() {
 
     // .and(pg_conn).map(|conn: PgConn|{})
 
+    let ws_router = warp::any().and(warp::ws()).map(|ws: warp::ws::Ws|{
+            ws.on_upgrade(move |socket| handle_ws_conn(socket))
+        });
     let hello = warp::path!("hello" / String).map(|name| format!("Hello, {}!", name));
     let league_results = warp::path!("league" / u32).map(|league_id| format!("League id {}", league_id));
     let series_results = warp::path!("series" / u64).map(|series_id| format!("Series id {}", series_id));
@@ -120,5 +172,5 @@ async fn main() {
     let get_routes = get().and(league_results.or(series_results).or(hello));
     let post_routes = post_competitions.or(post_serieses).or(post_teams).or(post_matches)
         .or(post_players).or(post_team_players);
-    warp::serve(get_routes.or(post_routes)).run(([127, 0, 0, 1], 3030)).await;
+    warp::serve(ws_router.or(get_routes).or(post_routes)).run(([127, 0, 0, 1], 3030)).await;
 }

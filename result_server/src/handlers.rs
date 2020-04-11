@@ -10,9 +10,9 @@ use uuid::Uuid;
 use itertools::Itertools;
 
 #[derive(Serialize)]
-struct ErrorResp {
-    code: u16,
-    message: String,
+pub struct ErrorResp {
+    pub code: u16,
+    pub message: String,
 }
 
 #[derive(Deserialize, LabelledGeneric)]
