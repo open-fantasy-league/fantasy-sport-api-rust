@@ -7,9 +7,8 @@ use uuid::Uuid;
 
 // TODO macros for similar funcs
 pub fn create_competitions<'a>(conn: &PgConnection, new: Vec<DbNewCompetition>) -> Result<Vec<DbCompetition>, diesel::result::Error>{
-    use crate::schema::competitions;
-    use crate::schema::competitions::dsl::*;
-    diesel::insert_into(competitions::table).values(new)
+    use crate::schema::competitions::{table, dsl::*};
+    diesel::insert_into(table).values(new)
         .on_conflict(competition_id).do_update()
         // Investigate how to specify set as struct, rather than listing out all fields
         .set((meta.eq(excluded(meta)), name.eq(excluded(name)), timespan.eq(excluded(timespan))))
@@ -17,36 +16,32 @@ pub fn create_competitions<'a>(conn: &PgConnection, new: Vec<DbNewCompetition>) 
 }
 
 pub fn create_serieses<'a>(conn: &PgConnection, new: Vec<DbNewSeries>) -> Result<Vec<DbSeries>, diesel::result::Error>{
-    use crate::schema::series;
-    use crate::schema::series::dsl::*;
-    diesel::insert_into(series::table).values(new)
+    use crate::schema::series::{table, dsl::*};
+    diesel::insert_into(table).values(new)
         .on_conflict(series_id).do_update()
         .set((competition_id.eq(excluded(competition_id)), meta.eq(excluded(meta)), name.eq(excluded(name)), timespan.eq(excluded(timespan))))
         .get_results(conn)
 }
 
 pub fn create_matches<'a>(conn: &PgConnection, new: Vec<DbNewMatch>) -> Result<Vec<DbMatch>, diesel::result::Error>{
-    use crate::schema::matches;
-    use crate::schema::matches::dsl::*;
-    diesel::insert_into(matches::table).values(new)
+    use crate::schema::matches::{table, dsl::*};
+    diesel::insert_into(table).values(new)
         .on_conflict(match_id).do_update()
         .set((series_id.eq(excluded(series_id)), meta.eq(excluded(meta)), name.eq(excluded(name)), timespan.eq(excluded(timespan))))
         .get_results(conn)
 }
 
 pub fn create_teams<'a>(conn: &PgConnection, new: Vec<DbNewTeam>) -> Result<Vec<DbTeam>, diesel::result::Error>{
-    use crate::schema::teams;
-    use crate::schema::teams::dsl::*;
-    diesel::insert_into(teams::table).values(new)
+    use crate::schema::teams::{table, dsl::*};
+    diesel::insert_into(table).values(new)
         .on_conflict(team_id).do_update()
         .set((meta.eq(excluded(meta)), name.eq(excluded(name)), timespan.eq(excluded(timespan))))
         .get_results(conn)
 }
 
-pub fn create_players<'a>(conn: &PgConnection, new: Vec<DbNewPlayer>) -> Result<Vec<DbPlayer>, diesel::result::Error>{
-    use crate::schema::players;
-    use crate::schema::players::dsl::*;
-    diesel::insert_into(players::table).values(&new)
+pub fn create_players(conn: &PgConnection, new: Vec<DbNewPlayer>) -> Result<Vec<DbPlayer>, diesel::result::Error>{
+    use crate::schema::players::{table, dsl::*};
+    diesel::insert_into(table).values(&new)
         .on_conflict(player_id).do_update()
         .set((meta.eq(excluded(meta)), name.eq(excluded(name)), timespan.eq(excluded(timespan))))
         .get_results(conn)
