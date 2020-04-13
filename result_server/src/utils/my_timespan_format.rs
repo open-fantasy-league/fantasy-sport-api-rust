@@ -2,9 +2,10 @@
 use serde::{self, de, Deserialize, Serializer, Deserializer};
 use serde::ser::{SerializeSeq};
 use chrono::{DateTime, Utc};
-use std::collections::Bound::{self, Included};
+use std::collections::Bound::{Included, Excluded};
+use crate::DieselTimespan;
 
-pub fn deserialize<'de, D>(deserializer: D) -> Result<(Bound<DateTime<Utc>>, Bound<DateTime<Utc>>), D::Error> where D: Deserializer<'de>{
+pub fn deserialize<'de, D>(deserializer: D) -> Result<DieselTimespan, D::Error> where D: Deserializer<'de>{
     // expecting "timespan": ["1984-blahblah", "1984-blah-blah"]
     // I couldnt find out how serde handled deserializing ranges/bounds,
     // but it seemed whatever it would be, would produce a que? from end-user,
@@ -21,15 +22,15 @@ pub fn deserialize<'de, D>(deserializer: D) -> Result<(Bound<DateTime<Utc>>, Bou
     else{
         let start = parts[0];
         let end = parts[1];
-        Ok((Included(start), Included(end)))
+        Ok((Included(start), Excluded(end)))
     }
 }
 
-pub fn serialize<S>(timespan: &(Bound<DateTime<Utc>>, Bound<DateTime<Utc>>), serializer: S) ->
+pub fn serialize<S>(timespan: &DieselTimespan, serializer: S) ->
     Result<S::Ok, S::Error> where S: Serializer,
     {
         let (start, end) = match timespan{
-            (Included(dt0), Included(dt1)) => Ok((dt0, dt1)),
+            (Included(dt0), Excluded(dt1)) => Ok((dt0, dt1)),
             _ => Err("Incorrect timerange format. THis should never happen!")
         }.map_err(serde::ser::Error::custom)?;
         let mut seq = serializer.serialize_seq(Some(2))?;

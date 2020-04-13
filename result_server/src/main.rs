@@ -4,7 +4,8 @@ extern crate dotenv;
 #[macro_use] // for the hlist macro
 extern crate frunk;
 extern crate frunk_core;
-//use std::collections::HashMap;
+use std::collections::Bound;
+use chrono::{DateTime, Utc};
 use futures::{FutureExt, StreamExt};
 use warp::*;
 use tokio::sync::{mpsc};
@@ -18,6 +19,8 @@ mod db;
 mod handlers;
 use handlers::*;
 mod utils;
+
+pub type DieselTimespan = (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>);
 
 #[derive(Deserialize, Serialize)]
 struct Player {

@@ -4,6 +4,15 @@ use diesel::pg::upsert::excluded;
 use diesel::RunQueryDsl;
 use diesel::ExpressionMethods;
 use uuid::Uuid;
+use diesel::sql_types;
+//use frunk::labelled::transform_from;
+use itertools::Itertools;
+use crate::handlers::ApiNewTeam;
+use crate::DieselTimespan;
+
+
+//sql_function!(fn trim_team_name_timespans(new_team_id sql_types::Uuid, new_timespan sql_types::Range<sql_types::Timestamptz>) -> ());
+sql_function!(trim_team_name_timespans, WTF, (new_team_id: sql_types::Uuid, new_timespan: sql_types::Range<sql_types::Timestamptz>) -> ());
 
 // TODO macros for similar funcs
 pub fn create_competitions<'a>(conn: &PgConnection, new: Vec<DbNewCompetition>) -> Result<Vec<DbCompetition>, diesel::result::Error>{
@@ -31,19 +40,42 @@ pub fn create_matches<'a>(conn: &PgConnection, new: Vec<DbNewMatch>) -> Result<V
         .get_results(conn)
 }
 
-pub fn create_teams<'a>(conn: &PgConnection, new: Vec<DbNewTeam>) -> Result<Vec<DbTeam>, diesel::result::Error>{
-    use crate::schema::teams::{table, dsl::*};
-    diesel::insert_into(table).values(new)
-        .on_conflict(team_id).do_update()
-        .set((meta.eq(excluded(meta)), name.eq(excluded(name)), timespan.eq(excluded(timespan))))
-        .get_results(conn)
+pub fn create_teams<'a>(conn: &PgConnection, new: Vec<ApiNewTeam>) -> Result<Vec<DbTeam>, diesel::result::Error>{
+    use crate::schema::{teams, team_names};
+    use crate::schema::teams::dsl as teams_col;
+    use crate::schema::team_names::dsl as team_names_col;
+    // TODO a nice-way to `From` one struct, into two structs
+    // THis made vector-of-tuples, rather than tuple-of-vectors
+    //let (new_db_teams, name_and_timespans): (Vec<DbNewTeam>, Vec<(String, DieselTimespan)>) = new.into_iter().map(|t| (DbNewTeam{team_id: t.team_id, meta: t.meta}, (t.name, t.timespan)).collect_vec();
+    let length = new.len();
+    let (new_db_teams, name_and_timespans): (Vec<DbNewTeam>, Vec<(String, DieselTimespan)>) = new
+        .into_iter()
+        .fold((Vec::with_capacity(length), Vec::with_capacity(length)), |(mut arr, mut arr2), t|{
+            arr.push(DbNewTeam{team_id: t.team_id, meta: t.meta});
+            arr2.push((t.name, t.timespan));
+            (arr, arr2)
+    });
+    let teams_res = diesel::insert_into(teams::table).values(new_db_teams)
+        .on_conflict(teams_col::team_id).do_update()
+        .set(teams_col::meta.eq(excluded(teams_col::meta)))
+        .get_results(conn);
+    teams_res.map(|teams: Vec<DbTeam>|{
+        let new_team_names: Vec<DbNewTeamName> = teams.iter().enumerate().map(|(i, t)| {
+            let (new_name, new_timespan) = name_and_timespans[i].clone();
+            trim_team_name_timespans(t.team_id, new_timespan);
+            DbNewTeamName{team_id: t.team_id, name: new_name, timespan: new_timespan}
+        }).collect_vec();
+
+        diesel::insert_into(team_names::table).values(new_team_names).get_results::<DbTeamName>(conn);
+        teams  // still want to just return original teams for now (to get new team-ids)
+    })
 }
 
 pub fn create_players(conn: &PgConnection, new: Vec<DbNewPlayer>) -> Result<Vec<DbPlayer>, diesel::result::Error>{
     use crate::schema::players::{table, dsl::*};
     diesel::insert_into(table).values(&new)
         .on_conflict(player_id).do_update()
-        .set((meta.eq(excluded(meta)), name.eq(excluded(name)), timespan.eq(excluded(timespan))))
+        .set(meta.eq(excluded(meta)))
         .get_results(conn)
 }
 

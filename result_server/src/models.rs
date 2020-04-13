@@ -1,8 +1,7 @@
 use super::schema::*;
 use serde::{Deserialize, Serialize};
 use serde_json;
-use chrono::{DateTime, Utc};
-use std::collections::Bound;
+use crate::DieselTimespan;
 use uuid::Uuid;
 use crate::utils::my_timespan_format;
 
@@ -12,7 +11,7 @@ pub struct DbCompetition {
     pub name: String,
     pub meta: serde_json::Value,
     #[serde(with = "my_timespan_format")]
-    pub timespan: (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>),
+    pub timespan: DieselTimespan,
 }
 
 #[derive(Insertable, Deserialize, LabelledGeneric)]
@@ -23,7 +22,7 @@ pub struct DbNewCompetition{
     pub name: String,
     pub meta: serde_json::Value,
     #[serde(with = "my_timespan_format")]
-    pub timespan: (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>),
+    pub timespan: DieselTimespan,
 }
 
 #[derive(Queryable, Serialize)]
@@ -33,7 +32,7 @@ pub struct DbSeries {
     pub competition_id: Uuid,
     pub meta: serde_json::Value,
     #[serde(with = "my_timespan_format")]
-    pub timespan: (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>),
+    pub timespan: DieselTimespan,
 }
 
 #[derive(Insertable, Deserialize, LabelledGeneric)]
@@ -44,7 +43,7 @@ pub struct DbNewSeries{
     pub name: String,
     pub meta: serde_json::Value,
     #[serde(with = "my_timespan_format")]
-    pub timespan: (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>),
+    pub timespan: DieselTimespan,
 }
 
 #[derive(Queryable, Serialize)]
@@ -54,7 +53,7 @@ pub struct DbMatch {
     pub series_id: Uuid,
     pub meta: serde_json::Value,
     #[serde(with = "my_timespan_format")]
-    pub timespan: (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>),
+    pub timespan: DieselTimespan,
 }
 
 #[derive(Insertable, Deserialize, LabelledGeneric)]
@@ -65,45 +64,71 @@ pub struct DbNewMatch{
     pub name: String,
     pub meta: serde_json::Value,
     #[serde(with = "my_timespan_format")]
-    pub timespan: (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>),
+    pub timespan: DieselTimespan,
 }
 
 #[derive(Queryable, Serialize)]
 pub struct DbTeam {
     pub team_id: Uuid,
-    pub name: String,
     pub meta: serde_json::Value,
+}
+
+#[derive(Queryable, Serialize)]
+pub struct DbTeamName {
+    #[serde(skip_serializing)]
+    team_name_id: Uuid,
+    pub team_id: Uuid,
+    pub name: String,
     #[serde(with = "my_timespan_format")]
-    pub timespan: (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>),
+    pub timespan: DieselTimespan,
 }
 
 #[derive(Insertable, Deserialize, LabelledGeneric)]
 #[table_name="teams"]
 pub struct DbNewTeam{
     pub team_id: Option<Uuid>,
-    pub name: String,
     pub meta: serde_json::Value,
+}
+
+#[derive(Insertable, Deserialize, LabelledGeneric)]
+#[table_name="team_names"]
+pub struct DbNewTeamName{
+    pub team_id: Uuid,
+    pub name: String,
     #[serde(with = "my_timespan_format")]
-    pub timespan: (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>),
+    pub timespan: DieselTimespan,
 }
 
 #[derive(Queryable, Serialize)]
 pub struct DbPlayer {
     pub player_id: Uuid,
-    pub name: String,
     pub meta: serde_json::Value,
+}
+
+#[derive(Queryable, Serialize)]
+pub struct DbPlayerName {
+    #[serde(skip_serializing)]
+    player_name_id: Uuid,
+    pub player_id: Uuid,
+    pub name: String,
     #[serde(with = "my_timespan_format")]
-    pub timespan: (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>),
+    pub timespan: DieselTimespan,
 }
 
 #[derive(Insertable, Deserialize, LabelledGeneric)]
 #[table_name="players"]
 pub struct DbNewPlayer{
     pub player_id: Option<Uuid>,
-    pub name: String,
     pub meta: serde_json::Value,
+}
+
+#[derive(Insertable, Deserialize, LabelledGeneric)]
+#[table_name="player_names"]
+pub struct DbNewPlayerName{
+    pub player_id: Uuid,
+    pub name: String,
     #[serde(with = "my_timespan_format")]
-    pub timespan: (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>),
+    pub timespan: DieselTimespan,
 }
 
 
@@ -126,5 +151,5 @@ pub struct DbNewTeamPlayer{
     pub team_id: Uuid,
     pub player_id: Uuid,
     #[serde(with = "my_timespan_format")]
-    pub timespan: (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>),
+    pub timespan: DieselTimespan,
 }

@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 use crate::utils::my_timespan_format;
 use crate::db;
-use chrono::{DateTime, Utc};
 use crate::db_pool::PgConn;
-use std::collections::{Bound, HashMap};
+use std::collections::HashMap;
+use crate::DieselTimespan;
 use frunk::labelled::transform_from;
 use crate::models::*;
 use uuid::Uuid;
@@ -21,7 +21,7 @@ pub struct ApiNewCompetition{
     pub name: String,
     pub meta: serde_json::Value,
     #[serde(with = "my_timespan_format")]
-    pub timespan: (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>),
+    pub timespan: DieselTimespan,
 }
 
 #[derive(Deserialize, LabelledGeneric)]
@@ -31,7 +31,7 @@ pub struct ApiNewSeries{
     pub name: String,
     pub meta: serde_json::Value,
     #[serde(with = "my_timespan_format")]
-    pub timespan: (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>),
+    pub timespan: DieselTimespan,
     pub teams: Vec<Uuid>,
 }
 
@@ -41,7 +41,7 @@ pub struct ApiNewTeam{
     pub name: String,
     pub meta: serde_json::Value,
     #[serde(with = "my_timespan_format")]
-    pub timespan: (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>),
+    pub timespan: DieselTimespan,
 }
 
 //using frunk instead
@@ -97,7 +97,7 @@ pub async fn create_competitions(new: Vec<ApiNewCompetition>, conn: PgConn) -> R
 
 
 pub async fn create_teams(new: Vec<ApiNewTeam>, conn: PgConn) -> Result<impl warp::Reply, warp::Rejection>{
-    let created = db::create_teams(&conn, new.into_iter().map(transform_from).collect_vec());
+    let created = db::create_teams(&conn, new);
     handle_handling_the_handler::<Vec<DbTeam>>(created)
 }
 
