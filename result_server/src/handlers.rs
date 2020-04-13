@@ -15,6 +15,15 @@ pub struct ErrorResp {
     pub message: String,
 }
 
+
+#[derive(Deserialize)]
+pub struct WSReq<'a> {
+    pub message_id: Uuid,
+    pub request_type: &'a str,
+    pub data: serde_json::Value
+    //pub data: String
+}
+
 #[derive(Deserialize, LabelledGeneric)]
 pub struct ApiNewCompetition{
     pub competition_id: Option<Uuid>,
@@ -67,7 +76,8 @@ fn handle_handling_the_handler<T: Serialize>(what_happened: Result<T, diesel::re
     }
 }
 
-pub async fn create_serieses(mut new: Vec<ApiNewSeries>, conn: PgConn) -> Result<impl warp::Reply, warp::Rejection>{
+//pub async fn upsert_serieses(conn: PgConn, mut new: Vec<ApiNewSeries>) -> Result<impl warp::Reply, warp::Rejection>{
+pub async fn upsert_serieses(conn: PgConn, mut new: Vec<ApiNewSeries>) -> Result<Vec<DbSeries>, diesel::result::Error>{
     // This just returns list of raw-series created (without the info on teams for each series)
     // Due to simplicity meaning either teams-in-series either match the input, or an error
     // happened
@@ -82,45 +92,42 @@ pub async fn create_serieses(mut new: Vec<ApiNewSeries>, conn: PgConn) -> Result
     // because the frunk `transform_from` consumes the old struct
     // unwrap safe due to above uuidv4 generation
     let series_teams: HashMap<Uuid, Vec<Uuid>> = new.iter().map(|s| (s.series_id.unwrap(), s.teams.clone())).collect();
-    let created = conn.build_transaction().run(|| {db::create_serieses(&conn, new.into_iter().map(transform_from).collect_vec()).and_then(|ser|{
-        let num_results = ser.len();
-        ser.into_iter().map(|s| {
-            match db::create_series_teams(&conn, &s.series_id, &series_teams[&s.series_id]){
-                Ok(_) => Ok(s), // still want to return series, with series-id
-                Err(fuuu) => Err(fuuu)
-            }
+    conn.build_transaction().run(|| {
+        db::upsert_serieses(
+            &conn, new.into_iter().map(transform_from).collect_vec()
+        ).and_then(|ser|{
+            let num_results = ser.len();
+            ser.into_iter().map(|s| {
+                match db::upsert_series_teams(&conn, &s.series_id, &series_teams[&s.series_id]){
+                    Ok(_) => Ok(s), // still want to return series, with series-id
+                    Err(fuuu) => Err(fuuu)
+                }
+            })
+            // I dunno how efficient this is, think map will do all the maps, then fold stops first
+            // error.
+            // Ideally would want to stop `map`ing as soon as hit error
+            .fold_results(Vec::with_capacity(num_results), |mut v, r| {v.push(r); v})
         })
-        // I dunno how efficient this is, think map will do all the maps, then fold stops first
-        // error.
-        // Ideally would want to stop `map`ing as soon as hit error
-        .fold_results(Vec::with_capacity(num_results), |mut v, r| {v.push(r); v})
     })
-    });
-    handle_handling_the_handler::<Vec<DbSeries>>(created)
 }
 
-pub async fn create_competitions(new: Vec<ApiNewCompetition>, conn: PgConn) -> Result<impl warp::Reply, warp::Rejection>{
-    let created = db::create_competitions(&conn, new.into_iter().map(transform_from).collect_vec());
-    handle_handling_the_handler::<Vec<DbCompetition>>(created)
+pub async fn upsert_competitions(conn: PgConn, new: Vec<ApiNewCompetition>) -> Result<Vec<DbCompetition>, diesel::result::Error>{
+    db::upsert_competitions(&conn, new.into_iter().map(transform_from).collect_vec())
 }
 
 
-pub async fn create_teams(new: Vec<ApiNewTeam>, conn: PgConn) -> Result<impl warp::Reply, warp::Rejection>{
-    let created = conn.build_transaction().run(|| db::create_teams(&conn, new));
-    handle_handling_the_handler::<Vec<DbTeam>>(created)
+pub async fn upsert_teams(conn: PgConn, new: Vec<ApiNewTeam>) -> Result<Vec<DbTeam>, diesel::result::Error>{
+    conn.build_transaction().run(|| db::upsert_teams(&conn, new))
 }
 
-pub async fn create_players(new: Vec<ApiNewPlayer>, conn: PgConn) -> Result<impl warp::Reply, warp::Rejection>{
-    let created = conn.build_transaction().run(|| db::create_players(&conn, new));
-    handle_handling_the_handler::<Vec<DbPlayer>>(created)
+pub async fn upsert_players(conn: PgConn, new: Vec<ApiNewPlayer>) -> Result<Vec<DbPlayer>, diesel::result::Error>{
+    conn.build_transaction().run(|| db::upsert_players(&conn, new))
 }
 
-pub async fn create_matches(new: Vec<DbNewMatch>, conn: PgConn) -> Result<impl warp::Reply, warp::Rejection>{
-    let created = db::create_matches(&conn, new);
-    handle_handling_the_handler::<Vec<DbMatch>>(created)
+pub async fn upsert_matches(conn: PgConn, new: Vec<DbNewMatch>) -> Result<Vec<DbMatch>, diesel::result::Error>{
+    db::upsert_matches(&conn, new)
 }
 
-pub async fn create_team_players(new: Vec<DbNewTeamPlayer>, conn: PgConn) -> Result<impl warp::Reply, warp::Rejection>{
-    let created = db::create_team_players(&conn, new);
-    handle_handling_the_handler::<usize>(created)
+pub async fn upsert_team_players(conn: PgConn, new: Vec<DbNewTeamPlayer>) -> Result<usize, diesel::result::Error>{
+    db::upsert_team_players(&conn, new)
 }

@@ -22,7 +22,7 @@ fn trim_timespans(conn: &PgConnection, table_name: &str, id: Uuid, timespan: Die
 }
 
 // TODO macros for similar funcs
-pub fn create_competitions<'a>(conn: &PgConnection, new: Vec<DbNewCompetition>) -> Result<Vec<DbCompetition>, diesel::result::Error>{
+pub fn upsert_competitions<'a>(conn: &PgConnection, new: Vec<DbNewCompetition>) -> Result<Vec<DbCompetition>, diesel::result::Error>{
     use crate::schema::competitions::{table, dsl::*};
     diesel::insert_into(table).values(new)
         .on_conflict(competition_id).do_update()
@@ -31,7 +31,7 @@ pub fn create_competitions<'a>(conn: &PgConnection, new: Vec<DbNewCompetition>) 
         .get_results(conn)
 }
 
-pub fn create_serieses<'a>(conn: &PgConnection, new: Vec<DbNewSeries>) -> Result<Vec<DbSeries>, diesel::result::Error>{
+pub fn upsert_serieses<'a>(conn: &PgConnection, new: Vec<DbNewSeries>) -> Result<Vec<DbSeries>, diesel::result::Error>{
     use crate::schema::series::{table, dsl::*};
     diesel::insert_into(table).values(new)
         .on_conflict(series_id).do_update()
@@ -39,7 +39,7 @@ pub fn create_serieses<'a>(conn: &PgConnection, new: Vec<DbNewSeries>) -> Result
         .get_results(conn)
 }
 
-pub fn create_matches<'a>(conn: &PgConnection, new: Vec<DbNewMatch>) -> Result<Vec<DbMatch>, diesel::result::Error>{
+pub fn upsert_matches<'a>(conn: &PgConnection, new: Vec<DbNewMatch>) -> Result<Vec<DbMatch>, diesel::result::Error>{
     use crate::schema::matches::{table, dsl::*};
     diesel::insert_into(table).values(new)
         .on_conflict(match_id).do_update()
@@ -47,7 +47,7 @@ pub fn create_matches<'a>(conn: &PgConnection, new: Vec<DbNewMatch>) -> Result<V
         .get_results(conn)
 }
 
-pub fn create_teams<'a>(conn: &PgConnection, new: Vec<ApiNewTeam>) -> Result<Vec<DbTeam>, diesel::result::Error>{
+pub fn upsert_teams<'a>(conn: &PgConnection, new: Vec<ApiNewTeam>) -> Result<Vec<DbTeam>, diesel::result::Error>{
     use crate::schema::{teams, team_names};
     use crate::schema::teams::dsl as teams_col;
     let num_entries = new.len();
@@ -85,7 +85,7 @@ pub fn create_teams<'a>(conn: &PgConnection, new: Vec<ApiNewTeam>) -> Result<Vec
     })
 }
 
-pub fn create_players(conn: &PgConnection, new: Vec<ApiNewPlayer>) -> Result<Vec<DbPlayer>, diesel::result::Error>{
+pub fn upsert_players(conn: &PgConnection, new: Vec<ApiNewPlayer>) -> Result<Vec<DbPlayer>, diesel::result::Error>{
     use crate::schema::{players, player_names};
     use crate::schema::players::dsl as players_col;
     let num_entries = new.len();
@@ -111,7 +111,7 @@ pub fn create_players(conn: &PgConnection, new: Vec<ApiNewPlayer>) -> Result<Vec
 }
 
 
-pub fn create_series_teams<'a>(
+pub fn upsert_series_teams<'a>(
         conn: &PgConnection, series_id: &Uuid, team_ids: &Vec<Uuid>
     ) -> Result<usize, diesel::result::Error>{
     use crate::schema::series_teams::{table, dsl};
@@ -121,7 +121,7 @@ pub fn create_series_teams<'a>(
     diesel::insert_into(table).values(&values).execute(conn)
 }
 
-pub fn create_team_players<'a>(
+pub fn upsert_team_players<'a>(
         conn: &PgConnection, team_players: Vec<DbNewTeamPlayer>
     ) -> Result<usize, diesel::result::Error>{
     use crate::schema::team_players::table;
