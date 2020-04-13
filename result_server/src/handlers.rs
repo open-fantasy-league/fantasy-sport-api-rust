@@ -44,6 +44,15 @@ pub struct ApiNewTeam{
     pub timespan: DieselTimespan,
 }
 
+#[derive(Deserialize, LabelledGeneric)]
+pub struct ApiNewPlayer{
+    pub player_id: Option<Uuid>,
+    pub name: String,
+    pub meta: serde_json::Value,
+    #[serde(with = "my_timespan_format")]
+    pub timespan: DieselTimespan,
+}
+
 //using frunk instead
 /*impl From<ApiNewCompetition> for DbNewCompetition{
     fn from(x: ApiNewCompetition) -> Self{
@@ -97,12 +106,12 @@ pub async fn create_competitions(new: Vec<ApiNewCompetition>, conn: PgConn) -> R
 
 
 pub async fn create_teams(new: Vec<ApiNewTeam>, conn: PgConn) -> Result<impl warp::Reply, warp::Rejection>{
-    let created = db::create_teams(&conn, new);
+    let created = conn.build_transaction().run(|| db::create_teams(&conn, new));
     handle_handling_the_handler::<Vec<DbTeam>>(created)
 }
 
-pub async fn create_players(new: Vec<DbNewPlayer>, conn: PgConn) -> Result<impl warp::Reply, warp::Rejection>{
-    let created = db::create_players(&conn, new);
+pub async fn create_players(new: Vec<ApiNewPlayer>, conn: PgConn) -> Result<impl warp::Reply, warp::Rejection>{
+    let created = conn.build_transaction().run(|| db::create_players(&conn, new));
     handle_handling_the_handler::<Vec<DbPlayer>>(created)
 }
 

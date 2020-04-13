@@ -166,7 +166,7 @@ async fn main() {
         .and(path("players"))
         .and(body::json())
         .and(pg_conn.clone())
-        .and_then(|body: Vec<models::DbNewPlayer>, conn: PgConn| create_players(body, conn));
+        .and_then(|body: Vec<ApiNewPlayer>, conn: PgConn| create_players(body, conn));
     let post_team_players = post()
         .and(path("team_players"))
         .and(body::json())
