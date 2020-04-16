@@ -64,14 +64,14 @@ pub fn upsert_teams<'a>(conn: &PgConnection, new: Vec<ApiNewTeam>) -> Result<Vec
             arr2.push((t.name, t.timespan));
             (arr, arr2)
     });*/
-    let new_db_teams = new.iter().map(|t| DbNewTeam{team_id: t.team_id.clone(), meta: t.meta.clone()}).collect_vec();
+    let new_db_teams = new.iter().map(|t| DbNewTeam{team_id: t.team_id, meta: t.meta.clone()}).collect_vec();
     let teams_res = diesel::insert_into(teams::table).values(new_db_teams)
         .on_conflict(teams_col::team_id).do_update()
         .set(teams_col::meta.eq(excluded(teams_col::meta)))
         .get_results(conn);
     teams_res.and_then(|teams: Vec<DbTeam>|{
-        let new_team_names = teams.iter().enumerate().map(|(i, t)| {
-            let (new_name, new_timespan) = (new[i].name.clone(), new[i].timespan.clone());
+        let new_team_names = teams.iter().zip(new.into_iter()).map(|(t, n)| {
+            let (new_name, new_timespan) = (n.name, n.timespan);
             trim_timespans(conn, "team_name", t.team_id, new_timespan)
             .map(|_| DbNewTeamName{team_id: t.team_id, name: new_name, timespan: new_timespan})
         })
