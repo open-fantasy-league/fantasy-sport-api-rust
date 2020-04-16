@@ -32,15 +32,15 @@ pub fn generic_ws_error(error_msg: String) -> ws::Message{
 }
 
 #[derive(Debug, Clone)]
-struct InvalidRequestError<'a>{req_type: &'a str}
+struct InvalidRequestError{req_type: String}
 
-impl fmt::Display for InvalidRequestError<'_> {
+impl fmt::Display for InvalidRequestError{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Invalid request_type {}", self.req_type)
     }
 }
 
-impl std::error::Error for InvalidRequestError<'_> {
+impl std::error::Error for InvalidRequestError{
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         // Generic error, underlying cause isn't tracked.
         None
@@ -55,15 +55,14 @@ async fn ws_req_resp(msg: String, conn: PgConn) -> Result<String, Box<dyn std::e
             let dr = serde_json::from_value(req.data);
             match dr{
             Ok(d) => match upsert_competitions(conn, d).await{
-                Ok(x) => match serde_json::to_string(&x){
-                        Ok(fuck) => Ok(fuck),
-                        Err(off) => Err(Box::new(off))
-                    }
+                Ok(x) => serde_json::to_string(&x).map_err(|e| e.into()),
                 Err(e) => Err(Box::new(e))
-                //.and_then(|x| serde_json::to_string(&x)).map_err(Box::new)},
                 }
             Err(e) => Err(Box::new(e))
             }
+            // serde_json::from_value(req.data).and_then(|d| async move {
+            //     upsert_competitions(conn, d).await}).and_then(|r| serde_json::to_string(&r))
+            //     .map_err(|e| e.into())
         },
         /*"upsert_serieses" => {
             upsert_serieses(conn, serde_json::from_value(req.data)?).await
@@ -90,10 +89,8 @@ async fn ws_req_resp(msg: String, conn: PgConn) -> Result<String, Box<dyn std::e
         //"upsert_player_match_results" => upsert_player_match_results(conn, serde_json::from_value(req.data)?),
         //"upsert_team_series_results" => upsert_team_series_results(conn, serde_json::from_value(req.data)?),
         uwotm8 => {
-            // fighting the borrow-checker here.
-            // cos the error lives beyond this func, so implicit lifetimes arent enough
-            //let gorge_cloney = &uwotm8.to_string().clone();
-            Err(Box::new(InvalidRequestError{req_type: ""}))
+            // Think have to make it a string, to not piss-off borrow checker, as we are returning it from this func
+            Err(Box::new(InvalidRequestError{req_type: uwotm8.to_string()}))
         }
     }
     // No json-websocket response exists in warp yet
