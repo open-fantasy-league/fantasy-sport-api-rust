@@ -10,7 +10,7 @@ use itertools::Itertools;
 use crate::handlers::{ApiNewTeam, ApiNewPlayer};
 use crate::DieselTimespan;
 
-
+//sql_function! {fn coalesce<T: sql_types::NotNull>(a: sql_types::Nullable<T>, b: T) -> T;}
 //sql_function!(fn trim_team_name_timespans(new_team_id sql_types::Uuid, new_timespan sql_types::Range<sql_types::Timestamptz>) -> ());
 //sql_function!(trim_team_name_timespans, WTF, (new_team_id: sql_types::Uuid, new_timespan: sql_types::Range<sql_types::Timestamptz>) -> ());
 
@@ -24,10 +24,16 @@ fn trim_timespans(conn: &PgConnection, table_name: &str, id: Uuid, timespan: Die
 // TODO macros for similar funcs
 pub fn upsert_competitions<'a>(conn: &PgConnection, new: Vec<DbNewCompetition>) -> Result<Vec<DbCompetition>, diesel::result::Error>{
     use crate::schema::competitions::{table, dsl::*};
+    // This "semi-upsert" doesnt work in postgres because it checks the inserts for null-ness, before other things,
+    // so never fails the conflict check and goes into update part.
+    // For now just do full upserts. fuck it.
+    // let upsert_sql = "INSERT INTO competitions(competition_id, meta, name, timespan) VALUES (($1, $2, $3, $4), ($5, $6, $7, $8)) 
+    //     ON CONFLICT DO UPDATE SET meta = coalesce(excluded.meta, meta), name = coalesce(excluded.name, name), timespan = coalesce(excluded.timespan, timespan)
+    // "
     diesel::insert_into(table).values(new)
         .on_conflict(competition_id).do_update()
-        // Investigate how to specify set as struct, rather than listing out all fields
         .set((meta.eq(excluded(meta)), name.eq(excluded(name)), timespan.eq(excluded(timespan))))
+        //.set(name.eq(coalesce::<sql_types::Text>(excluded(name), name)))
         .get_results(conn)
 }
 
