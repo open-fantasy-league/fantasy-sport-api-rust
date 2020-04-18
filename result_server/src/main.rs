@@ -4,7 +4,7 @@ extern crate dotenv;
 #[macro_use] // for the hlist macro
 extern crate frunk;
 extern crate frunk_core;
-use std::collections::{Bound, HashMap};
+use std::collections::{Bound, HashMap, HashSet};
 use std::fmt;
 use chrono::{DateTime, Utc};
 use futures::{FutureExt, StreamExt};
@@ -33,6 +33,34 @@ pub fn generic_ws_error(error_msg: String) -> ws::Message{
     )
 }
 
+struct Subscriptions{
+    teams: bool,
+    players: bool,
+    competitions: HashSet<Uuid>
+}
+
+impl Subscriptions{
+    fn new() -> Subscriptions {
+        Subscriptions{teams: false, players: false, competitions: HashSet::new()}
+    }
+}
+enum Subscription{
+    CompetitionSubscription,
+    String
+}
+
+struct WsConnection{
+    id: Uuid,
+    subscriptions: Subscriptions,
+    tx: mpsc::UnboundedSender<Result<ws::Message, warp::Error>>
+}
+
+impl WsConnection{
+    fn new(tx: mpsc::UnboundedSender<Result<ws::Message, warp::Error>>) -> WsConnection {
+        WsConnection{id: Uuid::new_v4(), subscriptions: Subscriptions::new(), tx: tx}
+    }
+}
+
 #[derive(Debug, Clone)]
 struct InvalidRequestError{req_type: String}
 
@@ -53,28 +81,55 @@ impl std::error::Error for InvalidRequestError{
 // https://blog.yoshuawuyts.com/error-handling-survey/
 // Eventually will probably use snafu
 type BoxError = Box<dyn std::error::Error + Sync + Send + 'static>;
-type WsConnections = Arc<Mutex<HashMap<Uuid, mpsc::UnboundedSender<Result<ws::Message, warp::Error>>>>>;
+type WsConnections = Arc<Mutex<HashMap<Uuid, WsConnection>>>;
 
-async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &WsConnections) -> Result<String, BoxError>{
+async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &WsConnections, user_ws_id: Uuid) -> Result<String, BoxError>{
     let req: WSReq = serde_json::from_str(&msg)?;
 
     match req.request_type{
         "upsert_competitions" => {
             let dr = serde_json::from_value(req.data);
             let resp: Result<String, BoxError> = match dr{
-                Ok(d) => match upsert_competitions(conn, d).await{
-                    Ok(x) => serde_json::to_string(&x).map_err(|e| e.into()),
-                    Err(e) => Err(Box::new(e) as BoxError)
+                Ok(d) => {
+                    let competitions_out_r= upsert_competitions(conn, d).await;
+                    match competitions_out_r{
+                        Ok(competitions_out) => {
+                            // assume anything upserted the user wants to subscribe to
+                            if let Some(ws_user) = ws_conns.lock().await.get(&user_ws_id){
+                                competitions_out.iter().for_each(|c| {ws_user.subscriptions.competitions.insert(c.competition_id);});
+                            };
+
+                            for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
+                                let subscribed_comps: Vec<&models::DbCompetition>  = competitions_out.iter()
+                                    .filter(|c| wsconn.subscriptions.competitions.contains(&c.competition_id)).collect();
+                                // TODO cache in-case lots of people have same filters
+                                let subscribed_comps_json_r = serde_json::to_string(&subscribed_comps);
+                                match subscribed_comps_json_r.as_ref(){
+                                    Ok(subscribed_comps_json) => {
+                                        if let Err(publish) = wsconn.tx.send(Ok(ws::Message::text(subscribed_comps_json))){
+                                            println!("Error publishing update {:?} to {} : {}", &subscribed_comps_json_r, uid, &publish)
+                                        };
+                                    },
+                                    Err(_) => println!("Error json serializing publisher update {:?} to {}", &subscribed_comps_json_r, uid)
+                                };
+                            };
+                            serde_json::to_string(&competitions_out).map_err(|e| e.into())
+                        },
+                        Err(e) => Err(Box::new(e) as BoxError)
+                    }
                 },
                 Err(e) => Err(Box::new(e) as BoxError)
             };
-            resp.as_ref().map(|r| async move {
-                for (&uid, tx) in ws_conns.lock().await.iter_mut(){
-                    if let Err(publish) = tx.send(Ok(ws::Message::text(r))){
-                        println!("Error publishing update {:?} to {} : {}", r, uid, &publish)
-                    };
-                };
-            });
+            
+            // resp.as_ref().map(|r| async move {
+            //     for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
+            //         for 
+            //         if wsconn.subscriptions.contains()
+            //         if let Err(publish) = wsconn.tx.send(Ok(ws::Message::text(r))){
+            //             println!("Error publishing update {:?} to {} : {}", r, uid, &publish)
+            //         };
+            //     };
+            // });
             // if resp.is_ok(){
             //     for (&uid, tx) in ws_conns.lock().await.iter_mut(){
             //         if let Err(publish) = tx.send(Ok(ws::Message::text(&resp.unwrap()))){
@@ -118,8 +173,8 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &WsConnections) -> Res
     }
 }
 
-async fn handle_ws_msg(msg: ws::Message, conn: PgConn, ws_conns: &WsConnections) -> ws::Message{
-    match ws_req_resp(msg.to_str().unwrap().to_string(), conn, ws_conns).await{
+async fn handle_ws_msg(msg: ws::Message, conn: PgConn, ws_conns: &WsConnections, user_ws_id: Uuid) -> ws::Message{
+    match ws_req_resp(msg.to_str().unwrap().to_string(), conn, ws_conns, user_ws_id).await{
         Ok(text) => ws::Message::text(text),
         Err(e) => generic_ws_error(e.to_string())
     }
@@ -130,8 +185,10 @@ async fn handle_ws_conn(ws: ws::WebSocket, pg_pool: PgPool, ws_conns: WsConnecti
     // https://github.com/seanmonstar/warp/blob/master/examples/websockets_chat.rs
     let (ws_send, mut ws_recv) = ws.split();
     let (tx, rx) = mpsc::unbounded_channel();
-    let ws_id = Uuid::new_v4();
-    ws_conns.lock().await.insert(ws_id, tx);
+    let ws_conn = WsConnection::new(tx);
+    let ws_id = ws_conn.id;
+    // let ws_id = Uuid::new_v4();
+    ws_conns.lock().await.insert(ws_conn.id, ws_conn);
     tokio::task::spawn(rx.forward(ws_send).map(|result| {
         if let Err(e) = result {
             eprintln!("websocket send error: {}", e);
@@ -149,16 +206,16 @@ async fn handle_ws_conn(ws: ws::WebSocket, pg_pool: PgPool, ws_conns: WsConnecti
             // pgpool get should probably be deferred until after we unwrap/get websocket message
             // but trying like this as worried about ownership of pool, moving it into funcs
             Ok(msg) => match pg_pool.get(){
-                Ok(conn) => handle_ws_msg(msg, conn, &ws_conns).await,
+                Ok(conn) => handle_ws_msg(msg, conn, &ws_conns, ws_id).await,
                 Err(e) => generic_ws_error(e.to_string())
             },
             Err(e) => {
                 eprintln!("websocket error(uid=): {}", e);
                 // If the websocket recv is broken, is it viable to try and send back through there was
                 // an error? (Don't send actual error, maybe sensitive info? Who knows?
-                if let Some(tx) = ws_conns.lock().await.get(&ws_id){
-                    if let Err(e) = tx.send(Ok(ws::Message::text("Unexpected recv error"))){
-                        println!("Error sending Unexpected recv error msg to {}: {:?}", &ws_id, e)
+                if let Some(wsconn) = ws_conns.lock().await.get(&ws_id){
+                    if let Err(e) = wsconn.tx.send(Ok(ws::Message::text("Unexpected recv error"))){
+                        println!("Error sending Unexpected recv error msg to {}: {:?}", wsconn.id, e)
                     };
                 }
                 ws_conns.lock().await.remove(&ws_id);
@@ -169,9 +226,9 @@ async fn handle_ws_conn(ws: ws::WebSocket, pg_pool: PgPool, ws_conns: WsConnecti
         //tx.send(Ok(ws::Message::text(new_msg.clone())));
         // Feels unnecessary locking whole map just to get our tx (we moved it into the map, so cant access variable anymore)
         // Maybe something better
-        if let Some(tx) = ws_conns.lock().await.get(&ws_id){
-            if let Err(e) = tx.send(resp){
-                println!("Error sending regular msg to {}: {:?}", &ws_id, e)
+        if let Some(wsconn) = ws_conns.lock().await.get(&ws_id){
+            if let Err(e) = wsconn.tx.send(resp){
+                println!("Error sending regular msg to {}: {:?}", wsconn.id, e)
             };
         }
     }
