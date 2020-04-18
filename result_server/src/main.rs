@@ -131,7 +131,7 @@ async fn handle_ws_msg(msg: ws::Message, conn: PgConn, ws_conns: &WsConnections)
 }
 
 
-async fn handle_ws_conn(ws: ws::WebSocket, pg_pool: PgPool, ws_conns: WsConnections){
+async fn handle_ws_conn(ws: ws::WebSocket, pg_pool: PgPool, ws_conns: WsConnections) -> (){
     // https://github.com/seanmonstar/warp/blob/master/examples/websockets_chat.rs
     let (ws_send, mut ws_recv) = ws.split();
     let (tx, rx) = mpsc::unbounded_channel();
