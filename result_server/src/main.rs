@@ -25,6 +25,12 @@ mod utils;
 
 pub type DieselTimespan = (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>);
 
+// There's so many different error handling libraries to choose from
+// https://blog.yoshuawuyts.com/error-handling-survey/
+// Eventually will probably use snafu
+type BoxError = Box<dyn std::error::Error + Sync + Send + 'static>;
+type WsConnections = Arc<Mutex<HashMap<Uuid, WsConnection>>>;
+
 pub fn generic_ws_error(error_msg: String) -> ws::Message{
     ws::Message::text(
         serde_json::to_string(
@@ -77,13 +83,7 @@ impl std::error::Error for InvalidRequestError{
     }
 }
 
-// There's so many different error handling libraries to choose from
-// https://blog.yoshuawuyts.com/error-handling-survey/
-// Eventually will probably use snafu
-type BoxError = Box<dyn std::error::Error + Sync + Send + 'static>;
-type WsConnections = Arc<Mutex<HashMap<Uuid, WsConnection>>>;
-
-async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &WsConnections, user_ws_id: Uuid) -> Result<String, BoxError>{
+async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, user_ws_id: Uuid) -> Result<String, BoxError>{
     let req: WSReq = serde_json::from_str(&msg)?;
 
     match req.request_type{
@@ -96,6 +96,7 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &WsConnections, user_w
                         Ok(competitions_out) => {
                             // assume anything upserted the user wants to subscribe to
                             if let Some(ws_user) = ws_conns.lock().await.get(&user_ws_id){
+                                //let a = ws_user;
                                 competitions_out.iter().for_each(|c| {ws_user.subscriptions.competitions.insert(c.competition_id);});
                             };
 
@@ -173,7 +174,7 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &WsConnections, user_w
     }
 }
 
-async fn handle_ws_msg(msg: ws::Message, conn: PgConn, ws_conns: &WsConnections, user_ws_id: Uuid) -> ws::Message{
+async fn handle_ws_msg(msg: ws::Message, conn: PgConn, ws_conns: &mut WsConnections, user_ws_id: Uuid) -> ws::Message{
     match ws_req_resp(msg.to_str().unwrap().to_string(), conn, ws_conns, user_ws_id).await{
         Ok(text) => ws::Message::text(text),
         Err(e) => generic_ws_error(e.to_string())
@@ -181,7 +182,7 @@ async fn handle_ws_msg(msg: ws::Message, conn: PgConn, ws_conns: &WsConnections,
 }
 
 
-async fn handle_ws_conn(ws: ws::WebSocket, pg_pool: PgPool, ws_conns: WsConnections) {
+async fn handle_ws_conn(ws: ws::WebSocket, pg_pool: PgPool, mut ws_conns: WsConnections) {
     // https://github.com/seanmonstar/warp/blob/master/examples/websockets_chat.rs
     let (ws_send, mut ws_recv) = ws.split();
     let (tx, rx) = mpsc::unbounded_channel();
@@ -206,7 +207,7 @@ async fn handle_ws_conn(ws: ws::WebSocket, pg_pool: PgPool, ws_conns: WsConnecti
             // pgpool get should probably be deferred until after we unwrap/get websocket message
             // but trying like this as worried about ownership of pool, moving it into funcs
             Ok(msg) => match pg_pool.get(){
-                Ok(conn) => handle_ws_msg(msg, conn, &ws_conns, ws_id).await,
+                Ok(conn) => handle_ws_msg(msg, conn, &mut ws_conns, ws_id).await,
                 Err(e) => generic_ws_error(e.to_string())
             },
             Err(e) => {
