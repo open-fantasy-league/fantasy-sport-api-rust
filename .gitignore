@@ -11,3 +11,5 @@ Cargo.lock
 
 .tags
 .env
+
+.vscode/

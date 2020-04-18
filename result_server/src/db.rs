@@ -15,6 +15,7 @@ use crate::DieselTimespan;
 //sql_function!(trim_team_name_timespans, WTF, (new_team_id: sql_types::Uuid, new_timespan: sql_types::Range<sql_types::Timestamptz>) -> ());
 
 fn trim_timespans(conn: &PgConnection, table_name: &str, id: Uuid, timespan: DieselTimespan) -> Result<usize, diesel::result::Error>{
+    // TODO this should return updated rows so can be published as changes
     sql_query(format!("SELECT trim_{}_timespans($1, $2)", table_name))
     .bind::<sql_types::Uuid, _>(id)
     .bind::<sql_types::Range<sql_types::Timestamptz>, _>(timespan)

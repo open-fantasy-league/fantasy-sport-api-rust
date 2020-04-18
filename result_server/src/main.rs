@@ -49,44 +49,39 @@ impl std::error::Error for InvalidRequestError{
     }
 }
 
-#[derive(Debug, Clone)]
-struct ApiError{req_type: String}
-
-// impl fmt::Display for ApiError{
-//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-//         write!(f, "Invalid request_type {}", self.req_type)
-//     }
-// }
-
-impl std::error::Error for ApiError{
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        // Generic error, underlying cause isn't tracked.
-        None
-    }
-}
-
+// There's so many different error handling libraries to choose from
+// https://blog.yoshuawuyts.com/error-handling-survey/
+// Eventually will probably use snafu
+type BoxError = Box<dyn std::error::Error + Sync + Send + 'static>;
 type WsConnections = Arc<Mutex<HashMap<Uuid, mpsc::UnboundedSender<Result<ws::Message, warp::Error>>>>>;
 
-async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &WsConnections) -> Result<String, Box<dyn std::error::Error>>{
+async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &WsConnections) -> Result<String, BoxError>{
     let req: WSReq = serde_json::from_str(&msg)?;
 
     match req.request_type{
         "upsert_competitions" => {
             let dr = serde_json::from_value(req.data);
-            let resp: Result<String, Box<dyn std::error::Error>> = match dr{
+            let resp: Result<String, BoxError> = match dr{
                 Ok(d) => match upsert_competitions(conn, d).await{
                     Ok(x) => serde_json::to_string(&x).map_err(|e| e.into()),
-                    Err(e) => Err(Box::new(e))
+                    Err(e) => Err(Box::new(e) as BoxError)
                 },
-                Err(e) => Err(Box::new(e))
+                Err(e) => Err(Box::new(e) as BoxError)
             };
-            if resp.is_ok(){
+            resp.as_ref().map(|r| async move {
                 for (&uid, tx) in ws_conns.lock().await.iter_mut(){
-                    if let Err(publish) = tx.send(Ok(ws::Message::text(resp.unwrap()))){
-                        println!("Error publishing update {:?} to {}", resp, uid)
+                    if let Err(publish) = tx.send(Ok(ws::Message::text(r))){
+                        println!("Error publishing update {:?} to {} : {}", r, uid, &publish)
                     };
-                }
-            };
+                };
+            });
+            // if resp.is_ok(){
+            //     for (&uid, tx) in ws_conns.lock().await.iter_mut(){
+            //         if let Err(publish) = tx.send(Ok(ws::Message::text(&resp.unwrap()))){
+            //             println!("Error publishing update {:?} to {} : {}", &resp, uid, &publish)
+            //         };
+            //     }
+            // };
             resp
             // serde_json::from_value(req.data).and_then(|d| async move {
             //     upsert_competitions(conn, d).await}).and_then(|r| serde_json::to_string(&r))
@@ -131,7 +126,7 @@ async fn handle_ws_msg(msg: ws::Message, conn: PgConn, ws_conns: &WsConnections)
 }
 
 
-async fn handle_ws_conn(ws: ws::WebSocket, pg_pool: PgPool, ws_conns: WsConnections) -> (){
+async fn handle_ws_conn(ws: ws::WebSocket, pg_pool: PgPool, ws_conns: WsConnections) {
     // https://github.com/seanmonstar/warp/blob/master/examples/websockets_chat.rs
     let (ws_send, mut ws_recv) = ws.split();
     let (tx, rx) = mpsc::unbounded_channel();
