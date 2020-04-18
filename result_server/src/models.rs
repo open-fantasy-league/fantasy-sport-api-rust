@@ -5,7 +5,7 @@ use crate::DieselTimespan;
 use uuid::Uuid;
 use crate::utils::my_timespan_format;
 
-#[derive(Queryable, Serialize)]
+#[derive(Queryable, Serialize, Debug)]
 pub struct DbCompetition {
     pub competition_id: Uuid,
     pub name: String,
@@ -14,7 +14,7 @@ pub struct DbCompetition {
     pub timespan: DieselTimespan,
 }
 
-#[derive(Insertable, Deserialize, LabelledGeneric)]
+#[derive(Insertable, Deserialize, LabelledGeneric, Debug)]
 #[table_name="competitions"]
 pub struct DbNewCompetition{
     pub competition_id: Option<Uuid>,

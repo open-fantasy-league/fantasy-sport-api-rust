@@ -19,12 +19,12 @@ pub struct ErrorResp {
 #[derive(Deserialize)]
 pub struct WSReq<'a> {
     pub message_id: Uuid,
-    pub request_type: &'a str,
+    pub method: &'a str,
     pub data: serde_json::Value
     //pub data: String
 }
 
-#[derive(Deserialize, LabelledGeneric)]
+#[derive(Deserialize, LabelledGeneric, Debug)]
 pub struct ApiNewCompetition{
     pub competition_id: Option<Uuid>,
     pub name: String,
@@ -33,7 +33,7 @@ pub struct ApiNewCompetition{
     pub timespan: DieselTimespan,
 }
 
-#[derive(Deserialize, LabelledGeneric)]
+#[derive(Deserialize, LabelledGeneric, Debug)]
 pub struct ApiNewSeries{
     pub series_id: Option<Uuid>,
     pub competition_id: Uuid,
@@ -44,7 +44,7 @@ pub struct ApiNewSeries{
     pub teams: Vec<Uuid>,
 }
 
-#[derive(Deserialize, LabelledGeneric)]
+#[derive(Deserialize, LabelledGeneric, Debug)]
 pub struct ApiNewTeam{
     pub team_id: Option<Uuid>,
     pub name: String,
@@ -53,7 +53,7 @@ pub struct ApiNewTeam{
     pub timespan: DieselTimespan,
 }
 
-#[derive(Deserialize, LabelledGeneric)]
+#[derive(Deserialize, LabelledGeneric, Debug)]
 pub struct ApiNewPlayer{
     pub player_id: Option<Uuid>,
     pub name: String,

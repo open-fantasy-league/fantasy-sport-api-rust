@@ -68,11 +68,11 @@ impl WsConnection{
 }
 
 #[derive(Debug, Clone)]
-struct InvalidRequestError{req_type: String}
+struct InvalidRequestError{method: String}
 
 impl fmt::Display for InvalidRequestError{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Invalid request_type {}", self.req_type)
+        write!(f, "Invalid request_type {}", self.method)
     }
 }
 
@@ -85,24 +85,27 @@ impl std::error::Error for InvalidRequestError{
 
 async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, user_ws_id: Uuid) -> Result<String, BoxError>{
     let req: WSReq = serde_json::from_str(&msg)?;
-
-    match req.request_type{
+    println!("{}", &req.data);
+    match req.method{
         "upsert_competitions" => {
             let dr = serde_json::from_value(req.data);
             let resp: Result<String, BoxError> = match dr{
                 Ok(d) => {
+                    println!("{:?}", &d);
                     let competitions_out_r= upsert_competitions(conn, d).await;
                     match competitions_out_r{
                         Ok(competitions_out) => {
                             // assume anything upserted the user wants to subscribe to
-                            if let Some(ws_user) = ws_conns.lock().await.get(&user_ws_id){
-                                //let a = ws_user;
-                                competitions_out.iter().for_each(|c| {ws_user.subscriptions.competitions.insert(c.competition_id);});
+                            if let Some(ws_user) = ws_conns.lock().await.get_mut(&user_ws_id){
+                                competitions_out.iter().for_each(|c| {
+                                    println!("Adding subscription {}", c.competition_id);ws_user.subscriptions.competitions.insert(c.competition_id);
+                                });
                             };
 
                             for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
                                 let subscribed_comps: Vec<&models::DbCompetition>  = competitions_out.iter()
                                     .filter(|c| wsconn.subscriptions.competitions.contains(&c.competition_id)).collect();
+                                println!("subscribed_comps: {:?}", subscribed_comps);
                                 // TODO cache in-case lots of people have same filters
                                 let subscribed_comps_json_r = serde_json::to_string(&subscribed_comps);
                                 match subscribed_comps_json_r.as_ref(){
@@ -114,12 +117,13 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, us
                                     Err(_) => println!("Error json serializing publisher update {:?} to {}", &subscribed_comps_json_r, uid)
                                 };
                             };
+                            println!("{:?}", &competitions_out);
                             serde_json::to_string(&competitions_out).map_err(|e| e.into())
                         },
                         Err(e) => Err(Box::new(e) as BoxError)
                     }
                 },
-                Err(e) => Err(Box::new(e) as BoxError)
+                Err(e) => {                println!("fuck u");Err(Box::new(e) as BoxError)}
             };
             
             // resp.as_ref().map(|r| async move {
@@ -169,15 +173,18 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, us
         //"upsert_team_series_results" => upsert_team_series_results(conn, serde_json::from_value(req.data)?),
         uwotm8 => {
             // Think have to make it a string, to not piss-off borrow checker, as we are returning it from this func
-            Err(Box::new(InvalidRequestError{req_type: uwotm8.to_string()}))
+            Err(Box::new(InvalidRequestError{method: uwotm8.to_string()}))
         }
     }
 }
 
 async fn handle_ws_msg(msg: ws::Message, conn: PgConn, ws_conns: &mut WsConnections, user_ws_id: Uuid) -> ws::Message{
-    match ws_req_resp(msg.to_str().unwrap().to_string(), conn, ws_conns, user_ws_id).await{
-        Ok(text) => ws::Message::text(text),
-        Err(e) => generic_ws_error(e.to_string())
+    match msg.to_str(){
+        Ok(msg_str) => match ws_req_resp(msg_str.to_string(), conn, ws_conns, user_ws_id).await{
+            Ok(text) => ws::Message::text(text),
+            Err(e) => generic_ws_error(e.to_string())
+        },
+        Err(e) => generic_ws_error(String::from("wtf. How does msg.to_str fail?"))
     }
 }
 
