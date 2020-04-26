@@ -6,6 +6,8 @@ extern crate frunk;
 extern crate frunk_core;
 use std::collections::{Bound, HashMap, HashSet};
 use std::fmt;
+use std::iter::FromIterator;
+use itertools::Itertools;
 use chrono::{DateTime, Utc};
 use futures::{FutureExt, StreamExt};
 use warp::*;
@@ -83,6 +85,70 @@ impl std::error::Error for InvalidRequestError{
     }
 }
 
+async fn sub_to_competitions<'a, T: Iterator<Item = &'a Uuid>>(ws_conns: &mut WsConnections, user_ws_id: Uuid, competition_ids: T){
+    if let Some(ws_user) = ws_conns.lock().await.get_mut(&user_ws_id){
+        competition_ids.for_each(|cid| {
+            println!("Adding subscription {}", cid); ws_user.subscriptions.competitions.insert(*cid);
+        });
+    };
+}
+
+async fn publish_competitions(ws_conns: &mut WsConnections, competitions: &Vec<models::DbCompetition>){
+
+    for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
+        let subscribed_comps: Vec<&models::DbCompetition>  = competitions.iter()
+            .filter(|c| wsconn.subscriptions.competitions.contains(&c.competition_id)).collect();
+        println!("subscribed_comps: {:?}", subscribed_comps);
+        // TODO cache in-case lots of people have same filters
+        let subscribed_comps_json_r = serde_json::to_string(&subscribed_comps);
+        match subscribed_comps_json_r.as_ref(){
+            Ok(subscribed_comps_json) => {
+                if let Err(publish) = wsconn.tx.send(Ok(ws::Message::text(subscribed_comps_json))){
+                    println!("Error publishing update {:?} to {} : {}", &subscribed_comps_json_r, uid, &publish)
+                };
+            },
+            Err(_) => println!("Error json serializing publisher update {:?} to {}", &subscribed_comps_json_r, uid)
+        };
+    };
+}
+
+async fn publish_series(ws_conns: &mut WsConnections, series: &Vec<models::DbSeries>){
+
+    for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
+        let subscribed: Vec<&models::DbSeries>  = series.iter()
+            .filter(|s| wsconn.subscriptions.competitions.contains(&s.competition_id)).collect();
+        println!("subscribed_series: {:?}", subscribed);
+        // TODO cache in-case lots of people have same filters
+        let subscribed_json_r = serde_json::to_string(&subscribed);
+        match subscribed_json_r.as_ref(){
+            Ok(subscribed_json) => {
+                if let Err(publish) = wsconn.tx.send(Ok(ws::Message::text(subscribed_json))){
+                    println!("Error publishing update {:?} to {} : {}", &subscribed_json, uid, &publish)
+                };
+            },
+            Err(_) => println!("Error json serializing publisher update {:?} to {}", &subscribed_json_r, uid)
+        };
+    };
+}
+
+async fn publish_matches(ws_conns: &mut WsConnections, matches: &Vec<models::DbMatch>, series_to_competitions: HashMap<Uuid, Uuid>){
+    for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
+        let subscribed: Vec<&models::DbMatch>  = matches.iter()
+            .filter(|x| wsconn.subscriptions.competitions.contains(&series_to_competitions.get(&x.series_id).unwrap())).collect();
+        println!("subscribed_series: {:?}", subscribed);
+        // TODO cache in-case lots of people have same filters
+        let subscribed_json_r = serde_json::to_string(&subscribed);
+        match subscribed_json_r.as_ref(){
+            Ok(subscribed_json) => {
+                if let Err(publish) = wsconn.tx.send(Ok(ws::Message::text(subscribed_json))){
+                    println!("Error publishing update {:?} to {} : {}", &subscribed_json, uid, &publish)
+                };
+            },
+            Err(_) => println!("Error json serializing publisher update {:?} to {}", &subscribed_json_r, uid)
+        };
+    };
+}
+
 async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, user_ws_id: Uuid) -> Result<String, BoxError>{
     let req: WSReq = serde_json::from_str(&msg)?;
     println!("{}", &req.data);
@@ -96,77 +162,85 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, us
                     match competitions_out_r{
                         Ok(competitions_out) => {
                             // assume anything upserted the user wants to subscribe to
-                            if let Some(ws_user) = ws_conns.lock().await.get_mut(&user_ws_id){
-                                competitions_out.iter().for_each(|c| {
-                                    println!("Adding subscription {}", c.competition_id);ws_user.subscriptions.competitions.insert(c.competition_id);
-                                });
-                            };
-
-                            for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
-                                let subscribed_comps: Vec<&models::DbCompetition>  = competitions_out.iter()
-                                    .filter(|c| wsconn.subscriptions.competitions.contains(&c.competition_id)).collect();
-                                println!("subscribed_comps: {:?}", subscribed_comps);
-                                // TODO cache in-case lots of people have same filters
-                                let subscribed_comps_json_r = serde_json::to_string(&subscribed_comps);
-                                match subscribed_comps_json_r.as_ref(){
-                                    Ok(subscribed_comps_json) => {
-                                        if let Err(publish) = wsconn.tx.send(Ok(ws::Message::text(subscribed_comps_json))){
-                                            println!("Error publishing update {:?} to {} : {}", &subscribed_comps_json_r, uid, &publish)
-                                        };
-                                    },
-                                    Err(_) => println!("Error json serializing publisher update {:?} to {}", &subscribed_comps_json_r, uid)
-                                };
-                            };
+                            sub_to_competitions(ws_conns, user_ws_id, competitions_out.iter().map(|c| c.competition_id).collect::<HashSet<Uuid>>().iter()).await;
+                            publish_competitions(ws_conns, &competitions_out).await;
                             println!("{:?}", &competitions_out);
                             serde_json::to_string(&competitions_out).map_err(|e| e.into())
                         },
                         Err(e) => Err(Box::new(e) as BoxError)
                     }
                 },
-                Err(e) => {                println!("fuck u");Err(Box::new(e) as BoxError)}
+                Err(e) => {Err(Box::new(e) as BoxError)}
             };
-            
-            // resp.as_ref().map(|r| async move {
-            //     for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
-            //         for 
-            //         if wsconn.subscriptions.contains()
-            //         if let Err(publish) = wsconn.tx.send(Ok(ws::Message::text(r))){
-            //             println!("Error publishing update {:?} to {} : {}", r, uid, &publish)
-            //         };
-            //     };
-            // });
-            // if resp.is_ok(){
-            //     for (&uid, tx) in ws_conns.lock().await.iter_mut(){
-            //         if let Err(publish) = tx.send(Ok(ws::Message::text(&resp.unwrap()))){
-            //             println!("Error publishing update {:?} to {} : {}", &resp, uid, &publish)
-            //         };
-            //     }
-            // };
             resp
-            // serde_json::from_value(req.data).and_then(|d| async move {
-            //     upsert_competitions(conn, d).await}).and_then(|r| serde_json::to_string(&r))
-            //     .map_err(|e| e.into())
         },
-        /*"upsert_serieses" => {
-            upsert_serieses(conn, serde_json::from_value(req.data)?).await
-            .and_then(|x| serde_json::to_string(&x)?).map_err(Box::new)
+        "upsert_serieses" => {
+            let dr = serde_json::from_value(req.data);
+            let resp: Result<String, BoxError> = match dr{
+                Ok(d) => {
+                    println!("{:?}", &d);
+                    let series_out_r= upsert_serieses(conn, d).await;
+                    match series_out_r{
+                        Ok(series_out) => {
+                            //let comp_ids: HashSet<Uuid> = series_out.iter().map(|s| s.competition_id).dedup().collect();
+                            // assume anything upserted the user wants to subscribe to
+                            // TODO check how turn map into iter
+                            sub_to_competitions(ws_conns, user_ws_id, series_out.iter().map(|s| s.competition_id).collect::<HashSet<Uuid>>().iter()).await;
+                            publish_series(ws_conns, &series_out).await;
+                            serde_json::to_string(&series_out).map_err(|e| e.into())
+                        },
+                        Err(e) => Err(Box::new(e) as BoxError)
+                    }
+                },
+                Err(e) => {Err(Box::new(e) as BoxError)}
+            };
+            resp
         },
         "upsert_matches" => {
-            upsert_matches(conn, serde_json::from_value(req.data)?).await
-            .and_then(|x| serde_json::to_string(&x)?).map_err(Box::new)
+            let dr = serde_json::from_value(req.data);
+            let resp: Result<String, BoxError> = match dr{
+                Ok(d) => {
+                    println!("{:?}", &d);
+                    let upserted_r= db::upsert_matches(&conn, d);//upsert_matches(&conn, d).await;
+                    match upserted_r{
+                        Ok(upserted) => {
+                            let series_ids: Vec<Uuid> = upserted.iter().map(|s| s.series_id).dedup().collect();
+                            let comp_and_series_ids_r = db::get_competition_ids_for_series(&conn, &series_ids);
+                            match comp_and_series_ids_r{
+                                Ok(comp_and_series_ids) => {
+                                    // assume anything upserted the user wants to subscribe to
+                                    sub_to_competitions(ws_conns, user_ws_id, comp_and_series_ids.iter().map(|x| &x.1)).await;
+                                    publish_matches(ws_conns, &upserted, comp_and_series_ids.into_iter().collect()).await;
+                                },
+                                Err(e) => {
+                                    println!("Error publishing upsert_serieses for comps: {}", e)
+                                }
+                            }
+                            serde_json::to_string(&upserted).map_err(|e| e.into())
+                        },
+                        Err(e) => Err(Box::new(e) as BoxError)
+                    }
+                },
+                Err(e) => {Err(Box::new(e) as BoxError)}
+            };
+            resp
         },
-        "upsert_teams" => {
-            upsert_teams(conn, serde_json::from_value(req.data)?).await
-            .and_then(|x| serde_json::to_string(&x)?).map_err(Box::new)
-        },
-        "upsert_players" => {
-            upsert_players(conn, serde_json::from_value(req.data)?).await
-            .and_then(|x| serde_json::to_string(&x)?).map_err(Box::new)
-        },
-        "upsert_team_players" => {
-            upsert_team_players(conn, serde_json::from_value(req.data)?).await
-            .and_then(|x| serde_json::to_string(&x)?).map_err(Box::new)
-        },*/
+        // "upsert_matches" => {
+        //     upsert_matches(conn, serde_json::from_value(req.data)?).await
+        //     .and_then(|x| serde_json::to_string(&x)?).map_err(Box::new)
+        // },
+        // "upsert_teams" => {
+        //     upsert_teams(conn, serde_json::from_value(req.data)?).await
+        //     .and_then(|x| serde_json::to_string(&x)?).map_err(Box::new)
+        // },
+        // "upsert_players" => {
+        //     upsert_players(conn, serde_json::from_value(req.data)?).await
+        //     .and_then(|x| serde_json::to_string(&x)?).map_err(Box::new)
+        // },
+        // "upsert_team_players" => {
+        //     upsert_team_players(conn, serde_json::from_value(req.data)?).await
+        //     .and_then(|x| serde_json::to_string(&x)?).map_err(Box::new)
+        // },
         //"upsert_series_teams" => upsert_series_teams(conn, serde_json::from_value(req.data)?),
         //"upsert_team_match_results" => upsert_team_match_results(conn, serde_json::from_value(req.data)?),
         //"upsert_player_match_results" => upsert_player_match_results(conn, serde_json::from_value(req.data)?),

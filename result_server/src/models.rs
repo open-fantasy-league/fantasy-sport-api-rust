@@ -1,9 +1,9 @@
 use super::schema::*;
+use crate::utils::my_timespan_format;
+use crate::DieselTimespan;
 use serde::{Deserialize, Serialize};
 use serde_json;
-use crate::DieselTimespan;
 use uuid::Uuid;
-use crate::utils::my_timespan_format;
 
 #[derive(Queryable, Serialize, Debug)]
 pub struct DbCompetition {
@@ -15,8 +15,8 @@ pub struct DbCompetition {
 }
 
 #[derive(Insertable, Deserialize, LabelledGeneric, Debug)]
-#[table_name="competitions"]
-pub struct DbNewCompetition{
+#[table_name = "competitions"]
+pub struct DbNewCompetition {
     pub competition_id: Option<Uuid>,
     //pub name: &'a str, // This didnt work. think similar to https://stackoverflow.com/a/57977257/3920439
     pub name: String,
@@ -25,7 +25,7 @@ pub struct DbNewCompetition{
     pub timespan: DieselTimespan,
 }
 
-#[derive(Queryable, Serialize)]
+#[derive(Queryable, Serialize, Debug)]
 pub struct DbSeries {
     pub series_id: Uuid,
     pub name: String,
@@ -36,8 +36,8 @@ pub struct DbSeries {
 }
 
 #[derive(Insertable, Deserialize, LabelledGeneric)]
-#[table_name="series"]
-pub struct DbNewSeries{
+#[table_name = "series"]
+pub struct DbNewSeries {
     pub series_id: Option<Uuid>,
     pub competition_id: Uuid,
     pub name: String,
@@ -46,7 +46,7 @@ pub struct DbNewSeries{
     pub timespan: DieselTimespan,
 }
 
-#[derive(Queryable, Serialize)]
+#[derive(Queryable, Serialize, Debug)]
 pub struct DbMatch {
     pub match_id: Uuid,
     pub name: String,
@@ -56,9 +56,9 @@ pub struct DbMatch {
     pub timespan: DieselTimespan,
 }
 
-#[derive(Insertable, Deserialize, LabelledGeneric)]
-#[table_name="matches"]
-pub struct DbNewMatch{
+#[derive(Insertable, Deserialize, LabelledGeneric, Debug)]
+#[table_name = "matches"]
+pub struct DbNewMatch {
     pub match_id: Option<Uuid>,
     pub series_id: Uuid,
     pub name: String,
@@ -67,13 +67,13 @@ pub struct DbNewMatch{
     pub timespan: DieselTimespan,
 }
 
-#[derive(Queryable, Serialize)]
+#[derive(Queryable, Serialize, Debug)]
 pub struct DbTeam {
     pub team_id: Uuid,
     pub meta: serde_json::Value,
 }
 
-#[derive(Queryable, Serialize)]
+#[derive(Queryable, Serialize, Debug)]
 pub struct DbTeamName {
     #[serde(skip_serializing)]
     team_name_id: Uuid,
@@ -84,28 +84,28 @@ pub struct DbTeamName {
 }
 
 #[derive(Insertable, Deserialize, LabelledGeneric)]
-#[table_name="teams"]
-pub struct DbNewTeam{
+#[table_name = "teams"]
+pub struct DbNewTeam {
     pub team_id: Option<Uuid>,
     pub meta: serde_json::Value,
 }
 
 #[derive(Insertable, Deserialize, LabelledGeneric)]
-#[table_name="team_names"]
-pub struct DbNewTeamName{
+#[table_name = "team_names"]
+pub struct DbNewTeamName {
     pub team_id: Uuid,
     pub name: String,
     #[serde(with = "my_timespan_format")]
     pub timespan: DieselTimespan,
 }
 
-#[derive(Queryable, Serialize)]
+#[derive(Queryable, Serialize, Debug)]
 pub struct DbPlayer {
     pub player_id: Uuid,
     pub meta: serde_json::Value,
 }
 
-#[derive(Queryable, Serialize)]
+#[derive(Queryable, Serialize, Debug)]
 pub struct DbPlayerName {
     #[serde(skip_serializing)]
     player_name_id: Uuid,
@@ -116,38 +116,37 @@ pub struct DbPlayerName {
 }
 
 #[derive(Insertable, Deserialize, LabelledGeneric)]
-#[table_name="players"]
-pub struct DbNewPlayer{
+#[table_name = "players"]
+pub struct DbNewPlayer {
     pub player_id: Option<Uuid>,
     pub meta: serde_json::Value,
 }
 
 #[derive(Insertable, Deserialize, LabelledGeneric)]
-#[table_name="player_names"]
-pub struct DbNewPlayerName{
+#[table_name = "player_names"]
+pub struct DbNewPlayerName {
     pub player_id: Uuid,
     pub name: String,
     #[serde(with = "my_timespan_format")]
     pub timespan: DieselTimespan,
 }
 
-
-#[derive(Queryable)]
+#[derive(Queryable, Debug)]
 pub struct DbSeriesTeam {
     pub series_id: Uuid,
     pub team_id: Uuid,
 }
 
 #[derive(Insertable, Deserialize)]
-#[table_name="series_teams"]
-pub struct DbNewSeriesTeam{
+#[table_name = "series_teams"]
+pub struct DbNewSeriesTeam {
     pub series_id: Uuid,
     pub team_id: Uuid,
 }
 
 #[derive(Insertable, Deserialize)]
-#[table_name="team_players"]
-pub struct DbNewTeamPlayer{
+#[table_name = "team_players"]
+pub struct DbNewTeamPlayer {
     pub team_id: Uuid,
     pub player_id: Uuid,
     #[serde(with = "my_timespan_format")]
