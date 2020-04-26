@@ -162,7 +162,7 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, us
                     match competitions_out_r{
                         Ok(competitions_out) => {
                             // assume anything upserted the user wants to subscribe to
-                            sub_to_competitions(ws_conns, user_ws_id, competitions_out.iter().map(|c| c.competition_id).collect::<HashSet<Uuid>>().iter()).await;
+                            sub_to_competitions(ws_conns, user_ws_id, competitions_out.iter().map(|c| &c.competition_id)).await;
                             publish_competitions(ws_conns, &competitions_out).await;
                             println!("{:?}", &competitions_out);
                             serde_json::to_string(&competitions_out).map_err(|e| e.into())
@@ -185,7 +185,7 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, us
                             //let comp_ids: HashSet<Uuid> = series_out.iter().map(|s| s.competition_id).dedup().collect();
                             // assume anything upserted the user wants to subscribe to
                             // TODO check how turn map into iter
-                            sub_to_competitions(ws_conns, user_ws_id, series_out.iter().map(|s| s.competition_id).collect::<HashSet<Uuid>>().iter()).await;
+                            sub_to_competitions(ws_conns, user_ws_id, series_out.iter().map(|s| &s.competition_id)).await;
                             publish_series(ws_conns, &series_out).await;
                             serde_json::to_string(&series_out).map_err(|e| e.into())
                         },
