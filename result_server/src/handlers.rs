@@ -15,20 +15,22 @@ pub struct ErrorResp {
     pub message: String,
 }
 
-
-// #[derive(Serialize)]
-// pub struct WSResp<'a> {
-//     pub message_id: Uuid,
-//     pub mode: &'a str,
-//     pub data: serde_json::Value
-// }
-
 #[derive(Serialize)]
-pub struct WSResp<'a, T: Serialize> {
+pub struct WSMsgOut<'a, T: Serialize> {
     pub message_id: Uuid,
     pub mode: &'a str,
     pub message_type: &'a str,
     pub data: T
+}
+
+impl<'a, T: Serialize> WSMsgOut<'a, T>{
+    pub fn resp(message_id: Uuid, message_type: &'a str, data: T) -> Self{
+        return Self{message_id: message_id, message_type: message_type, mode: "resp", data: data}
+    }
+
+    pub fn push(message_type: &'a str, data: T) -> Self{
+        return Self{message_id: Uuid::new_v4(), message_type: message_type, mode: "push", data: data}
+    }
 }
 
 

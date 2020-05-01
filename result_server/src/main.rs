@@ -89,7 +89,8 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, us
                             sub_to_competitions(ws_conns, user_ws_id, competitions_out.iter().map(|c| &c.competition_id)).await;
                             publish_competitions(ws_conns, &competitions_out).await;
                             println!("{:?}", &competitions_out);
-                            let resp_msg = WSResp{message_id: req.message_id, message_type: req.method, mode: "resp", data: competitions_out};
+                            let resp_msg = WSMsgOut::resp(req.message_id, req.method, competitions_out);
+                            //let resp_msg = WSMsgOut{message_id: req.message_id, message_type: req.method, mode: "resp", data: competitions_out};
                             serde_json::to_string(&resp_msg).map_err(|e| e.into())
                         },
                         Err(e) => Err(Box::new(e) as BoxError)
@@ -112,7 +113,7 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, us
                             // TODO check how turn map into iter
                             sub_to_competitions(ws_conns, user_ws_id, series_out.iter().map(|s| &s.competition_id)).await;
                             publish_series(ws_conns, &series_out).await;
-                            let resp_msg = WSResp{message_id: req.message_id, message_type: req.method, mode: "resp", data: series_out};
+                            let resp_msg = WSMsgOut::resp(req.message_id, req.method, series_out);
                             serde_json::to_string(&resp_msg).map_err(|e| e.into())
                         },
                         Err(e) => Err(Box::new(e) as BoxError)
@@ -142,7 +143,7 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, us
                                     println!("Error publishing upsert_serieses for comps: {}", e)
                                 }
                             }
-                            let resp_msg = WSResp{message_id: req.message_id, message_type: req.method, mode: "resp", data: upserted};
+                            let resp_msg = WSMsgOut::resp(req.message_id, req.method, upserted);
                             serde_json::to_string(&resp_msg).map_err(|e| e.into())
                         },
                         Err(e) => Err(Box::new(e) as BoxError)
@@ -161,7 +162,7 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, us
                     match upserted_r{
                         Ok(upserted) => {
                             publish_teams(ws_conns, &upserted).await;
-                            let resp_msg = WSResp{message_id: req.message_id, message_type: req.method, mode: "resp", data: upserted};
+                            let resp_msg = WSMsgOut::resp(req.message_id, req.method, upserted);
                             serde_json::to_string(&resp_msg).map_err(|e| e.into())
                         },
                         Err(e) => Err(Box::new(e) as BoxError)
@@ -171,10 +172,25 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, us
             };
             resp
         },
-        // "upsert_players" => {
-        //     upsert_players(conn, serde_json::from_value(req.data)?).await
-        //     .and_then(|x| serde_json::to_string(&x)?).map_err(Box::new)
-        // },
+        "upsert_players" => {
+            let dr = serde_json::from_value(req.data);
+            let resp: Result<String, BoxError> = match dr{
+                Ok(d) => {
+                    println!("{:?}", &d);
+                    let upserted_r= db::upsert_players(&conn, d);//upsert_matches(&conn, d).await;
+                    match upserted_r{
+                        Ok(upserted) => {
+                            publish_players(ws_conns, &upserted).await;
+                            let resp_msg = WSMsgOut::resp(req.message_id, req.method, upserted);
+                            serde_json::to_string(&resp_msg).map_err(|e| e.into())
+                        },
+                        Err(e) => Err(Box::new(e) as BoxError)
+                    }
+                },
+                Err(e) => {Err(Box::new(e) as BoxError)}
+            };
+            resp
+        },
         // "upsert_team_players" => {
         //     upsert_team_players(conn, serde_json::from_value(req.data)?).await
         //     .and_then(|x| serde_json::to_string(&x)?).map_err(Box::new)
