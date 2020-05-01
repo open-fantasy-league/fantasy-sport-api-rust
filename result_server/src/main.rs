@@ -24,6 +24,10 @@ mod db;
 mod handlers;
 use handlers::*;
 mod utils;
+mod publisher;
+use publisher::*;
+mod subscription_handler;
+use subscription_handler::*;
 
 pub type DieselTimespan = (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>);
 
@@ -41,25 +45,9 @@ pub fn generic_ws_error(error_msg: String) -> ws::Message{
     )
 }
 
-struct Subscriptions{
-    teams: bool,
-    players: bool,
-    competitions: HashSet<Uuid>
-}
-
-impl Subscriptions{
-    fn new() -> Subscriptions {
-        Subscriptions{teams: false, players: false, competitions: HashSet::new()}
-    }
-}
-enum Subscription{
-    CompetitionSubscription,
-    String
-}
-
-struct WsConnection{
-    id: Uuid,
-    subscriptions: Subscriptions,
+pub struct WsConnection{
+    pub id: Uuid,
+    pub subscriptions: Subscriptions,
     tx: mpsc::UnboundedSender<Result<ws::Message, warp::Error>>
 }
 
@@ -83,70 +71,6 @@ impl std::error::Error for InvalidRequestError{
         // Generic error, underlying cause isn't tracked.
         None
     }
-}
-
-async fn sub_to_competitions<'a, T: Iterator<Item = &'a Uuid>>(ws_conns: &mut WsConnections, user_ws_id: Uuid, competition_ids: T){
-    if let Some(ws_user) = ws_conns.lock().await.get_mut(&user_ws_id){
-        competition_ids.for_each(|cid| {
-            println!("Adding subscription {}", cid); ws_user.subscriptions.competitions.insert(*cid);
-        });
-    };
-}
-
-async fn publish_competitions(ws_conns: &mut WsConnections, competitions: &Vec<models::DbCompetition>){
-
-    for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
-        let subscribed_comps: Vec<&models::DbCompetition>  = competitions.iter()
-            .filter(|c| wsconn.subscriptions.competitions.contains(&c.competition_id)).collect();
-        println!("subscribed_comps: {:?}", subscribed_comps);
-        // TODO cache in-case lots of people have same filters
-        let subscribed_comps_json_r = serde_json::to_string(&subscribed_comps);
-        match subscribed_comps_json_r.as_ref(){
-            Ok(subscribed_comps_json) => {
-                if let Err(publish) = wsconn.tx.send(Ok(ws::Message::text(subscribed_comps_json))){
-                    println!("Error publishing update {:?} to {} : {}", &subscribed_comps_json_r, uid, &publish)
-                };
-            },
-            Err(_) => println!("Error json serializing publisher update {:?} to {}", &subscribed_comps_json_r, uid)
-        };
-    };
-}
-
-async fn publish_series(ws_conns: &mut WsConnections, series: &Vec<models::DbSeries>){
-
-    for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
-        let subscribed: Vec<&models::DbSeries>  = series.iter()
-            .filter(|s| wsconn.subscriptions.competitions.contains(&s.competition_id)).collect();
-        println!("subscribed_series: {:?}", subscribed);
-        // TODO cache in-case lots of people have same filters
-        let subscribed_json_r = serde_json::to_string(&subscribed);
-        match subscribed_json_r.as_ref(){
-            Ok(subscribed_json) => {
-                if let Err(publish) = wsconn.tx.send(Ok(ws::Message::text(subscribed_json))){
-                    println!("Error publishing update {:?} to {} : {}", &subscribed_json, uid, &publish)
-                };
-            },
-            Err(_) => println!("Error json serializing publisher update {:?} to {}", &subscribed_json_r, uid)
-        };
-    };
-}
-
-async fn publish_matches(ws_conns: &mut WsConnections, matches: &Vec<models::DbMatch>, series_to_competitions: HashMap<Uuid, Uuid>){
-    for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
-        let subscribed: Vec<&models::DbMatch>  = matches.iter()
-            .filter(|x| wsconn.subscriptions.competitions.contains(&series_to_competitions.get(&x.series_id).unwrap())).collect();
-        println!("subscribed_series: {:?}", subscribed);
-        // TODO cache in-case lots of people have same filters
-        let subscribed_json_r = serde_json::to_string(&subscribed);
-        match subscribed_json_r.as_ref(){
-            Ok(subscribed_json) => {
-                if let Err(publish) = wsconn.tx.send(Ok(ws::Message::text(subscribed_json))){
-                    println!("Error publishing update {:?} to {} : {}", &subscribed_json, uid, &publish)
-                };
-            },
-            Err(_) => println!("Error json serializing publisher update {:?} to {}", &subscribed_json_r, uid)
-        };
-    };
 }
 
 async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, user_ws_id: Uuid) -> Result<String, BoxError>{
@@ -225,14 +149,24 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, us
             };
             resp
         },
-        // "upsert_matches" => {
-        //     upsert_matches(conn, serde_json::from_value(req.data)?).await
-        //     .and_then(|x| serde_json::to_string(&x)?).map_err(Box::new)
-        // },
-        // "upsert_teams" => {
-        //     upsert_teams(conn, serde_json::from_value(req.data)?).await
-        //     .and_then(|x| serde_json::to_string(&x)?).map_err(Box::new)
-        // },
+        "upsert_teams" => {
+            let dr = serde_json::from_value(req.data);
+            let resp: Result<String, BoxError> = match dr{
+                Ok(d) => {
+                    println!("{:?}", &d);
+                    let upserted_r= db::upsert_teams(&conn, d);//upsert_matches(&conn, d).await;
+                    match upserted_r{
+                        Ok(upserted) => {
+                            publish_teams(ws_conns, &upserted).await;
+                            serde_json::to_string(&upserted).map_err(|e| e.into())
+                        },
+                        Err(e) => Err(Box::new(e) as BoxError)
+                    }
+                },
+                Err(e) => {Err(Box::new(e) as BoxError)}
+            };
+            resp
+        },
         // "upsert_players" => {
         //     upsert_players(conn, serde_json::from_value(req.data)?).await
         //     .and_then(|x| serde_json::to_string(&x)?).map_err(Box::new)
