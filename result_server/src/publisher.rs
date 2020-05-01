@@ -4,6 +4,7 @@ use warp::ws;
 use std::collections::HashMap;
 use uuid::Uuid;
 use crate::handlers::WSMsgOut;
+use serde::Serialize;
 
 pub async fn publish_competitions(ws_conns: &mut WsConnections, competitions: &Vec<models::DbCompetition>){
 
@@ -96,5 +97,60 @@ pub async fn publish_players(ws_conns: &mut WsConnections, players: &Vec<models:
                 Err(_) => println!("Error json serializing publisher update {:?} to {}", &players, uid)
             };
         }
+    };
+}
+
+// pub async fn publish_team_match_results(ws_conns: &mut WsConnections, results: &Vec<models::DbTeamMatchResult>, match_to_comp_ids: HashMap<Uuid, Uuid>){
+//     // TODO cache in-case lots of people have same filters
+//     for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
+//         let subscribed_results: Vec<&models::DbTeamMatchResult>  = results.iter()
+//             .filter(|x| wsconn.subscriptions.competitions.contains(&match_to_comp_ids.get(&x.match_id).unwrap())).collect();
+//         let push_msg = WSMsgOut::push("team_match_results", subscribed_results);
+//         let subscribed_json_r = serde_json::to_string(&push_msg);
+//         match subscribed_json_r.as_ref(){
+//             Ok(subscribed_json) => {
+//                 if let Err(publish) = wsconn.tx.send(Ok(ws::Message::text(subscribed_json))){
+//                     println!("Error publishing update {:?} to {} : {}", &subscribed_json, uid, &publish)
+//                 };
+//             },
+//             Err(_) => println!("Error json serializing publisher update {:?} to {}", &subscribed_json_r, uid)
+//         };
+//     };
+// }
+
+// pub async fn publish_team_series_results(ws_conns: &mut WsConnections, results: &Vec<models::DbTeamSeriesResult>, match_to_comp_ids: HashMap<Uuid, Uuid>){
+//     // TODO cache in-case lots of people have same filters
+//     for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
+//         let subscribed_results: Vec<&models::DbTeamMatchResult>  = results.iter()
+//             .filter(|x| wsconn.subscriptions.competitions.contains(&match_to_comp_ids.get(&x.match_id).unwrap())).collect();
+//         let push_msg = WSMsgOut::push("team_series_results", subscribed_results);
+//         let subscribed_json_r = serde_json::to_string(&push_msg);
+//         match subscribed_json_r.as_ref(){
+//             Ok(subscribed_json) => {
+//                 if let Err(publish) = wsconn.tx.send(Ok(ws::Message::text(subscribed_json))){
+//                     println!("Error publishing update {:?} to {} : {}", &subscribed_json, uid, &publish)
+//                 };
+//             },
+//             Err(_) => println!("Error json serializing publisher update {:?} to {}", &subscribed_json_r, uid)
+//         };
+//     };
+// }
+
+pub async fn publish_results<'a, T: models::Publishable + models::HasId + Serialize>
+    (ws_conns: &mut WsConnections, results: &Vec<T>, id_to_comp_ids: HashMap<Uuid, Uuid>){
+    // TODO cache in-case lots of people have same filters
+    for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
+        let subscribed_results: Vec<&T>  = results.iter()
+            .filter(|x| wsconn.subscriptions.competitions.contains(&id_to_comp_ids.get(&x.get_id()).unwrap())).collect();
+        let push_msg = WSMsgOut::push(T::message_type(), subscribed_results);
+        let subscribed_json_r = serde_json::to_string(&push_msg);
+        match subscribed_json_r.as_ref(){
+            Ok(subscribed_json) => {
+                if let Err(publish) = wsconn.tx.send(Ok(ws::Message::text(subscribed_json))){
+                    println!("Error publishing update {:?} to {} : {}", &subscribed_json, uid, &publish)
+                };
+            },
+            Err(_) => println!("Error json serializing publisher update {:?} to {}", &subscribed_json_r, uid)
+        };
     };
 }

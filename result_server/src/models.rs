@@ -152,3 +152,98 @@ pub struct DbNewTeamPlayer {
     #[serde(with = "my_timespan_format")]
     pub timespan: DieselTimespan,
 }
+
+#[derive(Queryable, Serialize, Debug)]
+pub struct DbTeamMatchResult {
+    team_result_id: Uuid,
+    pub team_id: Uuid,
+    pub match_id: Uuid,
+    pub result: String,
+    pub meta: serde_json::Value,
+}
+#[derive(Insertable, Deserialize, Debug)]
+#[table_name = "team_results"]
+pub struct DbNewTeamMatchResult {
+    pub team_id: Uuid,
+    pub match_id: Uuid,
+    pub result: String,
+    pub meta: serde_json::Value,
+}
+
+#[derive(Queryable, Serialize, Debug)]
+pub struct DbTeamSeriesResult {
+    team_series_result_id: Uuid,
+    pub team_id: Uuid,
+    pub series_id: Uuid,
+    pub result: String,
+    pub meta: serde_json::Value,
+}
+#[derive(Insertable, Deserialize, Debug)]
+#[table_name = "team_series_results"]
+pub struct DbNewTeamSeriesResult {
+    pub team_id: Uuid,
+    pub series_id: Uuid,
+    pub result: String,
+    pub meta: serde_json::Value,
+}
+
+#[derive(Queryable, Serialize, Debug)]
+pub struct DbPlayerMatchResult {
+    player_result_id: Uuid,
+    pub player_id: Uuid,
+    pub match_id: Uuid,
+    pub result: String,
+    pub meta: serde_json::Value,
+}
+#[derive(Insertable, Deserialize, Debug)]
+#[table_name = "player_results"]
+pub struct DbNewPlayerMatchResult {
+    pub player_id: Uuid,
+    pub match_id: Uuid,
+    pub result: String,
+    pub meta: serde_json::Value,
+}
+
+pub trait Publishable {
+    fn message_type<'a>() -> &'a str;
+}
+
+pub trait HasId {
+    fn get_id(&self) -> Uuid;
+}
+
+impl HasId for DbTeamMatchResult {
+    fn get_id(&self) -> Uuid {
+        self.match_id
+    }
+}
+
+impl Publishable for DbTeamMatchResult {
+    fn message_type<'a>() -> &'a str {
+        "team_match_results"
+    }
+}
+
+impl HasId for DbPlayerMatchResult {
+    fn get_id(&self) -> Uuid {
+        self.match_id
+    }
+}
+
+impl Publishable for DbPlayerMatchResult {
+    fn message_type<'a>() -> &'a str {
+        "player_match_results"
+    }
+}
+
+impl HasId for DbTeamSeriesResult {
+    fn get_id(&self) -> Uuid {
+        self.series_id
+    }
+}
+
+impl Publishable for DbTeamSeriesResult {
+    fn message_type<'a>() -> &'a str {
+        "team_series_results"
+    }
+}

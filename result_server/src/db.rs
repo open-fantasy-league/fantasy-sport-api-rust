@@ -6,7 +6,7 @@ use diesel::prelude::*;
 use diesel::ExpressionMethods;
 use diesel::RunQueryDsl;
 use diesel::{sql_query, sql_types};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 //use frunk::labelled::transform_from;
 use crate::handlers::{ApiNewPlayer, ApiNewTeam};
@@ -219,6 +219,57 @@ pub fn upsert_team_players<'a>(
         .execute(conn)
 }
 
+pub fn upsert_team_match_results(
+    conn: &PgConnection,
+    team_results: Vec<DbNewTeamMatchResult>,
+) -> Result<Vec<DbTeamMatchResult>, diesel::result::Error> {
+    use crate::schema::team_results::{dsl, table};
+    diesel::insert_into(table)
+        .values(&team_results)
+        // TODO  confirm this on conflict actually works (have i set a unique const?)
+        .on_conflict((dsl::team_id, dsl::match_id))
+        .do_update()
+        .set((
+            dsl::meta.eq(excluded(dsl::meta)),
+            dsl::result.eq(excluded(dsl::result)),
+        ))
+        .get_results(conn)
+}
+
+pub fn upsert_player_match_results(
+    conn: &PgConnection,
+    player_results: Vec<DbNewPlayerMatchResult>,
+) -> Result<Vec<DbPlayerMatchResult>, diesel::result::Error> {
+    use crate::schema::player_results::{dsl, table};
+    diesel::insert_into(table)
+        .values(&player_results)
+        // TODO  confirm this on conflict actually works (have i set a unique const?)
+        .on_conflict((dsl::player_id, dsl::match_id))
+        .do_update()
+        .set((
+            dsl::meta.eq(excluded(dsl::meta)),
+            dsl::result.eq(excluded(dsl::result)),
+        ))
+        .get_results(conn)
+}
+
+pub fn upsert_team_series_results(
+    conn: &PgConnection,
+    team_results: Vec<DbNewTeamSeriesResult>,
+) -> Result<Vec<DbTeamSeriesResult>, diesel::result::Error> {
+    use crate::schema::team_series_results::{dsl, table};
+    diesel::insert_into(table)
+        .values(&team_results)
+        // TODO  confirm this on conflict actually works (have i set a unique const?)
+        .on_conflict((dsl::team_id, dsl::series_id))
+        .do_update()
+        .set((
+            dsl::meta.eq(excluded(dsl::meta)),
+            dsl::result.eq(excluded(dsl::result)),
+        ))
+        .get_results(conn)
+}
+
 pub fn get_competition_ids_for_series(
     conn: &PgConnection,
     series_ids: &Vec<Uuid>,
@@ -226,13 +277,38 @@ pub fn get_competition_ids_for_series(
     use crate::schema::competitions;
     use crate::schema::series::dsl;
 
-    // The load doesnt work here
-    // sql_query("SELECT competition_id from series JOIN competitions using(competition_id) WHERE series_id IN $1")
-    //     .bind::<Vec<sql_types::Uuid>, _>(series_ids)
-    //     .load::<Uuid>(conn)
     dsl::series
         .select((dsl::series_id, dsl::competition_id))
         .filter(dsl::series_id.eq(any(series_ids)))
         .left_join(competitions::table)
         .load(conn)
+}
+
+pub fn get_competition_ids_for_matches(
+    conn: &PgConnection,
+    match_ids: &Vec<Uuid>,
+) -> Result<Vec<(Uuid, Uuid)>, diesel::result::Error> {
+    use crate::schema::matches;
+    use crate::schema::series;
+    // matches::table.inner_join(series::table).load(conn)
+    // TODO https://github.com/diesel-rs/diesel/issues/1129#issuecomment-324965108
+    matches::table
+        .inner_join(series::table)
+        .select((matches::match_id, series::competition_id))
+        .filter(matches::dsl::match_id.eq(any(match_ids)))
+        .load(conn)
+}
+
+pub fn get_all_teams(
+    conn: &PgConnection,
+) -> Result<Vec<(DbTeam, DbTeamName)>, diesel::result::Error> {
+    use crate::schema::{team_names, teams};
+    teams::table.inner_join(team_names::table).load(conn)
+}
+
+pub fn get_all_players(
+    conn: &PgConnection,
+) -> Result<Vec<(DbPlayer, DbPlayerName)>, diesel::result::Error> {
+    use crate::schema::{player_names, players};
+    players::table.inner_join(player_names::table).load(conn)
 }

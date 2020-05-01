@@ -77,6 +77,50 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, us
     let req: WSReq = serde_json::from_str(&msg)?;
     println!("{}", &req.data);
     match req.method{
+        "sub_teams" => {
+            let dr: Result<ApiSubTeams, _> = serde_json::from_value(req.data);
+            let resp: Result<String, BoxError> = match dr{
+                Ok(d) => {
+                    println!("{:?}", &d);
+                    sub_to_teams(ws_conns, user_ws_id, d.toggle).await;
+                    let db_out_r = db::get_all_teams(&conn).map(|rows| ApiTeam::from_rows(rows));
+                    match db_out_r{
+                        Ok(db_out) => {
+                            // assume anything upserted the user wants to subscribe to
+                            println!("{:?}", &db_out);
+                            let resp_msg = WSMsgOut::resp(req.message_id, req.method, db_out);
+                            //let resp_msg = WSMsgOut{message_id: req.message_id, message_type: req.method, mode: "resp", data: competitions_out};
+                            serde_json::to_string(&resp_msg).map_err(|e| e.into())
+                        },
+                        Err(e) => Err(Box::new(e) as BoxError)
+                    }
+                },
+                Err(e) => {Err(Box::new(e) as BoxError)}
+            };
+            resp
+        },
+        "sub_players" => {
+            let dr: Result<ApiSubTeams, _> = serde_json::from_value(req.data);
+            let resp: Result<String, BoxError> = match dr{
+                Ok(d) => {
+                    println!("{:?}", &d);
+                    sub_to_players(ws_conns, user_ws_id, d.toggle).await;
+                    let db_out_r = db::get_all_players(&conn).map(|rows| ApiPlayer::from_rows(rows));
+                    match db_out_r{
+                        Ok(db_out) => {
+                            // assume anything upserted the user wants to subscribe to
+                            println!("{:?}", &db_out);
+                            let resp_msg = WSMsgOut::resp(req.message_id, req.method, db_out);
+                            //let resp_msg = WSMsgOut{message_id: req.message_id, message_type: req.method, mode: "resp", data: competitions_out};
+                            serde_json::to_string(&resp_msg).map_err(|e| e.into())
+                        },
+                        Err(e) => Err(Box::new(e) as BoxError)
+                    }
+                },
+                Err(e) => {Err(Box::new(e) as BoxError)}
+            };
+            resp
+        },
         "upsert_competitions" => {
             let dr = serde_json::from_value(req.data);
             let resp: Result<String, BoxError> = match dr{
@@ -196,7 +240,96 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, us
         //     .and_then(|x| serde_json::to_string(&x)?).map_err(Box::new)
         // },
         //"upsert_series_teams" => upsert_series_teams(conn, serde_json::from_value(req.data)?),
-        //"upsert_team_match_results" => upsert_team_match_results(conn, serde_json::from_value(req.data)?),
+        "upsert_team_match_results" => {
+            let dr: Result<Vec<models::DbNewTeamMatchResult>, _> = serde_json::from_value(req.data);
+            let resp: Result<String, BoxError> = match dr{
+                Ok(d) => {
+                    println!("{:?}", &d);
+                    let match_ids: Vec<Uuid> = d.iter().map(|x| x.match_id).collect();
+                    let upserted_r= db::upsert_team_match_results(&conn, d);
+                    match upserted_r{
+                        Ok(upserted) => {
+                            let fuck = db::get_competition_ids_for_matches(&conn, &match_ids);
+                            // If you put the fuck expression as match <expr>
+                            // complains about "await occurs here, with `&conn` maybe used later"
+                            // Don't understand the error. TODO
+                            match fuck{
+                                Ok(competition_n_match_ids) => {
+                                    let comp_to_match_ids: HashMap<Uuid, Uuid> = competition_n_match_ids.into_iter().collect();
+                                    publish_results::<models::DbTeamMatchResult>(ws_conns, &upserted, comp_to_match_ids).await;
+                                    let resp_msg = WSMsgOut::resp(req.message_id, req.method, upserted);
+                                    serde_json::to_string(&resp_msg).map_err(|e| e.into())
+                                },
+                                Err(e) => Err(Box::new(e) as BoxError)
+                            }
+                        },
+                        Err(e) => Err(Box::new(e) as BoxError)
+                    }
+                },
+                Err(e) => {Err(Box::new(e) as BoxError)}
+            };
+            resp
+        },
+        "upsert_player_match_results" => {
+            let dr: Result<Vec<models::DbNewPlayerMatchResult>, _> = serde_json::from_value(req.data);
+            let resp: Result<String, BoxError> = match dr{
+                Ok(d) => {
+                    println!("{:?}", &d);
+                    let match_ids: Vec<Uuid> = d.iter().map(|x| x.match_id).collect();
+                    let upserted_r= db::upsert_player_match_results(&conn, d);
+                    match upserted_r{
+                        Ok(upserted) => {
+                            let fuck = db::get_competition_ids_for_matches(&conn, &match_ids);
+                            // If you put the fuck expression as match <expr>
+                            // complains about "await occurs here, with `&conn` maybe used later"
+                            // Don't understand the error. TODO
+                            match fuck{
+                                Ok(competition_n_match_ids) => {
+                                    let comp_to_match_ids: HashMap<Uuid, Uuid> = competition_n_match_ids.into_iter().collect();
+                                    publish_results::<models::DbPlayerMatchResult>(ws_conns, &upserted, comp_to_match_ids).await;
+                                    let resp_msg = WSMsgOut::resp(req.message_id, req.method, upserted);
+                                    serde_json::to_string(&resp_msg).map_err(|e| e.into())
+                                },
+                                Err(e) => Err(Box::new(e) as BoxError)
+                            }
+                        },
+                        Err(e) => Err(Box::new(e) as BoxError)
+                    }
+                },
+                Err(e) => {Err(Box::new(e) as BoxError)}
+            };
+            resp
+        },
+        "upsert_team_series_results" => {
+            let dr: Result<Vec<models::DbNewTeamSeriesResult>, _> = serde_json::from_value(req.data);
+            let resp: Result<String, BoxError> = match dr{
+                Ok(d) => {
+                    println!("{:?}", &d);
+                    let series_ids: Vec<Uuid> = d.iter().map(|x| x.series_id).collect();
+                    let upserted_r= db::upsert_team_series_results(&conn, d);
+                    match upserted_r{
+                        Ok(upserted) => {
+                            let fuck = db::get_competition_ids_for_series(&conn, &series_ids);
+                            // If you put the fuck expression as match <expr>
+                            // complains about "await occurs here, with `&conn` maybe used later"
+                            // Don't understand the error. TODO
+                            match fuck{
+                                Ok(competition_n_series_ids) => {
+                                    let comp_to_series_ids: HashMap<Uuid, Uuid> = competition_n_series_ids.into_iter().collect();
+                                    publish_results::<models::DbTeamSeriesResult>(ws_conns, &upserted, comp_to_series_ids).await;
+                                    let resp_msg = WSMsgOut::resp(req.message_id, req.method, upserted);
+                                    serde_json::to_string(&resp_msg).map_err(|e| e.into())
+                                },
+                                Err(e) => Err(Box::new(e) as BoxError)
+                            }
+                        },
+                        Err(e) => Err(Box::new(e) as BoxError)
+                    }
+                },
+                Err(e) => {Err(Box::new(e) as BoxError)}
+            };
+            resp
+        }
         //"upsert_player_match_results" => upsert_player_match_results(conn, serde_json::from_value(req.data)?),
         //"upsert_team_series_results" => upsert_team_series_results(conn, serde_json::from_value(req.data)?),
         uwotm8 => {

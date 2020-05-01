@@ -42,6 +42,20 @@ pub struct WSReq<'a> {
     //pub data: String
 }
 
+
+#[derive(Deserialize, LabelledGeneric, Debug)]
+pub struct ApiSubTeams{
+    pub toggle: bool,
+}
+
+pub struct ApiSubPlayers{
+    pub toggle: bool,
+}
+
+pub struct ApiSubCompetitions{
+    pub competition_ids: Vec<Uuid>,
+}
+
 #[derive(Deserialize, LabelledGeneric, Debug)]
 pub struct ApiNewCompetition{
     pub competition_id: Option<Uuid>,
@@ -71,11 +85,89 @@ pub struct ApiNewTeam{
     pub timespan: DieselTimespan,
 }
 
+#[derive(Serialize, Debug)]
+pub struct ApiTeam{
+    pub team_id: Uuid,
+    pub meta: serde_json::Value,
+    pub names: Vec<ApiTeamName>,
+}
+
+impl ApiTeam{
+    
+    pub fn from_rows(rows: Vec<(DbTeam, DbTeamName)>) -> Vec<Self>{
+        // Group rows by team-id using hashmap, build a list of different team names
+        // Assume if a team has no names ever, we dont care about it
+        let mut acc: HashMap<Uuid, (DbTeam, Vec<DbTeamName>)> = HashMap::new();
+        acc = rows.into_iter().fold(acc, |mut acc, (team, team_name)| {
+            match acc.get_mut(&team.team_id) {
+                Some(t) => {t.1.push(team_name);},
+                None => {acc.insert(team.team_id, (team, vec![team_name]));},
+            }
+            acc
+        });
+
+        acc.into_iter().map(|(team_id, v)|{
+            Self{
+                team_id: team_id,
+                meta: v.0.meta,
+                names: v.1.into_iter().map(|tn| ApiTeamName{name: tn.name, timespan: tn.timespan}).collect_vec()
+            }
+        })
+        .collect_vec()
+    }
+}
+
+#[derive(Serialize, Debug)]
+pub struct ApiTeamName{
+    pub name: String,
+    #[serde(with = "my_timespan_format")]
+    pub timespan: DieselTimespan,
+}
+
 #[derive(Deserialize, LabelledGeneric, Debug)]
 pub struct ApiNewPlayer{
     pub player_id: Option<Uuid>,
     pub name: String,
     pub meta: serde_json::Value,
+    #[serde(with = "my_timespan_format")]
+    pub timespan: DieselTimespan,
+}
+
+#[derive(Serialize, Debug)]
+pub struct ApiPlayer{
+    pub player_id: Uuid,
+    pub meta: serde_json::Value,
+    pub names: Vec<ApiPlayerName>,
+}
+
+impl ApiPlayer{
+    
+    pub fn from_rows(rows: Vec<(DbPlayer, DbPlayerName)>) -> Vec<Self>{
+        // Group rows by team-id using hashmap, build a list of different team names
+        // Assume if a team has no names ever, we dont care about it
+        let mut acc: HashMap<Uuid, (DbPlayer, Vec<DbPlayerName>)> = HashMap::new();
+        acc = rows.into_iter().fold(acc, |mut acc, (player, player_name)| {
+            match acc.get_mut(&player.player_id) {
+                Some(t) => {t.1.push(player_name);},
+                None => {acc.insert(player.player_id, (player, vec![player_name]));},
+            }
+            acc
+        });
+
+        acc.into_iter().map(|(pid, v)|{
+            Self{
+                player_id: pid,
+                meta: v.0.meta,
+                names: v.1.into_iter().map(|tn| ApiPlayerName{name: tn.name, timespan: tn.timespan}).collect_vec()
+            }
+        })
+        .collect_vec()
+    }
+}
+
+#[derive(Serialize, Debug)]
+pub struct ApiPlayerName{
+    pub name: String,
     #[serde(with = "my_timespan_format")]
     pub timespan: DieselTimespan,
 }
