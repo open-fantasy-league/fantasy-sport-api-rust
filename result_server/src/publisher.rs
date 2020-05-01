@@ -3,6 +3,7 @@ use crate::WsConnections;
 use warp::ws;
 use std::collections::HashMap;
 use uuid::Uuid;
+use crate::handlers::WSResp;
 
 pub async fn publish_competitions(ws_conns: &mut WsConnections, competitions: &Vec<models::DbCompetition>){
 
@@ -11,7 +12,8 @@ pub async fn publish_competitions(ws_conns: &mut WsConnections, competitions: &V
             .filter(|c| wsconn.subscriptions.competitions.contains(&c.competition_id)).collect();
         println!("subscribed_comps: {:?}", subscribed_comps);
         // TODO cache in-case lots of people have same filters
-        let subscribed_comps_json_r = serde_json::to_string(&subscribed_comps);
+        let publish_msg = WSResp{message_id: Uuid::new_v4(), message_type: "competitions", mode: "push", data: subscribed_comps};
+        let subscribed_comps_json_r = serde_json::to_string(&publish_msg);
         match subscribed_comps_json_r.as_ref(){
             Ok(subscribed_comps_json) => {
                 if let Err(publish) = wsconn.tx.send(Ok(ws::Message::text(subscribed_comps_json))){
@@ -30,7 +32,8 @@ pub async fn publish_series(ws_conns: &mut WsConnections, series: &Vec<models::D
             .filter(|s| wsconn.subscriptions.competitions.contains(&s.competition_id)).collect();
         println!("subscribed_series: {:?}", subscribed);
         // TODO cache in-case lots of people have same filters
-        let subscribed_json_r = serde_json::to_string(&subscribed);
+        let publish_msg = WSResp{message_id: Uuid::new_v4(), message_type: "series", mode: "push", data: subscribed};
+        let subscribed_json_r = serde_json::to_string(&publish_msg);
         match subscribed_json_r.as_ref(){
             Ok(subscribed_json) => {
                 if let Err(publish) = wsconn.tx.send(Ok(ws::Message::text(subscribed_json))){
@@ -48,7 +51,8 @@ pub async fn publish_matches(ws_conns: &mut WsConnections, matches: &Vec<models:
             .filter(|x| wsconn.subscriptions.competitions.contains(&series_to_competitions.get(&x.series_id).unwrap())).collect();
         println!("subscribed_series: {:?}", subscribed);
         // TODO cache in-case lots of people have same filters
-        let subscribed_json_r = serde_json::to_string(&subscribed);
+        let publish_msg = WSResp{message_id: Uuid::new_v4(), message_type: "matches", mode: "push", data: subscribed};
+        let subscribed_json_r = serde_json::to_string(&publish_msg);
         match subscribed_json_r.as_ref(){
             Ok(subscribed_json) => {
                 if let Err(publish) = wsconn.tx.send(Ok(ws::Message::text(subscribed_json))){
@@ -65,7 +69,8 @@ pub async fn publish_teams(ws_conns: &mut WsConnections, teams: &Vec<models::DbT
     // TODO This doesnt include team-names that were mutated by their name-timestamp being 
     for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
         if wsconn.subscriptions.teams{
-            match serde_json::to_string(&teams).as_ref(){
+            let publish_msg = WSResp{message_id: Uuid::new_v4(), message_type: "teams", mode: "push", data: teams};
+            match serde_json::to_string(&publish_msg).as_ref(){
                 Ok(subscribed_json) => {
                     if let Err(publish) = wsconn.tx.send(Ok(ws::Message::text(subscribed_json))){
                         println!("Error publishing update {:?} to {} : {}", &subscribed_json, uid, &publish)

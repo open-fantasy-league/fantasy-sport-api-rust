@@ -89,7 +89,8 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, us
                             sub_to_competitions(ws_conns, user_ws_id, competitions_out.iter().map(|c| &c.competition_id)).await;
                             publish_competitions(ws_conns, &competitions_out).await;
                             println!("{:?}", &competitions_out);
-                            serde_json::to_string(&competitions_out).map_err(|e| e.into())
+                            let resp_msg = WSResp{message_id: req.message_id, message_type: req.method, mode: "resp", data: competitions_out};
+                            serde_json::to_string(&resp_msg).map_err(|e| e.into())
                         },
                         Err(e) => Err(Box::new(e) as BoxError)
                     }
@@ -111,7 +112,8 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, us
                             // TODO check how turn map into iter
                             sub_to_competitions(ws_conns, user_ws_id, series_out.iter().map(|s| &s.competition_id)).await;
                             publish_series(ws_conns, &series_out).await;
-                            serde_json::to_string(&series_out).map_err(|e| e.into())
+                            let resp_msg = WSResp{message_id: req.message_id, message_type: req.method, mode: "resp", data: series_out};
+                            serde_json::to_string(&resp_msg).map_err(|e| e.into())
                         },
                         Err(e) => Err(Box::new(e) as BoxError)
                     }
@@ -140,7 +142,8 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, us
                                     println!("Error publishing upsert_serieses for comps: {}", e)
                                 }
                             }
-                            serde_json::to_string(&upserted).map_err(|e| e.into())
+                            let resp_msg = WSResp{message_id: req.message_id, message_type: req.method, mode: "resp", data: upserted};
+                            serde_json::to_string(&resp_msg).map_err(|e| e.into())
                         },
                         Err(e) => Err(Box::new(e) as BoxError)
                     }
@@ -158,7 +161,8 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, us
                     match upserted_r{
                         Ok(upserted) => {
                             publish_teams(ws_conns, &upserted).await;
-                            serde_json::to_string(&upserted).map_err(|e| e.into())
+                            let resp_msg = WSResp{message_id: req.message_id, message_type: req.method, mode: "resp", data: upserted};
+                            serde_json::to_string(&resp_msg).map_err(|e| e.into())
                         },
                         Err(e) => Err(Box::new(e) as BoxError)
                     }

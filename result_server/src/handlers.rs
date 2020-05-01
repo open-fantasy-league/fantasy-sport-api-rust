@@ -16,6 +16,22 @@ pub struct ErrorResp {
 }
 
 
+// #[derive(Serialize)]
+// pub struct WSResp<'a> {
+//     pub message_id: Uuid,
+//     pub mode: &'a str,
+//     pub data: serde_json::Value
+// }
+
+#[derive(Serialize)]
+pub struct WSResp<'a, T: Serialize> {
+    pub message_id: Uuid,
+    pub mode: &'a str,
+    pub message_type: &'a str,
+    pub data: T
+}
+
+
 #[derive(Deserialize)]
 pub struct WSReq<'a> {
     pub message_id: Uuid,
