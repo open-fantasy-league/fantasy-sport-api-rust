@@ -243,7 +243,7 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, us
                     let upserted_r= db::upsert_team_players(&conn, d);
                     match upserted_r{
                         Ok(upserted) => {
-                            publish_players(ws_conns, &upserted).await;
+                            publish_team_players(ws_conns, &upserted).await;
                             let resp_msg = WSMsgOut::resp(req.message_id, req.method, upserted);
                             serde_json::to_string(&resp_msg).map_err(|e| e.into())
                         },

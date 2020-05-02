@@ -211,12 +211,21 @@ pub fn upsert_series_teams<'a>(
 
 pub fn upsert_team_players<'a>(
     conn: &PgConnection,
-    team_players: Vec<DbNewTeamPlayer>,
-) -> Result<Vec<DbNewTeamPlayer>, diesel::result::Error> {
-    use crate::schema::team_players::table;
-    diesel::insert_into(table)
-        .values(&team_players)
-        .get_results(conn)
+    new: Vec<DbNewTeamPlayer>,
+) -> Result<Vec<DbTeamPlayer>, diesel::result::Error> {
+    use crate::schema::team_players;
+    let num_entries = new.len();
+    new.iter().map(|n| {
+        // map looks useless but want to pass our insertable onto fold-results OK part
+        trim_timespans(conn, "team_player", n.player_id, n.timespan).map(|_| n)
+    }).fold_results(Vec::with_capacity(num_entries), |mut v, o| {
+        v.push(o);
+        v
+    }).and_then(|nn| {
+        diesel::insert_into(team_players::table)
+            .values(nn)
+            .get_results(conn)
+    })
 }
 
 pub fn upsert_team_match_results(
@@ -307,6 +316,14 @@ pub fn get_all_teams(
 }
 
 pub fn get_all_players(
+    conn: &PgConnection,
+) -> Result<Vec<(DbPlayer, DbPlayerName)>, diesel::result::Error> {
+    use crate::schema::{player_names, players};
+    players::table.inner_join(player_names::table).load(conn)
+}
+
+
+pub fn get_players(
     conn: &PgConnection,
 ) -> Result<Vec<(DbPlayer, DbPlayerName)>, diesel::result::Error> {
     use crate::schema::{player_names, players};

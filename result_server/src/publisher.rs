@@ -100,6 +100,23 @@ pub async fn publish_players(ws_conns: &mut WsConnections, players: &Vec<models:
     };
 }
 
+pub async fn publish_team_players(ws_conns: &mut WsConnections, team_players: &Vec<models::DbTeamPlayer>){
+    // TODO This doesnt include team-names that were mutated by their name-timestamp being 
+    for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
+        if wsconn.subscriptions.players{
+            let push_msg = WSMsgOut::push("players", team_players);
+            match serde_json::to_string(&push_msg).as_ref(){
+                Ok(subscribed_json) => {
+                    if let Err(publish) = wsconn.tx.send(Ok(ws::Message::text(subscribed_json))){
+                        println!("Error publishing update {:?} to {} : {}", &subscribed_json, uid, &publish)
+                    };
+                },
+                Err(_) => println!("Error json serializing publisher update {:?} to {}", &team_players, uid)
+            };
+        }
+    };
+}
+
 // pub async fn publish_team_match_results(ws_conns: &mut WsConnections, results: &Vec<models::DbTeamMatchResult>, match_to_comp_ids: HashMap<Uuid, Uuid>){
 //     // TODO cache in-case lots of people have same filters
 //     for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){

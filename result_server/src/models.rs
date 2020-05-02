@@ -144,9 +144,18 @@ pub struct DbNewSeriesTeam {
     pub team_id: Uuid,
 }
 
-#[derive(Insertable, Queryable, Serialize, Deserialize, Debug)]
+#[derive(Insertable, Deserialize, Debug)]
 #[table_name = "team_players"]
 pub struct DbNewTeamPlayer {
+    pub team_id: Uuid,
+    pub player_id: Uuid,
+    #[serde(with = "my_timespan_format")]
+    pub timespan: DieselTimespan,
+}
+
+#[derive(Queryable, Serialize, Debug)]
+pub struct DbTeamPlayer {
+    team_player_id: Uuid,
     pub team_id: Uuid,
     pub player_id: Uuid,
     #[serde(with = "my_timespan_format")]
