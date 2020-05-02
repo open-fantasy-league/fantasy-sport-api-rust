@@ -86,7 +86,7 @@ pub async fn publish_teams(ws_conns: &mut WsConnections, teams: &Vec<models::DbT
 pub async fn publish_players(ws_conns: &mut WsConnections, players: &Vec<models::DbPlayer>){
     // TODO This doesnt include team-names that were mutated by their name-timestamp being 
     for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
-        if wsconn.subscriptions.players{
+        if wsconn.subscriptions.teams{
             let push_msg = WSMsgOut::push("players", players);
             match serde_json::to_string(&push_msg).as_ref(){
                 Ok(subscribed_json) => {
@@ -103,7 +103,7 @@ pub async fn publish_players(ws_conns: &mut WsConnections, players: &Vec<models:
 pub async fn publish_team_players(ws_conns: &mut WsConnections, team_players: &Vec<models::DbTeamPlayer>){
     // TODO This doesnt include team-names that were mutated by their name-timestamp being 
     for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
-        if wsconn.subscriptions.players{
+        if wsconn.subscriptions.teams{
             let push_msg = WSMsgOut::push("players", team_players);
             match serde_json::to_string(&push_msg).as_ref(){
                 Ok(subscribed_json) => {

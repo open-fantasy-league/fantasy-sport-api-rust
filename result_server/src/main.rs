@@ -83,44 +83,49 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, us
                 Ok(d) => {
                     println!("{:?}", &d);
                     sub_to_teams(ws_conns, user_ws_id, d.toggle).await;
-                    let db_out_r = db::get_all_teams(&conn).map(|rows| ApiTeam::from_rows(rows));
-                    match db_out_r{
-                        Ok(db_out) => {
+                    // TODO return players in teams
+                    let team_out_r = db::get_all_teams(&conn).map(|rows| ApiTeam::from_rows(rows));
+                    let players_out_r = db::get_all_players(&conn).map(|rows| ApiPlayer::from_rows(rows));
+                    //let team_players_out_r = db::get_all_team_players(&conn);
+                    match (team_out_r, players_out_r){
+                        (Ok(team_out), Ok(players_out)) => {
                             // assume anything upserted the user wants to subscribe to
-                            println!("{:?}", &db_out);
-                            let resp_msg = WSMsgOut::resp(req.message_id, req.method, db_out);
+                            println!("{:?}", &team_out);
+                            let data = ApiTeamsAndPlayers{teams: team_out, players: players_out};
+                            let resp_msg = WSMsgOut::resp(req.message_id, req.method, data);
                             //let resp_msg = WSMsgOut{message_id: req.message_id, message_type: req.method, mode: "resp", data: competitions_out};
                             serde_json::to_string(&resp_msg).map_err(|e| e.into())
                         },
-                        Err(e) => Err(Box::new(e) as BoxError)
+                        (Err(e), _) => Err(Box::new(e) as BoxError),
+                        (_, Err(e)) => Err(Box::new(e) as BoxError),
                     }
                 },
                 Err(e) => {Err(Box::new(e) as BoxError)}
             };
             resp
         },
-        "sub_players" => {
-            let dr: Result<ApiSubTeams, _> = serde_json::from_value(req.data);
-            let resp: Result<String, BoxError> = match dr{
-                Ok(d) => {
-                    println!("{:?}", &d);
-                    sub_to_players(ws_conns, user_ws_id, d.toggle).await;
-                    let db_out_r = db::get_all_players(&conn).map(|rows| ApiPlayer::from_rows(rows));
-                    match db_out_r{
-                        Ok(db_out) => {
-                            // assume anything upserted the user wants to subscribe to
-                            println!("{:?}", &db_out);
-                            let resp_msg = WSMsgOut::resp(req.message_id, req.method, db_out);
-                            //let resp_msg = WSMsgOut{message_id: req.message_id, message_type: req.method, mode: "resp", data: competitions_out};
-                            serde_json::to_string(&resp_msg).map_err(|e| e.into())
-                        },
-                        Err(e) => Err(Box::new(e) as BoxError)
-                    }
-                },
-                Err(e) => {Err(Box::new(e) as BoxError)}
-            };
-            resp
-        },
+        // "sub_players" => {
+        //     let dr: Result<ApiSubTeams, _> = serde_json::from_value(req.data);
+        //     let resp: Result<String, BoxError> = match dr{
+        //         Ok(d) => {
+        //             println!("{:?}", &d);
+        //             sub_to_teams(ws_conns, user_ws_id, d.toggle).await;
+        //             let db_out_r = db::get_all_players(&conn).map(|rows| ApiPlayer::from_rows(rows));
+        //             match db_out_r{
+        //                 Ok(db_out) => {
+        //                     // assume anything upserted the user wants to subscribe to
+        //                     println!("{:?}", &db_out);
+        //                     let resp_msg = WSMsgOut::resp(req.message_id, req.method, db_out);
+        //                     //let resp_msg = WSMsgOut{message_id: req.message_id, message_type: req.method, mode: "resp", data: competitions_out};
+        //                     serde_json::to_string(&resp_msg).map_err(|e| e.into())
+        //                 },
+        //                 Err(e) => Err(Box::new(e) as BoxError)
+        //             }
+        //         },
+        //         Err(e) => {Err(Box::new(e) as BoxError)}
+        //     };
+        //     resp
+        // },
         "upsert_competitions" => {
             let dr = serde_json::from_value(req.data);
             let resp: Result<String, BoxError> = match dr{

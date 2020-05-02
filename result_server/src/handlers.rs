@@ -172,6 +172,12 @@ pub struct ApiPlayerName{
     pub timespan: DieselTimespan,
 }
 
+#[derive(Serialize, Debug)]
+pub struct ApiTeamsAndPlayers{
+    pub teams: Vec<ApiTeam>,
+    pub players: Vec<ApiPlayer>
+}
+
 //using frunk instead
 /*impl From<ApiNewCompetition> for DbNewCompetition{
     fn from(x: ApiNewCompetition) -> Self{
