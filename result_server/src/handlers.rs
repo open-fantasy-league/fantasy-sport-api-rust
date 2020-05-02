@@ -162,6 +162,62 @@ impl ApiPlayer{
     }
 }
 
+
+#[derive(Serialize, Debug)]
+pub struct ApiMatch{
+    pub match_id: Uuid,
+    pub name: String,
+    pub meta: serde_json::Value,
+    #[serde(with = "my_timespan_format")]
+    pub timespan: DieselTimespan,
+    pub player_results: Vec<PlayerResult>,
+    pub team_results: Vec<TeamMatchResult>
+}
+
+#[derive(Serialize, Debug)]
+pub struct ApiSeries{
+    pub series_id: Uuid,
+    pub name: String,
+    pub meta: serde_json::Value,
+    #[serde(with = "my_timespan_format")]
+    pub timespan: DieselTimespan,
+    pub matches: Vec<ApiMatch>,
+    pub teams: Vec<Team>,
+    pub team_results: Vec<TeamSeriesResult>,
+}
+
+#[derive(Serialize, Debug)]
+pub struct ApiCompetition{
+    pub competition_id: Uuid,
+    pub name: String,
+    pub meta: serde_json::Value,
+    #[serde(with = "my_timespan_format")]
+    pub timespan: DieselTimespan,
+    pub series: Vec<ApiSeries>
+}
+
+impl ApiCompetition{
+    // Vec<(Competition, Vec<(Series, Vec<TeamSeriesResult>, Vec<(Match, Vec<PlayerResult>, Vec<TeamMatchResult>)>)>)>
+    pub fn from_rows(rows: db::CompetitionHierarchy) -> Vec<Self>{
+        rows.into_iter().map(|(c, v)| {
+            Self{
+                competition_id: c.competition_id, name: c.name, meta: c.meta, timespan: c.timespan,
+                series: v.into_iter().map(|(s, tr, v)|{
+                    ApiSeries{
+                        series_id: s.series_id, name: s.name, meta: s.meta, timespan: s.timespan,
+                        teams: vec![], team_results: tr, matches: v.into_iter().map(|(m, pr, tr)|{
+                            ApiMatch{
+                                match_id: m.match_id, name: m.name, meta: m.meta, timespan: m.timespan,
+                                player_results: pr, team_results: tr
+                            }
+                        }).collect_vec()
+                    }
+                }).collect_vec()
+            }
+        }).collect_vec()
+    }
+}
+
 #[derive(Serialize, Debug)]
 pub struct ApiPlayerName{
     pub name: String,

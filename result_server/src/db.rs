@@ -11,7 +11,9 @@ use uuid::Uuid;
 //use frunk::labelled::transform_from;
 use crate::handlers::{ApiNewPlayer, ApiNewTeam};
 use crate::DieselTimespan;
-use itertools::Itertools;
+use itertools::{Itertools, izip};
+
+pub type CompetitionHierarchy = Vec<(Competition, Vec<(Series, Vec<TeamSeriesResult>, Vec<(Match, Vec<PlayerResult>, Vec<TeamMatchResult>)>)>)>;
 
 //sql_function! {fn coalesce<T: sql_types::NotNull>(a: sql_types::Nullable<T>, b: T) -> T;}
 //sql_function!(fn trim_team_name_timespans(new_team_id sql_types::Uuid, new_timespan sql_types::Range<sql_types::Timestamptz>) -> ());
@@ -247,8 +249,8 @@ pub fn upsert_team_match_results(
 
 pub fn upsert_player_match_results(
     conn: &PgConnection,
-    player_results: Vec<NewPlayerMatchResult>,
-) -> Result<Vec<PlayerMatchResult>, diesel::result::Error> {
+    player_results: Vec<NewPlayerResult>,
+) -> Result<Vec<PlayerResult>, diesel::result::Error> {
     use crate::schema::player_results::{dsl, table};
     diesel::insert_into(table)
         .values(&player_results)
@@ -339,7 +341,32 @@ pub fn get_all_competitions(
 pub fn get_full_competitions(
     conn: &PgConnection,
     competition_ids: Vec<Uuid>
-) -> Result<Vec<Competition>, diesel::result::Error> {
+) -> Result<CompetitionHierarchy, diesel::result::Error> {
     use crate::schema::competitions;
-    competitions::table.filter(competitions::dsl::competition_id.eq(any(competition_ids))).load(conn)
+    let comps = competitions::table
+        .filter(competitions::dsl::competition_id.eq(any(competition_ids)))
+        .load::<Competition>(conn)?;
+    let series = Series::belonging_to(&comps).load::<Series>(conn)?;
+    let matches = Match::belonging_to(&series).load::<Match>(conn)?;
+    let team_series_results = TeamSeriesResult::belonging_to(&series).load::<TeamSeriesResult>(conn)?;
+    let team_match_results = TeamMatchResult::belonging_to(&matches).load::<TeamMatchResult>(conn)?;
+    let player_results = PlayerResult::belonging_to(&matches).load::<PlayerResult>(conn)?;
+    let grouped_player_results = player_results.grouped_by(&matches);
+    let grouped_team_match_results = team_match_results.grouped_by(&matches);
+    let grouped_team_series_results = team_series_results.grouped_by(&series);
+    let matches_and_match_results: Vec<Vec<(Match, Vec<PlayerResult>, Vec<TeamMatchResult>)>> = matches.into_iter().zip(grouped_player_results).zip(grouped_team_match_results)
+        .map(|((x, y), z)| (x, y, z))
+        .grouped_by(&series);
+    // let matches_and_match_results: Vec<Vec<Match>> = izip!((matches.into_iter(), grouped_player_results, grouped_team_match_results))
+    // .grouped_by(&series);
+    let series_lvl: Vec<Vec<(Series, Vec<TeamSeriesResult>, Vec<(Match, Vec<PlayerResult>, Vec<TeamMatchResult>)>)>> = series.into_iter().zip(grouped_team_series_results).zip(matches_and_match_results)
+        .map(|((x, y), z)| (x, y, z))
+        .grouped_by(&comps);
+    let everything: CompetitionHierarchy = comps.into_iter().zip(series_lvl)
+        .collect();
+    // let everything = matches_and_match_results.into_iter().zip(grouped_team_series_results)
+    //     .grouped_by(&comps);
+    Ok(everything)
+    //let grouped_series = series.grouped_by(&comps);
+    //series
 }

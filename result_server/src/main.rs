@@ -97,20 +97,18 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, us
                     let subscribed_comps: Vec<&models::Competition> = if let Some(ws_user) = ws_conns.lock().await.get_mut(&user_ws_id){
                         subscribed_comps(&ws_user.subscriptions, &all_competitions)
                     } else {vec![]};
-                    let competitions_out_r = db::get_full_competitions(&conn, subscribed_comps.iter().map(|x| x.competition_id).collect());
-                    let players_out_r = db::get_all_players(&conn).map(|rows| ApiPlayer::from_rows(rows));
-                    let team_players_out_r = db::get_all_team_players(&conn);
-                    Err(Box::new(InvalidRequestError{description: "fuck off m8".to_string()}))
-                    // match (competitions_out_r, players_out_r, team_players_out_r){
-                    //     (Ok(team_out), Ok(players_out), Ok(team_players_out)) => {
-                    //         let data = ApiTeamsAndPlayers{teams: team_out, players: players_out, team_players: team_players_out};
-                    //         let resp_msg = WSMsgOut::resp(req.message_id, req.method, data);
-                    //         serde_json::to_string(&resp_msg).map_err(|e| e.into())
-                    //     },
-                    //     (Err(e), _, _) => Err(Box::new(e) as BoxError),
-                    //     (_, Err(e), _) => Err(Box::new(e) as BoxError),
-                    //     (_, _, Err(e)) => Err(Box::new(e) as BoxError),
-                    // }
+                    let competitions_out_r = db::get_full_competitions(
+                        &conn,
+                         subscribed_comps.iter().map(|x| x.competition_id).collect()
+                    );
+                    match competitions_out_r{
+                        Ok(comp_rows) => {
+                            let data = ApiCompetition::from_rows(comp_rows);
+                            let resp_msg = WSMsgOut::resp(req.message_id, req.method, data);
+                            serde_json::to_string(&resp_msg).map_err(|e| e.into())
+                        },
+                        Err(e) => Err(Box::new(e) as BoxError)
+                    }
                 },
                 Err(e) => {Err(Box::new(e) as BoxError)}
             };
@@ -307,7 +305,7 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, us
             resp
         },
         "upsert_player_match_results" => {
-            let dr: Result<Vec<models::NewPlayerMatchResult>, _> = serde_json::from_value(req.data);
+            let dr: Result<Vec<models::NewPlayerResult>, _> = serde_json::from_value(req.data);
             let resp: Result<String, BoxError> = match dr{
                 Ok(d) => {
                     println!("{:?}", &d);
@@ -322,7 +320,7 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, us
                             match fuck{
                                 Ok(competition_n_match_ids) => {
                                     let comp_to_match_ids: HashMap<Uuid, Uuid> = competition_n_match_ids.into_iter().collect();
-                                    publish_results::<models::PlayerMatchResult>(ws_conns, &upserted, comp_to_match_ids).await;
+                                    publish_results::<models::PlayerResult>(ws_conns, &upserted, comp_to_match_ids).await;
                                     let resp_msg = WSMsgOut::resp(req.message_id, req.method, upserted);
                                     serde_json::to_string(&resp_msg).map_err(|e| e.into())
                                 },
