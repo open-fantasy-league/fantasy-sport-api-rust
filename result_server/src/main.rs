@@ -26,8 +26,8 @@ use handlers::*;
 mod utils;
 mod publisher;
 use publisher::*;
-mod subscription_handler;
-use subscription_handler::*;
+mod subscriptions;
+use subscriptions::*;
 
 pub type DieselTimespan = (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>);
 
@@ -58,11 +58,11 @@ impl WsConnection{
 }
 
 #[derive(Debug, Clone)]
-struct InvalidRequestError{method: String}
+struct InvalidRequestError{description: String}
 
 impl fmt::Display for InvalidRequestError{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Invalid request_type {}", self.method)
+        write!(f, "Invalid request: {}", self.description)
     }
 }
 
@@ -77,55 +77,70 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, us
     let req: WSReq = serde_json::from_str(&msg)?;
     println!("{}", &req.data);
     match req.method{
+        "sub_competitions" => {
+            let dr: Result<ApiSubCompetitions, _> = serde_json::from_value(req.data);
+            let resp: Result<String, BoxError> = match dr{
+                Ok(d) => {
+                    if let Some(toggle) = d.all{
+                        sub_to_all_competitions(ws_conns, user_ws_id, toggle).await;
+                    }
+                    else if let Some(competition_ids) = d.competition_ids{
+                        sub_to_competitions(ws_conns, user_ws_id, competition_ids.iter()).await;
+                    }
+                    else{
+                        return Err(Box::new(InvalidRequestError{description: String::from("sub_competitions must specify either 'all' or 'competition_ids'")}))
+                    }
+                                        // TODO handle unwrap.
+                    let all_competitions = db::get_all_competitions(&conn).unwrap();
+                    // general code is unsightly.
+                    //really the sub_to stuff should not take all ws_conns, and only take the one user
+                    let subscribed_comps: Vec<&models::DbCompetition> = if let Some(ws_user) = ws_conns.lock().await.get_mut(&user_ws_id){
+                        subscribed_comps(&ws_user.subscriptions, &all_competitions)
+                    } else {vec![]};
+                    let competitions_out_r = db::get_full_competitions(&conn, subscribed_comps.iter().map(|x| x.competition_id).collect());
+                    let players_out_r = db::get_all_players(&conn).map(|rows| ApiPlayer::from_rows(rows));
+                    let team_players_out_r = db::get_all_team_players(&conn);
+                    Err(Box::new(InvalidRequestError{description: "fuck off m8".to_string()}))
+                    // match (competitions_out_r, players_out_r, team_players_out_r){
+                    //     (Ok(team_out), Ok(players_out), Ok(team_players_out)) => {
+                    //         let data = ApiTeamsAndPlayers{teams: team_out, players: players_out, team_players: team_players_out};
+                    //         let resp_msg = WSMsgOut::resp(req.message_id, req.method, data);
+                    //         serde_json::to_string(&resp_msg).map_err(|e| e.into())
+                    //     },
+                    //     (Err(e), _, _) => Err(Box::new(e) as BoxError),
+                    //     (_, Err(e), _) => Err(Box::new(e) as BoxError),
+                    //     (_, _, Err(e)) => Err(Box::new(e) as BoxError),
+                    // }
+                },
+                Err(e) => {Err(Box::new(e) as BoxError)}
+            };
+            resp
+        },
         "sub_teams" => {
             let dr: Result<ApiSubTeams, _> = serde_json::from_value(req.data);
             let resp: Result<String, BoxError> = match dr{
                 Ok(d) => {
                     println!("{:?}", &d);
                     sub_to_teams(ws_conns, user_ws_id, d.toggle).await;
-                    // TODO return players in teams
+
                     let team_out_r = db::get_all_teams(&conn).map(|rows| ApiTeam::from_rows(rows));
                     let players_out_r = db::get_all_players(&conn).map(|rows| ApiPlayer::from_rows(rows));
-                    //let team_players_out_r = db::get_all_team_players(&conn);
-                    match (team_out_r, players_out_r){
-                        (Ok(team_out), Ok(players_out)) => {
-                            // assume anything upserted the user wants to subscribe to
-                            println!("{:?}", &team_out);
-                            let data = ApiTeamsAndPlayers{teams: team_out, players: players_out};
+                    let team_players_out_r = db::get_all_team_players(&conn);
+                    match (team_out_r, players_out_r, team_players_out_r){
+                        (Ok(team_out), Ok(players_out), Ok(team_players_out)) => {
+                            let data = ApiTeamsAndPlayers{teams: team_out, players: players_out, team_players: team_players_out};
                             let resp_msg = WSMsgOut::resp(req.message_id, req.method, data);
-                            //let resp_msg = WSMsgOut{message_id: req.message_id, message_type: req.method, mode: "resp", data: competitions_out};
                             serde_json::to_string(&resp_msg).map_err(|e| e.into())
                         },
-                        (Err(e), _) => Err(Box::new(e) as BoxError),
-                        (_, Err(e)) => Err(Box::new(e) as BoxError),
+                        (Err(e), _, _) => Err(Box::new(e) as BoxError),
+                        (_, Err(e), _) => Err(Box::new(e) as BoxError),
+                        (_, _, Err(e)) => Err(Box::new(e) as BoxError),
                     }
                 },
                 Err(e) => {Err(Box::new(e) as BoxError)}
             };
             resp
         },
-        // "sub_players" => {
-        //     let dr: Result<ApiSubTeams, _> = serde_json::from_value(req.data);
-        //     let resp: Result<String, BoxError> = match dr{
-        //         Ok(d) => {
-        //             println!("{:?}", &d);
-        //             sub_to_teams(ws_conns, user_ws_id, d.toggle).await;
-        //             let db_out_r = db::get_all_players(&conn).map(|rows| ApiPlayer::from_rows(rows));
-        //             match db_out_r{
-        //                 Ok(db_out) => {
-        //                     // assume anything upserted the user wants to subscribe to
-        //                     println!("{:?}", &db_out);
-        //                     let resp_msg = WSMsgOut::resp(req.message_id, req.method, db_out);
-        //                     //let resp_msg = WSMsgOut{message_id: req.message_id, message_type: req.method, mode: "resp", data: competitions_out};
-        //                     serde_json::to_string(&resp_msg).map_err(|e| e.into())
-        //                 },
-        //                 Err(e) => Err(Box::new(e) as BoxError)
-        //             }
-        //         },
-        //         Err(e) => {Err(Box::new(e) as BoxError)}
-        //     };
-        //     resp
-        // },
         "upsert_competitions" => {
             let dr = serde_json::from_value(req.data);
             let resp: Result<String, BoxError> = match dr{
@@ -353,7 +368,7 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, us
         }
         uwotm8 => {
             // Think have to make it a string, to not piss-off borrow checker, as we are returning it from this func
-            Err(Box::new(InvalidRequestError{method: uwotm8.to_string()}))
+            Err(Box::new(InvalidRequestError{description: uwotm8.to_string()}))
         }
     }
 }

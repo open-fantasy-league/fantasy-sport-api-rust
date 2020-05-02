@@ -322,10 +322,24 @@ pub fn get_all_players(
     players::table.inner_join(player_names::table).load(conn)
 }
 
-
-pub fn get_players(
+pub fn get_all_team_players(
     conn: &PgConnection,
-) -> Result<Vec<(DbPlayer, DbPlayerName)>, diesel::result::Error> {
-    use crate::schema::{player_names, players};
-    players::table.inner_join(player_names::table).load(conn)
+) -> Result<Vec<DbTeamPlayer>, diesel::result::Error> {
+    use crate::schema::team_players;
+    team_players::table.load(conn)
+}
+
+pub fn get_all_competitions(
+    conn: &PgConnection,
+) -> Result<Vec<DbCompetition>, diesel::result::Error> {
+    use crate::schema::competitions;
+    competitions::table.load(conn)
+}
+
+pub fn get_full_competitions(
+    conn: &PgConnection,
+    competition_ids: Vec<Uuid>
+) -> Result<Vec<DbCompetition>, diesel::result::Error> {
+    use crate::schema::competitions;
+    competitions::table.filter(competitions::dsl::competition_id.eq(any(competition_ids))).load(conn)
 }

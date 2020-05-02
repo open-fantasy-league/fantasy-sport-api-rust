@@ -1,5 +1,6 @@
 use crate::models;
 use crate::WsConnections;
+use crate::subscriptions::subscribed_comps;
 use warp::ws;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -9,8 +10,7 @@ use serde::Serialize;
 pub async fn publish_competitions(ws_conns: &mut WsConnections, competitions: &Vec<models::DbCompetition>){
 
     for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
-        let subscribed_comps: Vec<&models::DbCompetition>  = competitions.iter()
-            .filter(|c| wsconn.subscriptions.competitions.contains(&c.competition_id)).collect();
+        let subscribed_comps: Vec<&models::DbCompetition> = subscribed_comps(&wsconn.subscriptions, competitions);
         println!("subscribed_comps: {:?}", subscribed_comps);
         // TODO cache in-case lots of people have same filters
         let push_msg = WSMsgOut::push("competitions", subscribed_comps);

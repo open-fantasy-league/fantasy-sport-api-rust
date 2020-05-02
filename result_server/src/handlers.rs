@@ -47,13 +47,10 @@ pub struct WSReq<'a> {
 pub struct ApiSubTeams{
     pub toggle: bool,
 }
-
-pub struct ApiSubPlayers{
-    pub toggle: bool,
-}
-
+#[derive(Deserialize, LabelledGeneric, Debug)]
 pub struct ApiSubCompetitions{
-    pub competition_ids: Vec<Uuid>,
+    pub competition_ids: Option<Vec<Uuid>>,
+    pub all: Option<bool>
 }
 
 #[derive(Deserialize, LabelledGeneric, Debug)]
@@ -175,7 +172,8 @@ pub struct ApiPlayerName{
 #[derive(Serialize, Debug)]
 pub struct ApiTeamsAndPlayers{
     pub teams: Vec<ApiTeam>,
-    pub players: Vec<ApiPlayer>
+    pub players: Vec<ApiPlayer>,
+    pub team_players: Vec<DbTeamPlayer>
 }
 
 //using frunk instead
