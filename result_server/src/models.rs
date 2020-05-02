@@ -142,9 +142,11 @@ pub struct NewPlayerName {
     pub timespan: DieselTimespan,
 }
 
-#[derive(Queryable, Debug)]
+#[derive(Queryable, Serialize, Debug, Identifiable, Associations)]
+#[primary_key(series_id, team_id)]
+#[belongs_to(Series)]
 pub struct SeriesTeam {
-    pub series_id: Uuid,
+    series_id: Uuid,
     pub team_id: Uuid,
 }
 

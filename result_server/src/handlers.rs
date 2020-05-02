@@ -182,7 +182,7 @@ pub struct ApiSeries{
     #[serde(with = "my_timespan_format")]
     pub timespan: DieselTimespan,
     pub matches: Vec<ApiMatch>,
-    pub teams: Vec<Team>,
+    pub teams: Vec<SeriesTeam>,
     pub team_results: Vec<TeamSeriesResult>,
 }
 
@@ -202,10 +202,10 @@ impl ApiCompetition{
         rows.into_iter().map(|(c, v)| {
             Self{
                 competition_id: c.competition_id, name: c.name, meta: c.meta, timespan: c.timespan,
-                series: v.into_iter().map(|(s, tr, v)|{
+                series: v.into_iter().map(|(s, tr, st, v)|{
                     ApiSeries{
                         series_id: s.series_id, name: s.name, meta: s.meta, timespan: s.timespan,
-                        teams: vec![], team_results: tr, matches: v.into_iter().map(|(m, pr, tr)|{
+                        teams: st, team_results: tr, matches: v.into_iter().map(|(m, pr, tr)|{
                             ApiMatch{
                                 match_id: m.match_id, name: m.name, meta: m.meta, timespan: m.timespan,
                                 player_results: pr, team_results: tr

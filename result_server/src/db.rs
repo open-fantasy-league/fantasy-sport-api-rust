@@ -13,7 +13,7 @@ use crate::handlers::{ApiNewPlayer, ApiNewTeam};
 use crate::DieselTimespan;
 use itertools::{Itertools, izip};
 
-pub type CompetitionHierarchy = Vec<(Competition, Vec<(Series, Vec<TeamSeriesResult>, Vec<(Match, Vec<PlayerResult>, Vec<TeamMatchResult>)>)>)>;
+pub type CompetitionHierarchy = Vec<(Competition, Vec<(Series, Vec<TeamSeriesResult>, Vec<SeriesTeam>, Vec<(Match, Vec<PlayerResult>, Vec<TeamMatchResult>)>)>)>;
 
 //sql_function! {fn coalesce<T: sql_types::NotNull>(a: sql_types::Nullable<T>, b: T) -> T;}
 //sql_function!(fn trim_team_name_timespans(new_team_id sql_types::Uuid, new_timespan sql_types::Range<sql_types::Timestamptz>) -> ());
@@ -349,24 +349,18 @@ pub fn get_full_competitions(
     let series = Series::belonging_to(&comps).load::<Series>(conn)?;
     let matches = Match::belonging_to(&series).load::<Match>(conn)?;
     let team_series_results = TeamSeriesResult::belonging_to(&series).load::<TeamSeriesResult>(conn)?;
+    let team_series = SeriesTeam::belonging_to(&series).load::<SeriesTeam>(conn)?;
     let team_match_results = TeamMatchResult::belonging_to(&matches).load::<TeamMatchResult>(conn)?;
     let player_results = PlayerResult::belonging_to(&matches).load::<PlayerResult>(conn)?;
     let grouped_player_results = player_results.grouped_by(&matches);
     let grouped_team_match_results = team_match_results.grouped_by(&matches);
     let grouped_team_series_results = team_series_results.grouped_by(&series);
-    let matches_and_match_results: Vec<Vec<(Match, Vec<PlayerResult>, Vec<TeamMatchResult>)>> = matches.into_iter().zip(grouped_player_results).zip(grouped_team_match_results)
-        .map(|((x, y), z)| (x, y, z))
+    let grouped_series_teams = team_series.grouped_by(&series);
+    let matches_and_match_results: Vec<Vec<(Match, Vec<PlayerResult>, Vec<TeamMatchResult>)>> = izip!(matches, grouped_player_results, grouped_team_match_results)
         .grouped_by(&series);
-    // let matches_and_match_results: Vec<Vec<Match>> = izip!((matches.into_iter(), grouped_player_results, grouped_team_match_results))
-    // .grouped_by(&series);
-    let series_lvl: Vec<Vec<(Series, Vec<TeamSeriesResult>, Vec<(Match, Vec<PlayerResult>, Vec<TeamMatchResult>)>)>> = series.into_iter().zip(grouped_team_series_results).zip(matches_and_match_results)
-        .map(|((x, y), z)| (x, y, z))
+    let series_lvl = izip!(series, grouped_team_series_results, grouped_series_teams, matches_and_match_results)
         .grouped_by(&comps);
     let everything: CompetitionHierarchy = comps.into_iter().zip(series_lvl)
         .collect();
-    // let everything = matches_and_match_results.into_iter().zip(grouped_team_series_results)
-    //     .grouped_by(&comps);
     Ok(everything)
-    //let grouped_series = series.grouped_by(&comps);
-    //series
 }
