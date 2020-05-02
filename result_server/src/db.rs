@@ -33,8 +33,8 @@ fn trim_timespans(
 // TODO macros for similar funcs
 pub fn upsert_competitions<'a>(
     conn: &PgConnection,
-    new: Vec<DbNewCompetition>,
-) -> Result<Vec<DbCompetition>, diesel::result::Error> {
+    new: Vec<NewCompetition>,
+) -> Result<Vec<Competition>, diesel::result::Error> {
     use crate::schema::competitions::{dsl::*, table};
     // This "semi-upsert" doesnt work in postgres because it checks the inserts for null-ness, before other things,
     // so never fails the conflict check and goes into update part.
@@ -57,8 +57,8 @@ pub fn upsert_competitions<'a>(
 
 pub fn upsert_serieses<'a>(
     conn: &PgConnection,
-    new: Vec<DbNewSeries>,
-) -> Result<Vec<DbSeries>, diesel::result::Error> {
+    new: Vec<NewSeries>,
+) -> Result<Vec<Series>, diesel::result::Error> {
     use crate::schema::series::{dsl::*, table};
     diesel::insert_into(table)
         .values(new)
@@ -75,8 +75,8 @@ pub fn upsert_serieses<'a>(
 
 pub fn upsert_matches(
     conn: &PgConnection,
-    new: Vec<DbNewMatch>,
-) -> Result<Vec<DbMatch>, diesel::result::Error> {
+    new: Vec<NewMatch>,
+) -> Result<Vec<Match>, diesel::result::Error> {
     use crate::schema::matches::{dsl::*, table};
     diesel::insert_into(table)
         .values(new)
@@ -94,7 +94,7 @@ pub fn upsert_matches(
 pub fn upsert_teams<'a>(
     conn: &PgConnection,
     new: Vec<ApiNewTeam>,
-) -> Result<Vec<DbTeam>, diesel::result::Error> {
+) -> Result<Vec<Team>, diesel::result::Error> {
     use crate::schema::teams::dsl as teams_col;
     use crate::schema::{team_names, teams};
     let num_entries = new.len();
@@ -104,16 +104,16 @@ pub fn upsert_teams<'a>(
     // for probably not even performance gain
     // just clone shit. who cares.
     /*let length = new.len();
-    let (new_db_teams, name_and_timespans): (Vec<DbNewTeam>, Vec<(String, DieselTimespan)>) = new
+    let (new_db_teams, name_and_timespans): (Vec<NewTeam>, Vec<(String, DieselTimespan)>) = new
         .into_iter()
         .fold((Vec::with_capacity(length), Vec::with_capacity(length)), |(mut arr, mut arr2), t|{
-            arr.push(DbNewTeam{team_id: t.team_id, meta: t.meta});
+            arr.push(NewTeam{team_id: t.team_id, meta: t.meta});
             arr2.push((t.name, t.timespan));
             (arr, arr2)
     });*/
     let new_db_teams = new
         .iter()
-        .map(|t| DbNewTeam {
+        .map(|t| NewTeam {
             team_id: t.team_id,
             meta: t.meta.clone(),
         })
@@ -124,13 +124,13 @@ pub fn upsert_teams<'a>(
         .do_update()
         .set(teams_col::meta.eq(excluded(teams_col::meta)))
         .get_results(conn);
-    teams_res.and_then(|teams: Vec<DbTeam>| {
+    teams_res.and_then(|teams: Vec<Team>| {
         let new_team_names = teams
             .iter()
             .zip(new.into_iter())
             .map(|(t, n)| {
                 let (new_name, new_timespan) = (n.name, n.timespan);
-                trim_timespans(conn, "team_name", t.team_id, new_timespan).map(|_| DbNewTeamName {
+                trim_timespans(conn, "team_name", t.team_id, new_timespan).map(|_| NewTeamName {
                     team_id: t.team_id,
                     name: new_name,
                     timespan: new_timespan,
@@ -152,13 +152,13 @@ pub fn upsert_teams<'a>(
 pub fn upsert_players(
     conn: &PgConnection,
     new: Vec<ApiNewPlayer>,
-) -> Result<Vec<DbPlayer>, diesel::result::Error> {
+) -> Result<Vec<Player>, diesel::result::Error> {
     use crate::schema::players::dsl as players_col;
     use crate::schema::{player_names, players};
     let num_entries = new.len();
     let new_db_players = new
         .iter()
-        .map(|t| DbNewPlayer {
+        .map(|t| NewPlayer {
             player_id: t.player_id.clone(),
             meta: t.meta.clone(),
         })
@@ -169,14 +169,14 @@ pub fn upsert_players(
         .do_update()
         .set(players_col::meta.eq(excluded(players_col::meta)))
         .get_results(conn);
-    players_res.and_then(|players: Vec<DbPlayer>| {
+    players_res.and_then(|players: Vec<Player>| {
         let new_player_names = players
             .iter()
             .enumerate()
             .map(|(i, t)| {
                 let (new_name, new_timespan) = (new[i].name.clone(), new[i].timespan.clone());
                 trim_timespans(conn, "player_name", t.player_id, new_timespan).map(|_| {
-                    DbNewPlayerName {
+                    NewPlayerName {
                         player_id: t.player_id,
                         name: new_name,
                         timespan: new_timespan,
@@ -211,8 +211,8 @@ pub fn upsert_series_teams<'a>(
 
 pub fn upsert_team_players<'a>(
     conn: &PgConnection,
-    new: Vec<DbNewTeamPlayer>,
-) -> Result<Vec<DbTeamPlayer>, diesel::result::Error> {
+    new: Vec<NewTeamPlayer>,
+) -> Result<Vec<TeamPlayer>, diesel::result::Error> {
     use crate::schema::team_players;
     let num_entries = new.len();
     new.iter().map(|n| {
@@ -230,8 +230,8 @@ pub fn upsert_team_players<'a>(
 
 pub fn upsert_team_match_results(
     conn: &PgConnection,
-    team_results: Vec<DbNewTeamMatchResult>,
-) -> Result<Vec<DbTeamMatchResult>, diesel::result::Error> {
+    team_results: Vec<NewTeamMatchResult>,
+) -> Result<Vec<TeamMatchResult>, diesel::result::Error> {
     use crate::schema::team_match_results::{dsl, table};
     diesel::insert_into(table)
         .values(&team_results)
@@ -247,8 +247,8 @@ pub fn upsert_team_match_results(
 
 pub fn upsert_player_match_results(
     conn: &PgConnection,
-    player_results: Vec<DbNewPlayerMatchResult>,
-) -> Result<Vec<DbPlayerMatchResult>, diesel::result::Error> {
+    player_results: Vec<NewPlayerMatchResult>,
+) -> Result<Vec<PlayerMatchResult>, diesel::result::Error> {
     use crate::schema::player_results::{dsl, table};
     diesel::insert_into(table)
         .values(&player_results)
@@ -264,8 +264,8 @@ pub fn upsert_player_match_results(
 
 pub fn upsert_team_series_results(
     conn: &PgConnection,
-    team_results: Vec<DbNewTeamSeriesResult>,
-) -> Result<Vec<DbTeamSeriesResult>, diesel::result::Error> {
+    team_results: Vec<NewTeamSeriesResult>,
+) -> Result<Vec<TeamSeriesResult>, diesel::result::Error> {
     use crate::schema::team_series_results::{dsl, table};
     diesel::insert_into(table)
         .values(&team_results)
@@ -310,28 +310,28 @@ pub fn get_competition_ids_for_matches(
 
 pub fn get_all_teams(
     conn: &PgConnection,
-) -> Result<Vec<(DbTeam, DbTeamName)>, diesel::result::Error> {
+) -> Result<Vec<(Team, TeamName)>, diesel::result::Error> {
     use crate::schema::{team_names, teams};
     teams::table.inner_join(team_names::table).load(conn)
 }
 
 pub fn get_all_players(
     conn: &PgConnection,
-) -> Result<Vec<(DbPlayer, DbPlayerName)>, diesel::result::Error> {
+) -> Result<Vec<(Player, PlayerName)>, diesel::result::Error> {
     use crate::schema::{player_names, players};
     players::table.inner_join(player_names::table).load(conn)
 }
 
 pub fn get_all_team_players(
     conn: &PgConnection,
-) -> Result<Vec<DbTeamPlayer>, diesel::result::Error> {
+) -> Result<Vec<TeamPlayer>, diesel::result::Error> {
     use crate::schema::team_players;
     team_players::table.load(conn)
 }
 
 pub fn get_all_competitions(
     conn: &PgConnection,
-) -> Result<Vec<DbCompetition>, diesel::result::Error> {
+) -> Result<Vec<Competition>, diesel::result::Error> {
     use crate::schema::competitions;
     competitions::table.load(conn)
 }
@@ -339,7 +339,7 @@ pub fn get_all_competitions(
 pub fn get_full_competitions(
     conn: &PgConnection,
     competition_ids: Vec<Uuid>
-) -> Result<Vec<DbCompetition>, diesel::result::Error> {
+) -> Result<Vec<Competition>, diesel::result::Error> {
     use crate::schema::competitions;
     competitions::table.filter(competitions::dsl::competition_id.eq(any(competition_ids))).load(conn)
 }

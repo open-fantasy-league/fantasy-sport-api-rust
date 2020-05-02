@@ -5,8 +5,9 @@ use serde::{Deserialize, Serialize};
 use serde_json;
 use uuid::Uuid;
 
-#[derive(Queryable, Serialize, Debug)]
-pub struct DbCompetition {
+#[derive(Queryable, Serialize, Debug, Identifiable, Associations)]
+#[primary_key(competition_id)]
+pub struct Competition {
     pub competition_id: Uuid,
     pub name: String,
     pub meta: serde_json::Value,
@@ -16,7 +17,7 @@ pub struct DbCompetition {
 
 #[derive(Insertable, Deserialize, LabelledGeneric, Debug)]
 #[table_name = "competitions"]
-pub struct DbNewCompetition {
+pub struct NewCompetition {
     pub competition_id: Option<Uuid>,
     //pub name: &'a str, // This didnt work. think similar to https://stackoverflow.com/a/57977257/3920439
     pub name: String,
@@ -25,8 +26,11 @@ pub struct DbNewCompetition {
     pub timespan: DieselTimespan,
 }
 
-#[derive(Queryable, Serialize, Debug)]
-pub struct DbSeries {
+#[derive(Queryable, Serialize, Debug, Identifiable, Associations)]
+#[belongs_to(Competition)]
+#[primary_key(series_id)]
+#[table_name = "series"]
+pub struct Series {
     pub series_id: Uuid,
     pub name: String,
     pub competition_id: Uuid,
@@ -37,7 +41,7 @@ pub struct DbSeries {
 
 #[derive(Insertable, Deserialize, LabelledGeneric)]
 #[table_name = "series"]
-pub struct DbNewSeries {
+pub struct NewSeries {
     pub series_id: Option<Uuid>,
     pub competition_id: Uuid,
     pub name: String,
@@ -46,8 +50,10 @@ pub struct DbNewSeries {
     pub timespan: DieselTimespan,
 }
 
-#[derive(Queryable, Serialize, Debug)]
-pub struct DbMatch {
+#[derive(Queryable, Serialize, Debug, Identifiable, Associations)]
+#[primary_key(match_id)]
+#[table_name = "matches"]
+pub struct Match {
     pub match_id: Uuid,
     pub name: String,
     pub series_id: Uuid,
@@ -58,7 +64,7 @@ pub struct DbMatch {
 
 #[derive(Insertable, Deserialize, LabelledGeneric, Debug)]
 #[table_name = "matches"]
-pub struct DbNewMatch {
+pub struct NewMatch {
     pub match_id: Option<Uuid>,
     pub series_id: Uuid,
     pub name: String,
@@ -68,13 +74,13 @@ pub struct DbNewMatch {
 }
 
 #[derive(Queryable, Serialize, Debug)]
-pub struct DbTeam {
+pub struct Team {
     pub team_id: Uuid,
     pub meta: serde_json::Value,
 }
 
 #[derive(Queryable, Serialize, Debug)]
-pub struct DbTeamName {
+pub struct TeamName {
     #[serde(skip_serializing)]
     team_name_id: Uuid,
     pub team_id: Uuid,
@@ -85,14 +91,14 @@ pub struct DbTeamName {
 
 #[derive(Insertable, Deserialize, LabelledGeneric)]
 #[table_name = "teams"]
-pub struct DbNewTeam {
+pub struct NewTeam {
     pub team_id: Option<Uuid>,
     pub meta: serde_json::Value,
 }
 
 #[derive(Insertable, Deserialize, LabelledGeneric)]
 #[table_name = "team_names"]
-pub struct DbNewTeamName {
+pub struct NewTeamName {
     pub team_id: Uuid,
     pub name: String,
     #[serde(with = "my_timespan_format")]
@@ -100,13 +106,13 @@ pub struct DbNewTeamName {
 }
 
 #[derive(Queryable, Serialize, Debug)]
-pub struct DbPlayer {
+pub struct Player {
     pub player_id: Uuid,
     pub meta: serde_json::Value,
 }
 
 #[derive(Queryable, Serialize, Debug)]
-pub struct DbPlayerName {
+pub struct PlayerName {
     #[serde(skip_serializing)]
     player_name_id: Uuid,
     pub player_id: Uuid,
@@ -117,14 +123,14 @@ pub struct DbPlayerName {
 
 #[derive(Insertable, Deserialize, LabelledGeneric)]
 #[table_name = "players"]
-pub struct DbNewPlayer {
+pub struct NewPlayer {
     pub player_id: Option<Uuid>,
     pub meta: serde_json::Value,
 }
 
 #[derive(Insertable, Deserialize, LabelledGeneric)]
 #[table_name = "player_names"]
-pub struct DbNewPlayerName {
+pub struct NewPlayerName {
     pub player_id: Uuid,
     pub name: String,
     #[serde(with = "my_timespan_format")]
@@ -132,21 +138,21 @@ pub struct DbNewPlayerName {
 }
 
 #[derive(Queryable, Debug)]
-pub struct DbSeriesTeam {
+pub struct SeriesTeam {
     pub series_id: Uuid,
     pub team_id: Uuid,
 }
 
 #[derive(Insertable, Deserialize)]
 #[table_name = "series_teams"]
-pub struct DbNewSeriesTeam {
+pub struct NewSeriesTeam {
     pub series_id: Uuid,
     pub team_id: Uuid,
 }
 
 #[derive(Insertable, Deserialize, Debug)]
 #[table_name = "team_players"]
-pub struct DbNewTeamPlayer {
+pub struct NewTeamPlayer {
     pub team_id: Uuid,
     pub player_id: Uuid,
     #[serde(with = "my_timespan_format")]
@@ -154,7 +160,7 @@ pub struct DbNewTeamPlayer {
 }
 
 #[derive(Queryable, Serialize, Debug)]
-pub struct DbTeamPlayer {
+pub struct TeamPlayer {
     team_player_id: Uuid,
     pub team_id: Uuid,
     pub player_id: Uuid,
@@ -163,7 +169,7 @@ pub struct DbTeamPlayer {
 }
 
 #[derive(Queryable, Serialize, Debug)]
-pub struct DbTeamMatchResult {
+pub struct TeamMatchResult {
     team_result_id: Uuid,
     pub team_id: Uuid,
     pub match_id: Uuid,
@@ -172,7 +178,7 @@ pub struct DbTeamMatchResult {
 }
 #[derive(Insertable, Deserialize, Debug)]
 #[table_name = "team_match_results"]
-pub struct DbNewTeamMatchResult {
+pub struct NewTeamMatchResult {
     pub team_id: Uuid,
     pub match_id: Uuid,
     pub result: String,
@@ -180,7 +186,7 @@ pub struct DbNewTeamMatchResult {
 }
 
 #[derive(Queryable, Serialize, Debug)]
-pub struct DbTeamSeriesResult {
+pub struct TeamSeriesResult {
     team_series_result_id: Uuid,
     pub team_id: Uuid,
     pub series_id: Uuid,
@@ -189,7 +195,7 @@ pub struct DbTeamSeriesResult {
 }
 #[derive(Insertable, Deserialize, Debug)]
 #[table_name = "team_series_results"]
-pub struct DbNewTeamSeriesResult {
+pub struct NewTeamSeriesResult {
     pub team_id: Uuid,
     pub series_id: Uuid,
     pub result: String,
@@ -197,7 +203,7 @@ pub struct DbNewTeamSeriesResult {
 }
 
 #[derive(Queryable, Serialize, Debug)]
-pub struct DbPlayerMatchResult {
+pub struct PlayerMatchResult {
     player_result_id: Uuid,
     pub player_id: Uuid,
     pub match_id: Uuid,
@@ -206,7 +212,7 @@ pub struct DbPlayerMatchResult {
 }
 #[derive(Insertable, Deserialize, Debug)]
 #[table_name = "player_results"]
-pub struct DbNewPlayerMatchResult {
+pub struct NewPlayerMatchResult {
     pub player_id: Uuid,
     pub match_id: Uuid,
     pub result: serde_json::Value,
@@ -221,37 +227,37 @@ pub trait HasId {
     fn get_id(&self) -> Uuid;
 }
 
-impl HasId for DbTeamMatchResult {
+impl HasId for TeamMatchResult {
     fn get_id(&self) -> Uuid {
         self.match_id
     }
 }
 
-impl Publishable for DbTeamMatchResult {
+impl Publishable for TeamMatchResult {
     fn message_type<'a>() -> &'a str {
         "team_match_results"
     }
 }
 
-impl HasId for DbPlayerMatchResult {
+impl HasId for PlayerMatchResult {
     fn get_id(&self) -> Uuid {
         self.match_id
     }
 }
 
-impl Publishable for DbPlayerMatchResult {
+impl Publishable for PlayerMatchResult {
     fn message_type<'a>() -> &'a str {
         "player_match_results"
     }
 }
 
-impl HasId for DbTeamSeriesResult {
+impl HasId for TeamSeriesResult {
     fn get_id(&self) -> Uuid {
         self.series_id
     }
 }
 
-impl Publishable for DbTeamSeriesResult {
+impl Publishable for TeamSeriesResult {
     fn message_type<'a>() -> &'a str {
         "team_series_results"
     }

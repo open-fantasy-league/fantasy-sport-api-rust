@@ -94,7 +94,7 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, us
                     let all_competitions = db::get_all_competitions(&conn).unwrap();
                     // general code is unsightly.
                     //really the sub_to stuff should not take all ws_conns, and only take the one user
-                    let subscribed_comps: Vec<&models::DbCompetition> = if let Some(ws_user) = ws_conns.lock().await.get_mut(&user_ws_id){
+                    let subscribed_comps: Vec<&models::Competition> = if let Some(ws_user) = ws_conns.lock().await.get_mut(&user_ws_id){
                         subscribed_comps(&ws_user.subscriptions, &all_competitions)
                     } else {vec![]};
                     let competitions_out_r = db::get_full_competitions(&conn, subscribed_comps.iter().map(|x| x.competition_id).collect());
@@ -277,7 +277,7 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, us
         // TODO this
         //"upsert_series_teams" => upsert_series_teams(conn, serde_json::from_value(req.data)?),
         "upsert_team_match_results" => {
-            let dr: Result<Vec<models::DbNewTeamMatchResult>, _> = serde_json::from_value(req.data);
+            let dr: Result<Vec<models::NewTeamMatchResult>, _> = serde_json::from_value(req.data);
             let resp: Result<String, BoxError> = match dr{
                 Ok(d) => {
                     println!("{:?}", &d);
@@ -292,7 +292,7 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, us
                             match fuck{
                                 Ok(competition_n_match_ids) => {
                                     let comp_to_match_ids: HashMap<Uuid, Uuid> = competition_n_match_ids.into_iter().collect();
-                                    publish_results::<models::DbTeamMatchResult>(ws_conns, &upserted, comp_to_match_ids).await;
+                                    publish_results::<models::TeamMatchResult>(ws_conns, &upserted, comp_to_match_ids).await;
                                     let resp_msg = WSMsgOut::resp(req.message_id, req.method, upserted);
                                     serde_json::to_string(&resp_msg).map_err(|e| e.into())
                                 },
@@ -307,7 +307,7 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, us
             resp
         },
         "upsert_player_match_results" => {
-            let dr: Result<Vec<models::DbNewPlayerMatchResult>, _> = serde_json::from_value(req.data);
+            let dr: Result<Vec<models::NewPlayerMatchResult>, _> = serde_json::from_value(req.data);
             let resp: Result<String, BoxError> = match dr{
                 Ok(d) => {
                     println!("{:?}", &d);
@@ -322,7 +322,7 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, us
                             match fuck{
                                 Ok(competition_n_match_ids) => {
                                     let comp_to_match_ids: HashMap<Uuid, Uuid> = competition_n_match_ids.into_iter().collect();
-                                    publish_results::<models::DbPlayerMatchResult>(ws_conns, &upserted, comp_to_match_ids).await;
+                                    publish_results::<models::PlayerMatchResult>(ws_conns, &upserted, comp_to_match_ids).await;
                                     let resp_msg = WSMsgOut::resp(req.message_id, req.method, upserted);
                                     serde_json::to_string(&resp_msg).map_err(|e| e.into())
                                 },
@@ -337,7 +337,7 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, us
             resp
         },
         "upsert_team_series_results" => {
-            let dr: Result<Vec<models::DbNewTeamSeriesResult>, _> = serde_json::from_value(req.data);
+            let dr: Result<Vec<models::NewTeamSeriesResult>, _> = serde_json::from_value(req.data);
             let resp: Result<String, BoxError> = match dr{
                 Ok(d) => {
                     println!("{:?}", &d);
@@ -352,7 +352,7 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, us
                             match fuck{
                                 Ok(competition_n_series_ids) => {
                                     let comp_to_series_ids: HashMap<Uuid, Uuid> = competition_n_series_ids.into_iter().collect();
-                                    publish_results::<models::DbTeamSeriesResult>(ws_conns, &upserted, comp_to_series_ids).await;
+                                    publish_results::<models::TeamSeriesResult>(ws_conns, &upserted, comp_to_series_ids).await;
                                     let resp_msg = WSMsgOut::resp(req.message_id, req.method, upserted);
                                     serde_json::to_string(&resp_msg).map_err(|e| e.into())
                                 },
@@ -489,7 +489,7 @@ async fn main() {
         .and(path("matches"))
         .and(body::json())
         .and(pg_conn.clone())
-        .and_then(|body: Vec<models::DbNewMatch>, conn: PgConn| upsert_matches(conn, body));
+        .and_then(|body: Vec<models::NewMatch>, conn: PgConn| upsert_matches(conn, body));
     let post_players = post()
         .and(path("players"))
         .and(body::json())
@@ -499,7 +499,7 @@ async fn main() {
         .and(path("team_players"))
         .and(body::json())
         .and(pg_conn.clone())
-        .and_then(|body: Vec<models::DbNewTeamPlayer>, conn: PgConn| upsert_team_players(conn, body));
+        .and_then(|body: Vec<models::NewTeamPlayer>, conn: PgConn| upsert_team_players(conn, body));
     let get_routes = get().and(league_results.or(series_results).or(hello));
     let post_routes = post_competitions.or(post_serieses).or(post_teams).or(post_matches)
         .or(post_players).or(post_team_players);*/

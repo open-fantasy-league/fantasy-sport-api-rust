@@ -91,10 +91,10 @@ pub struct ApiTeam{
 
 impl ApiTeam{
     
-    pub fn from_rows(rows: Vec<(DbTeam, DbTeamName)>) -> Vec<Self>{
+    pub fn from_rows(rows: Vec<(Team, TeamName)>) -> Vec<Self>{
         // Group rows by team-id using hashmap, build a list of different team names
         // Assume if a team has no names ever, we dont care about it
-        let mut acc: HashMap<Uuid, (DbTeam, Vec<DbTeamName>)> = HashMap::new();
+        let mut acc: HashMap<Uuid, (Team, Vec<TeamName>)> = HashMap::new();
         acc = rows.into_iter().fold(acc, |mut acc, (team, team_name)| {
             match acc.get_mut(&team.team_id) {
                 Some(t) => {t.1.push(team_name);},
@@ -139,10 +139,10 @@ pub struct ApiPlayer{
 
 impl ApiPlayer{
     
-    pub fn from_rows(rows: Vec<(DbPlayer, DbPlayerName)>) -> Vec<Self>{
+    pub fn from_rows(rows: Vec<(Player, PlayerName)>) -> Vec<Self>{
         // Group rows by team-id using hashmap, build a list of different team names
         // Assume if a team has no names ever, we dont care about it
-        let mut acc: HashMap<Uuid, (DbPlayer, Vec<DbPlayerName>)> = HashMap::new();
+        let mut acc: HashMap<Uuid, (Player, Vec<PlayerName>)> = HashMap::new();
         acc = rows.into_iter().fold(acc, |mut acc, (player, player_name)| {
             match acc.get_mut(&player.player_id) {
                 Some(t) => {t.1.push(player_name);},
@@ -173,13 +173,13 @@ pub struct ApiPlayerName{
 pub struct ApiTeamsAndPlayers{
     pub teams: Vec<ApiTeam>,
     pub players: Vec<ApiPlayer>,
-    pub team_players: Vec<DbTeamPlayer>
+    pub team_players: Vec<TeamPlayer>
 }
 
 //using frunk instead
-/*impl From<ApiNewCompetition> for DbNewCompetition{
+/*impl From<ApiNewCompetition> for NewCompetition{
     fn from(x: ApiNewCompetition) -> Self{
-        DbNewCompetition{code: x.code, name: x.name, meta: x.meta, timespan: x.timespan}
+        NewCompetition{code: x.code, name: x.name, meta: x.meta, timespan: x.timespan}
     }
 }*/
 
@@ -191,7 +191,7 @@ fn handle_handling_the_handler<T: Serialize>(what_happened: Result<T, diesel::re
 }
 
 //pub async fn upsert_serieses(conn: PgConn, mut new: Vec<ApiNewSeries>) -> Result<impl warp::Reply, warp::Rejection>{
-pub async fn upsert_serieses(conn: PgConn, mut new: Vec<ApiNewSeries>) -> Result<Vec<DbSeries>, diesel::result::Error>{
+pub async fn upsert_serieses(conn: PgConn, mut new: Vec<ApiNewSeries>) -> Result<Vec<Series>, diesel::result::Error>{
     // This just returns list of raw-series created (without the info on teams for each series)
     // Due to simplicity meaning either teams-in-series either match the input, or an error
     // happened
@@ -225,23 +225,23 @@ pub async fn upsert_serieses(conn: PgConn, mut new: Vec<ApiNewSeries>) -> Result
     })
 }
 
-pub async fn upsert_competitions(conn: PgConn, new: Vec<ApiNewCompetition>) -> Result<Vec<DbCompetition>, diesel::result::Error>{
+pub async fn upsert_competitions(conn: PgConn, new: Vec<ApiNewCompetition>) -> Result<Vec<Competition>, diesel::result::Error>{
     db::upsert_competitions(&conn, new.into_iter().map(transform_from).collect_vec())
 }
 
 
-pub async fn upsert_teams(conn: PgConn, new: Vec<ApiNewTeam>) -> Result<Vec<DbTeam>, diesel::result::Error>{
+pub async fn upsert_teams(conn: PgConn, new: Vec<ApiNewTeam>) -> Result<Vec<Team>, diesel::result::Error>{
     conn.build_transaction().run(|| db::upsert_teams(&conn, new))
 }
 
-pub async fn upsert_players(conn: PgConn, new: Vec<ApiNewPlayer>) -> Result<Vec<DbPlayer>, diesel::result::Error>{
+pub async fn upsert_players(conn: PgConn, new: Vec<ApiNewPlayer>) -> Result<Vec<Player>, diesel::result::Error>{
     conn.build_transaction().run(|| db::upsert_players(&conn, new))
 }
 
-pub async fn upsert_matches(conn: PgConn, new: Vec<DbNewMatch>) -> Result<Vec<DbMatch>, diesel::result::Error>{
+pub async fn upsert_matches(conn: PgConn, new: Vec<NewMatch>) -> Result<Vec<Match>, diesel::result::Error>{
     db::upsert_matches(&conn, new)
 }
 
-// pub async fn upsert_team_players(conn: PgConn, new: Vec<DbNewTeamPlayer>) -> Result<usize, diesel::result::Error>{
+// pub async fn upsert_team_players(conn: PgConn, new: Vec<NewTeamPlayer>) -> Result<usize, diesel::result::Error>{
 //     db::upsert_team_players(&conn, new)
 // }
