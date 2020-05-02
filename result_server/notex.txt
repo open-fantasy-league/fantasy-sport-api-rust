@@ -7,3 +7,9 @@ tomorrow:
 - publish players with teams
 - use the belonging_to association stuff
 - write the create-db sql for fantasy
+
+
+tomorrow2:
+- sort out passing in ws_conns vs ws_conns
+- another attempt at question mark error-handling in main
+- base simple fantasy messages (user-join. upsert-league)
