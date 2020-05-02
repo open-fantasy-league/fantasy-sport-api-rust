@@ -144,7 +144,7 @@ pub struct DbNewSeriesTeam {
     pub team_id: Uuid,
 }
 
-#[derive(Insertable, Deserialize)]
+#[derive(Insertable, Queryable, Serialize, Deserialize, Debug)]
 #[table_name = "team_players"]
 pub struct DbNewTeamPlayer {
     pub team_id: Uuid,
@@ -162,7 +162,7 @@ pub struct DbTeamMatchResult {
     pub meta: serde_json::Value,
 }
 #[derive(Insertable, Deserialize, Debug)]
-#[table_name = "team_results"]
+#[table_name = "team_match_results"]
 pub struct DbNewTeamMatchResult {
     pub team_id: Uuid,
     pub match_id: Uuid,
@@ -192,7 +192,7 @@ pub struct DbPlayerMatchResult {
     player_result_id: Uuid,
     pub player_id: Uuid,
     pub match_id: Uuid,
-    pub result: String,
+    pub result: serde_json::Value,
     pub meta: serde_json::Value,
 }
 #[derive(Insertable, Deserialize, Debug)]
@@ -200,7 +200,7 @@ pub struct DbPlayerMatchResult {
 pub struct DbNewPlayerMatchResult {
     pub player_id: Uuid,
     pub match_id: Uuid,
-    pub result: String,
+    pub result: serde_json::Value,
     pub meta: serde_json::Value,
 }
 

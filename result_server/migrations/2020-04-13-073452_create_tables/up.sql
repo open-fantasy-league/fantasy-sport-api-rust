@@ -65,12 +65,12 @@ CREATE TABLE player_results(
 	player_result_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 	player_id UUID NOT NULL REFERENCES players,
 	match_id UUID NOT NULL REFERENCES matches,
-	result TEXT NOT NULL,
+	result JSONB NOT NULL DEFAULT '{}'::jsonb,
 	meta JSONB NOT NULL DEFAULT '{}'::jsonb
 );
 
-CREATE TABLE team_results(
-	team_result_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+CREATE TABLE team_match_results(
+	team_match_result_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 	team_id UUID NOT NULL REFERENCES teams,
 	match_id UUID NOT NULL REFERENCES matches,
 	result TEXT NOT NULL,
@@ -85,8 +85,26 @@ CREATE TABLE team_series_results(
 	meta JSONB NOT NULL DEFAULT '{}'::jsonb
 );
 
-CREATE INDEX player_result_idx on player_results(result);
-CREATE INDEX team_result_idx on team_results(result);
+CREATE INDEX series_competition_idx on series(competition_id);
+CREATE INDEX matches_series_idx on matches(series_id);
+CREATE INDEX team_results_matches_idx on team_match_results(match_id);
+CREATE INDEX team_results_team_idx on team_match_results(team_id);
+CREATE INDEX team_results_series_idx on team_series_results(series_id);
+CREATE INDEX team_series_results_team_idx on team_series_results(team_id);
+CREATE INDEX player_results_matches_idx on player_results(match_id);
+CREATE INDEX player_results_player_idx on player_results(player_id);
+-- initially not doing composite indexes, because can see wanting to find "all the teams for a player" AND "all the players for a team"
+-- composite index wouldnt work with both questions
+CREATE INDEX team_players_idx_1 on team_players(team_id);
+CREATE INDEX team_players_idx_2 on team_players(player_id);
+CREATE INDEX series_teams_idx_1 on series_teams(series_id);
+CREATE INDEX series_teams_idx_2 on series_teams(team_id);
+CREATE INDEX player_names_idx on player_names(player_id);
+CREATE INDEX team_names_idx on team_names(team_id);
+-- might want an index for query player-name and find most recent player
+
+CREATE INDEX team_match_result_idx on team_match_results(result);
+CREATE INDEX team_series_result_idx on team_series_results(result);
 CREATE INDEX competition_timespan_idx on competitions USING gist (timespan);
 CREATE INDEX series_timespan_idx on series USING gist (timespan);
 CREATE INDEX matches_timespan_idx on matches USING gist (timespan);

@@ -238,6 +238,6 @@ pub async fn upsert_matches(conn: PgConn, new: Vec<DbNewMatch>) -> Result<Vec<Db
     db::upsert_matches(&conn, new)
 }
 
-pub async fn upsert_team_players(conn: PgConn, new: Vec<DbNewTeamPlayer>) -> Result<usize, diesel::result::Error>{
-    db::upsert_team_players(&conn, new)
-}
+// pub async fn upsert_team_players(conn: PgConn, new: Vec<DbNewTeamPlayer>) -> Result<usize, diesel::result::Error>{
+//     db::upsert_team_players(&conn, new)
+// }

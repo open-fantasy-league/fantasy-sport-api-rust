@@ -235,10 +235,26 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, us
             };
             resp
         },
-        // "upsert_team_players" => {
-        //     upsert_team_players(conn, serde_json::from_value(req.data)?).await
-        //     .and_then(|x| serde_json::to_string(&x)?).map_err(Box::new)
-        // },
+        "upsert_team_players" => {
+            let dr = serde_json::from_value(req.data);
+            let resp: Result<String, BoxError> = match dr{
+                Ok(d) => {
+                    println!("{:?}", &d);
+                    let upserted_r= db::upsert_team_players(&conn, d);
+                    match upserted_r{
+                        Ok(upserted) => {
+                            publish_players(ws_conns, &upserted).await;
+                            let resp_msg = WSMsgOut::resp(req.message_id, req.method, upserted);
+                            serde_json::to_string(&resp_msg).map_err(|e| e.into())
+                        },
+                        Err(e) => Err(Box::new(e) as BoxError)
+                    }
+                },
+                Err(e) => {Err(Box::new(e) as BoxError)}
+            };
+            resp
+        },
+        // TODO this
         //"upsert_series_teams" => upsert_series_teams(conn, serde_json::from_value(req.data)?),
         "upsert_team_match_results" => {
             let dr: Result<Vec<models::DbNewTeamMatchResult>, _> = serde_json::from_value(req.data);
@@ -330,8 +346,6 @@ async fn ws_req_resp(msg: String, conn: PgConn, ws_conns: &mut WsConnections, us
             };
             resp
         }
-        //"upsert_player_match_results" => upsert_player_match_results(conn, serde_json::from_value(req.data)?),
-        //"upsert_team_series_results" => upsert_team_series_results(conn, serde_json::from_value(req.data)?),
         uwotm8 => {
             // Think have to make it a string, to not piss-off borrow checker, as we are returning it from this func
             Err(Box::new(InvalidRequestError{method: uwotm8.to_string()}))

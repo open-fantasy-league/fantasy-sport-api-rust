@@ -212,18 +212,18 @@ pub fn upsert_series_teams<'a>(
 pub fn upsert_team_players<'a>(
     conn: &PgConnection,
     team_players: Vec<DbNewTeamPlayer>,
-) -> Result<usize, diesel::result::Error> {
+) -> Result<Vec<DbNewTeamPlayer>, diesel::result::Error> {
     use crate::schema::team_players::table;
     diesel::insert_into(table)
         .values(&team_players)
-        .execute(conn)
+        .get_results(conn)
 }
 
 pub fn upsert_team_match_results(
     conn: &PgConnection,
     team_results: Vec<DbNewTeamMatchResult>,
 ) -> Result<Vec<DbTeamMatchResult>, diesel::result::Error> {
-    use crate::schema::team_results::{dsl, table};
+    use crate::schema::team_match_results::{dsl, table};
     diesel::insert_into(table)
         .values(&team_results)
         // TODO  confirm this on conflict actually works (have i set a unique const?)

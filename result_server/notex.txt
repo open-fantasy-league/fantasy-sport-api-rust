@@ -1,2 +1,9 @@
 peoplen can sub to comp ids, all teams all players. simple
 wonder if weird messages are pings?
+
+
+tomorrow:
+- subscribe to results? (think simplest just get all results with competition subscribe)
+- publish players with teams
+- use the belonging_to association stuff
+- write the create-db sql for fantasy

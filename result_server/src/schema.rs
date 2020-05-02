@@ -31,7 +31,7 @@ table! {
         player_result_id -> Uuid,
         player_id -> Uuid,
         match_id -> Uuid,
-        result -> Text,
+        result -> Jsonb,
         meta -> Jsonb,
     }
 }
@@ -61,6 +61,16 @@ table! {
 }
 
 table! {
+    team_match_results (team_match_result_id) {
+        team_match_result_id -> Uuid,
+        team_id -> Uuid,
+        match_id -> Uuid,
+        result -> Text,
+        meta -> Jsonb,
+    }
+}
+
+table! {
     team_names (team_name_id) {
         team_name_id -> Uuid,
         team_id -> Uuid,
@@ -75,16 +85,6 @@ table! {
         player_id -> Uuid,
         team_id -> Uuid,
         timespan -> Tstzrange,
-    }
-}
-
-table! {
-    team_results (team_result_id) {
-        team_result_id -> Uuid,
-        team_id -> Uuid,
-        match_id -> Uuid,
-        result -> Text,
-        meta -> Jsonb,
     }
 }
 
@@ -112,11 +112,11 @@ joinable!(player_results -> players (player_id));
 joinable!(series -> competitions (competition_id));
 joinable!(series_teams -> series (series_id));
 joinable!(series_teams -> teams (team_id));
+joinable!(team_match_results -> matches (match_id));
+joinable!(team_match_results -> teams (team_id));
 joinable!(team_names -> teams (team_id));
 joinable!(team_players -> players (player_id));
 joinable!(team_players -> teams (team_id));
-joinable!(team_results -> matches (match_id));
-joinable!(team_results -> teams (team_id));
 joinable!(team_series_results -> series (series_id));
 joinable!(team_series_results -> teams (team_id));
 
@@ -128,9 +128,9 @@ allow_tables_to_appear_in_same_query!(
     players,
     series,
     series_teams,
+    team_match_results,
     team_names,
     team_players,
-    team_results,
     teams,
     team_series_results,
 );
