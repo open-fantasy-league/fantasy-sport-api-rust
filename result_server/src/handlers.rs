@@ -287,10 +287,10 @@ pub async fn sub_teams(req: WSReq, conn: PgConn, ws_conns: &mut WSConnections_, 
 }
 use std::pin::Pin;
 pub fn upsert_competitions(req: WSReq, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Pin<Box<dyn Future<Output=Result<String, BoxError>> + Send + Sync>>{
-    async fn hmmm(req: WSReq, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
-        let deserialized: Vec<NewCompetition> = serde_json::from_value(req.data).expect("fuck");
-        println!("{:?}", &deserialized);
-        let competitions_out= db::upsert_competitions(&conn, deserialized.into_iter().map(transform_from).collect_vec()).expect("fuck");
+    let deserialized: Vec<NewCompetition> = serde_json::from_value(req.data).expect("fuck");
+    println!("{:?}", &deserialized);
+    let competitions_out= db::upsert_competitions(&conn, deserialized.into_iter().map(transform_from).collect_vec()).expect("fuck");
+    async fn hmmm(req: WSReq, competitions_out: Vec<Competition>, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
         // assume anything upserted the user wants to subscribe to
         if let Some(ws_user) = ws_conns.lock().await.get_mut(&user_ws_id){
             sub_to_competitions(ws_user, competitions_out.iter().map(|c| &c.competition_id)).await;
@@ -302,7 +302,7 @@ pub fn upsert_competitions(req: WSReq, conn: PgConn, ws_conns: &mut WSConnection
         let out = serde_json::to_string(&resp_msg).map_err(|e| e.into());
         out
     }
-    Box::pin(hmmm(req, conn, ws_conns, user_ws_id))
+    Box::pin(hmmm(req, competitions_out, ws_conns, user_ws_id))
 }
 
 pub async fn upsert_series(req: WSReq, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{

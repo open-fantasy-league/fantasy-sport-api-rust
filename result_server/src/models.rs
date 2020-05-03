@@ -3,7 +3,7 @@ use warp_ws_server::utils::my_timespan_format::{self, DieselTimespan};
 use serde::{Deserialize, Serialize};
 use serde_json;
 use uuid::Uuid;
-use frunk::*;
+use frunk::LabelledGeneric;
 
 
 //https://kotiri.com/2018/01/31/postgresql-diesel-rust-types.html
