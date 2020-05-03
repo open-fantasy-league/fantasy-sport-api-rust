@@ -286,7 +286,7 @@ pub async fn sub_teams(req: WSReq, conn: PgConn, ws_conns: &mut WSConnections_, 
 }
 
 pub async fn upsert_competitions(req: WSReq, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
-    let deserialized = serde_json::from_value(req.data)?;
+    let deserialized: Vec<NewCompetition> = serde_json::from_value(req.data)?;
     println!("{:?}", &deserialized);
     let competitions_out= db::upsert_competitions(&conn, deserialized.into_iter().map(transform_from).collect_vec())?;
     // assume anything upserted the user wants to subscribe to

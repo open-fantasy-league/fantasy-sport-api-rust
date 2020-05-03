@@ -18,7 +18,8 @@ pub type BoxError = Box<dyn std::error::Error + Sync + Send + 'static>;
 // Maybe this lib should be agnostic to that, as it just focuses on a single connection
 // However not sure how to "pull stuff out of Arcs", maybe by design that wouldnt work. And wouldnt be threadsafe.
 pub type WSConnections<T> = Arc<Mutex<HashMap<Uuid, WSConnection<T>>>>;
-pub type WSMethod<T> = Box<dyn (Fn(WSReq, PgConn, &mut WSConnections<T>, Uuid) -> Pin<Box<dyn Future<Output=Result<String, BoxError>>>>) + Send + Sync>;
+//pub type WSMethod<T> = Box<dyn (Fn(WSReq, PgConn, &mut WSConnections<T>, Uuid) -> Pin<Box<dyn Future<Output=Result<String, BoxError>>>>) + Send + Sync>;
+pub type WSMethod<T> = Box<dyn Fn(WSReq, PgConn, &mut WSConnections<T>, Uuid) -> Result<String, BoxError> + Send + Sync>;
 // TODO this prob could be &str, but harder to get lifetimes to work
 pub type WSMethods<T> = Arc<HashMap<String, WSMethod<T>>>;
 pub trait Subscriptions {
@@ -42,32 +43,32 @@ impl<T: Subscriptions> WSConnection<T>{
 }
 
 #[derive(Serialize)]
-pub struct WSMsgOut<'a, T: Serialize> {
+pub struct WSMsgOut<T: Serialize> {
     pub message_id: Uuid,
-    pub mode: &'a str,
-    pub message_type: &'a str,
+    pub mode: String,
+    pub message_type: String,
     pub data: T
 }
 
-impl<'a, T: Serialize> WSMsgOut<'a, T>{
-    pub fn resp(message_id: Uuid, message_type: &'a str, data: T) -> Self{
-        return Self{message_id: message_id, message_type: message_type, mode: "resp", data: data}
+impl<T: Serialize> WSMsgOut<T>{
+    pub fn resp(message_id: Uuid, message_type: String, data: T) -> Self{
+        return Self{message_id: message_id, message_type: message_type, mode: "resp".to_string(), data: data}
     }
 
-    pub fn push(message_type: &'a str, data: T) -> Self{
-        return Self{message_id: Uuid::new_v4(), message_type: message_type, mode: "push", data: data}
+    pub fn push(message_type: String, data: T) -> Self{
+        return Self{message_id: Uuid::new_v4(), message_type: message_type, mode: "push".to_string(), data: data}
     }
 
     pub fn error(data: T) -> Self{
-        return Self{message_id: Uuid::new_v4(), message_type: "unknown", mode: "error", data: data}
+        return Self{message_id: Uuid::new_v4(), message_type: "unknown".to_string(), mode: "error".to_string(), data: data}
     }
 }
 
 
 #[derive(Deserialize)]
-pub struct WSReq<'a> {
+pub struct WSReq {
     pub message_id: Uuid,
-    pub method: &'a str,
+    pub method: String,
     pub data: serde_json::Value
 }
 
@@ -166,7 +167,7 @@ async fn ws_req_resp<T: Subscriptions>(
     println!("{}", &req.data);
     let method = methods.get(&req.method.to_string())
         .ok_or(Box::new(InvalidRequestError{description: req.method.to_string()}))?;
-    method(req, conn, ws_conns, user_ws_id).await
+    method(req, conn, ws_conns, user_ws_id)
 }
 
 #[cfg(test)]
