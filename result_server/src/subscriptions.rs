@@ -1,4 +1,4 @@
-use crate::WsConnections;
+use crate::WsConnection;
 use crate::models;
 use uuid::Uuid;
 use std::collections::HashSet;
@@ -14,24 +14,18 @@ impl Subscriptions{
     }
 }
 
-pub async fn sub_to_competitions<'a, T: Iterator<Item = &'a Uuid>>(ws_conns: &mut WsConnections, user_ws_id: Uuid, competition_ids: T){
-    if let Some(ws_user) = ws_conns.lock().await.get_mut(&user_ws_id){
-        competition_ids.for_each(|cid| {
-            println!("Adding subscription {}", cid); ws_user.subscriptions.competitions.insert(*cid);
-        });
-    };
+pub async fn sub_to_competitions<'a, T: Iterator<Item = &'a Uuid>>(ws_user: &mut WsConnection, competition_ids: T){
+    competition_ids.for_each(|cid| {
+        println!("Adding subscription {}", cid); ws_user.subscriptions.competitions.insert(*cid);
+    });
 }
 
-pub async fn sub_to_all_competitions(ws_conns: &mut WsConnections, user_ws_id: Uuid, toggle: bool){
-    if let Some(ws_user) = ws_conns.lock().await.get_mut(&user_ws_id){
-        ws_user.subscriptions.all_competitions = toggle
-    };
+pub async fn sub_to_all_competitions(ws_user: &mut WsConnection, toggle: bool){
+    ws_user.subscriptions.all_competitions = toggle
 }
 
-pub async fn sub_to_teams(ws_conns: &mut WsConnections, user_ws_id: Uuid, toggle: bool){
-    if let Some(ws_user) = ws_conns.lock().await.get_mut(&user_ws_id){
-        ws_user.subscriptions.teams = toggle
-    };
+pub async fn sub_to_teams(ws_user: &mut WsConnection, toggle: bool){
+    ws_user.subscriptions.teams = toggle
 }
 
 // TODO make generic with series and matches, T and closure for competition_id? or trait for HasCompetition?
