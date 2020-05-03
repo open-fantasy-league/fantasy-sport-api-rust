@@ -18,8 +18,8 @@ pub type BoxError = Box<dyn std::error::Error + Sync + Send + 'static>;
 // Maybe this lib should be agnostic to that, as it just focuses on a single connection
 // However not sure how to "pull stuff out of Arcs", maybe by design that wouldnt work. And wouldnt be threadsafe.
 pub type WSConnections<T> = Arc<Mutex<HashMap<Uuid, WSConnection<T>>>>;
-//pub type WSMethod<T> = Box<dyn (Fn(WSReq, PgConn, &mut WSConnections<T>, Uuid) -> Pin<Box<dyn Future<Output=Result<String, BoxError>>>>) + Send + Sync>;
-pub type WSMethod<T> = Box<dyn Fn(WSReq, PgConn, &mut WSConnections<T>, Uuid) -> Result<String, BoxError> + Send + Sync>;
+pub type WSMethod<T> = Box<dyn (Fn(WSReq, PgConn, &mut WSConnections<T>, Uuid) -> Pin<Box<dyn Future<Output=Result<String, BoxError>> + Send + Sync >>) + Send + Sync>;
+//pub type WSMethod<T> = Box<dyn Fn(WSReq, PgConn, &mut WSConnections<T>, Uuid) -> Result<String, BoxError> + Send + Sync>;
 // TODO this prob could be &str, but harder to get lifetimes to work
 pub type WSMethods<T> = Arc<HashMap<String, WSMethod<T>>>;
 pub trait Subscriptions {
@@ -167,7 +167,7 @@ async fn ws_req_resp<T: Subscriptions>(
     println!("{}", &req.data);
     let method = methods.get(&req.method.to_string())
         .ok_or(Box::new(InvalidRequestError{description: req.method.to_string()}))?;
-    method(req, conn, ws_conns, user_ws_id)
+    method(req, conn, ws_conns, user_ws_id).await
 }
 
 #[cfg(test)]
