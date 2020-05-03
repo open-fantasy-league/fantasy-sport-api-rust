@@ -69,6 +69,13 @@ CREATE TABLE player_results(
 	meta JSONB NOT NULL DEFAULT '{}'::jsonb
 );
 
+CREATE TABLE player_positions(
+	player_position_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+	player_id UUID NOT NULL REFERENCES players,
+	position TEXT NOT NULL,
+	timespan TSTZRANGE NOT NULL DEFAULT tstzrange(now(), 'infinity', '[)')
+);
+
 CREATE TABLE team_match_results(
 	team_match_result_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 	team_id UUID NOT NULL REFERENCES teams,
@@ -101,6 +108,7 @@ CREATE INDEX series_teams_idx_1 on series_teams(series_id);
 CREATE INDEX series_teams_idx_2 on series_teams(team_id);
 CREATE INDEX player_names_idx on player_names(player_id);
 CREATE INDEX team_names_idx on team_names(team_id);
+CREATE INDEX player_positions_idx on player_positions(player_id);
 -- might want an index for query player-name and find most recent player
 
 CREATE INDEX team_match_result_idx on team_match_results(result);
@@ -109,3 +117,4 @@ CREATE INDEX competition_timespan_idx on competitions USING gist (timespan);
 CREATE INDEX series_timespan_idx on series USING gist (timespan);
 CREATE INDEX matches_timespan_idx on matches USING gist (timespan);
 CREATE INDEX team_players_timespan_idx on team_players USING gist (timespan);
+CREATE INDEX player_positions_timespan_idx on player_positions USING gist (timespan);

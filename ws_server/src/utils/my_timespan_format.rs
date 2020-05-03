@@ -1,9 +1,10 @@
 // similar to https://serde.rs/custom-date-format.html
-use crate::DieselTimespan;
 use chrono::{DateTime, Utc};
 use serde::ser::SerializeSeq;
 use serde::{self, de, Deserialize, Deserializer, Serializer};
-use std::collections::Bound::{Excluded, Included};
+use std::collections::Bound::{self, Excluded, Included};
+
+pub type DieselTimespan = (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>);
 
 pub fn deserialize<'de, D>(deserializer: D) -> Result<DieselTimespan, D::Error>
 where

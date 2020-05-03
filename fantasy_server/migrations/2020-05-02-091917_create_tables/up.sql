@@ -6,8 +6,8 @@ CREATE TABLE leagues(
     squad_size INT NOT NULL,
     competition_id UUID NOT NULL,
     meta JSONB NOT NULL DEFAULT '{}',
-    max_players_per_team INT DEFAULT NULL,
-    max_players_per_position INT DEFAULT NULL
+    max_players_per_team INT NOT NULL DEFAULT 256,
+    max_players_per_position INT NOT NULL DEFAULT 256
 );
 
 CREATE TABLE periods(

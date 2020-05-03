@@ -55,8 +55,8 @@ table! {
         squad_size -> Int4,
         competition_id -> Uuid,
         meta -> Jsonb,
-        max_players_per_team -> Nullable<Int4>,
-        max_players_per_position -> Nullable<Int4>,
+        max_players_per_team -> Int4,
+        max_players_per_position -> Int4,
     }
 }
 

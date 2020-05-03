@@ -1,47 +1,16 @@
 use serde::{Deserialize, Serialize};
-use crate::utils::my_timespan_format;
 use crate::db;
-use crate::db_pool::PgConn;
 use std::collections::HashMap;
-use crate::DieselTimespan;
-use frunk::labelled::transform_from;
+use warp_ws_server::*;
+use warp_ws_server::utils::my_timespan_format::{self, DieselTimespan};
+use frunk::labelled::*;
 use crate::models::*;
+use crate::WSConnections_;
 use uuid::Uuid;
 use itertools::Itertools;
-
-#[derive(Serialize)]
-pub struct ErrorResp {
-    pub code: u16,
-    pub message: String,
-}
-
-#[derive(Serialize)]
-pub struct WSMsgOut<'a, T: Serialize> {
-    pub message_id: Uuid,
-    pub mode: &'a str,
-    pub message_type: &'a str,
-    pub data: T
-}
-
-impl<'a, T: Serialize> WSMsgOut<'a, T>{
-    pub fn resp(message_id: Uuid, message_type: &'a str, data: T) -> Self{
-        return Self{message_id: message_id, message_type: message_type, mode: "resp", data: data}
-    }
-
-    pub fn push(message_type: &'a str, data: T) -> Self{
-        return Self{message_id: Uuid::new_v4(), message_type: message_type, mode: "push", data: data}
-    }
-}
-
-
-#[derive(Deserialize)]
-pub struct WSReq<'a> {
-    pub message_id: Uuid,
-    pub method: &'a str,
-    pub data: serde_json::Value
-    //pub data: String
-}
-
+use frunk::*;
+use crate::subscriptions::*;
+use crate::publisher::*;
 
 #[derive(Deserialize, LabelledGeneric, Debug)]
 pub struct ApiSubTeams{
@@ -239,15 +208,8 @@ pub struct ApiTeamsAndPlayers{
     }
 }*/
 
-fn handle_handling_the_handler<T: Serialize>(what_happened: Result<T, diesel::result::Error>) -> Result<impl warp::Reply, warp::Rejection>{
-    match what_happened{
-        Ok(yay) => Ok(warp::reply::json(&yay)),
-        Err(fuuu) => Ok(warp::reply::json(&ErrorResp{code:500, message: fuuu.to_string()}))
-    }
-}
-
 //pub async fn upsert_serieses(conn: PgConn, mut new: Vec<ApiNewSeries>) -> Result<impl warp::Reply, warp::Rejection>{
-pub async fn upsert_serieses(conn: PgConn, mut new: Vec<ApiNewSeries>) -> Result<Vec<Series>, diesel::result::Error>{
+pub async fn upsert_series_with_children(conn: PgConn, mut new: Vec<ApiNewSeries>) -> Result<Vec<Series>, diesel::result::Error>{
     // This just returns list of raw-series created (without the info on teams for each series)
     // Due to simplicity meaning either teams-in-series either match the input, or an error
     // happened
@@ -281,23 +243,156 @@ pub async fn upsert_serieses(conn: PgConn, mut new: Vec<ApiNewSeries>) -> Result
     })
 }
 
-pub async fn upsert_competitions(conn: PgConn, new: Vec<ApiNewCompetition>) -> Result<Vec<Competition>, diesel::result::Error>{
-    db::upsert_competitions(&conn, new.into_iter().map(transform_from).collect_vec())
+pub async fn sub_competitions(req: WSReq, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
+    let deserialized: ApiSubCompetitions = serde_json::from_value(req.data)?;
+    // let ws_user = ws_conns.lock().await.get_mut(&user_ws_id).ok_or("Webscoket gone away")?;
+    // why does this need splitting into two lines?
+    // ANd is it holding the lock for this whole scope? doesnt need to
+    let mut hmmmm = ws_conns.lock().await;
+    let ws_user = hmmmm.get_mut(&user_ws_id).ok_or("Websocket gone away")?;
+    if let Some(toggle) = deserialized.all{
+        sub_to_all_competitions(ws_user, toggle).await;
+    }
+    else if let Some(competition_ids) = deserialized.competition_ids{
+        sub_to_competitions(ws_user, competition_ids.iter()).await;
+    }
+    else{
+        return Err(Box::new(InvalidRequestError{description: String::from("sub_competitions must specify either 'all' or 'competition_ids'")}))
+    }
+    let all_competitions = db::get_all_competitions(&conn)?;
+    let subscribed_comps: Vec<&Competition> = subscribed_comps(&ws_user.subscriptions, &all_competitions);
+    let comp_rows = db::get_full_competitions(
+        &conn,
+            subscribed_comps.iter().map(|x| x.competition_id).collect()
+    )?;
+    let data = ApiCompetition::from_rows(comp_rows);
+    let resp_msg = WSMsgOut::resp(req.message_id, req.method, data);
+    serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
+pub async fn sub_teams(req: WSReq, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
+    let deserialized: ApiSubTeams = serde_json::from_value(req.data)?;
+    let mut hmmmm = ws_conns.lock().await;
+    let ws_user = hmmmm.get_mut(&user_ws_id).ok_or("Websocket gone away")?;
+    println!("{:?}", &deserialized);
+    sub_to_teams(ws_user, deserialized.toggle).await;
 
-pub async fn upsert_teams(conn: PgConn, new: Vec<ApiNewTeam>) -> Result<Vec<Team>, diesel::result::Error>{
-    conn.build_transaction().run(|| db::upsert_teams(&conn, new))
+    let team_out = db::get_all_teams(&conn).map(|rows| ApiTeam::from_rows(rows))?;
+    let players_out = db::get_all_players(&conn).map(|rows| ApiPlayer::from_rows(rows))?;
+    let team_players_out = db::get_all_team_players(&conn)?;
+    let data = ApiTeamsAndPlayers{teams: team_out, players: players_out, team_players: team_players_out};
+    let resp_msg = WSMsgOut::resp(req.message_id, req.method, data);
+    serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
-pub async fn upsert_players(conn: PgConn, new: Vec<ApiNewPlayer>) -> Result<Vec<Player>, diesel::result::Error>{
-    conn.build_transaction().run(|| db::upsert_players(&conn, new))
+pub async fn upsert_competitions(req: WSReq, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
+    let deserialized = serde_json::from_value(req.data)?;
+    println!("{:?}", &deserialized);
+    let competitions_out= db::upsert_competitions(&conn, deserialized.into_iter().map(transform_from).collect_vec())?;
+    // assume anything upserted the user wants to subscribe to
+    if let Some(ws_user) = ws_conns.lock().await.get_mut(&user_ws_id){
+        sub_to_competitions(ws_user, competitions_out.iter().map(|c| &c.competition_id)).await;
+    }
+    // TODO ideally would return response before awaiting publishing going out
+    publish_competitions(ws_conns, &competitions_out).await;
+    println!("{:?}", &competitions_out);
+    let resp_msg = WSMsgOut::resp(req.message_id, req.method, competitions_out);
+    serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
-pub async fn upsert_matches(conn: PgConn, new: Vec<NewMatch>) -> Result<Vec<Match>, diesel::result::Error>{
-    db::upsert_matches(&conn, new)
+pub async fn upsert_series(req: WSReq, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
+    let deserialized = serde_json::from_value(req.data)?;
+    println!("{:?}", &deserialized);
+    let series_out= upsert_series_with_children(conn, deserialized).await?;
+    //let comp_ids: HashSet<Uuid> = series_out.iter().map(|s| s.competition_id).dedup().collect();
+    // assume anything upserted the user wants to subscribe to
+    // TODO check how turn map into iter
+    if let Some(ws_user) = ws_conns.lock().await.get_mut(&user_ws_id){
+        sub_to_competitions(ws_user, series_out.iter().map(|s| &s.competition_id)).await;
+    }
+    publish_series(ws_conns, &series_out).await;
+    let resp_msg = WSMsgOut::resp(req.message_id, req.method, series_out);
+    serde_json::to_string(&resp_msg).map_err(|e| e.into())
+}
+pub async fn upsert_matches(req: WSReq, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
+    let deserialized = serde_json::from_value(req.data)?;
+    println!("{:?}", &deserialized);
+    // TODO async db funkys  upsert_matches(&conn, d).await;
+    let upserted= db::upsert_matches(&conn, deserialized)?;
+    let series_ids: Vec<Uuid> = upserted.iter().map(|s| s.series_id).dedup().collect();
+    let comp_and_series_ids = db::get_competition_ids_for_series(&conn, &series_ids)?;
+    // assume anything upserted the user wants to subscribe to
+    if let Some(ws_user) = ws_conns.lock().await.get_mut(&user_ws_id){
+        sub_to_competitions(ws_user, comp_and_series_ids.iter().map(|x| &x.1)).await;
+    }
+    publish_matches(ws_conns, &upserted, comp_and_series_ids.into_iter().collect()).await;
+    let resp_msg = WSMsgOut::resp(req.message_id, req.method, upserted);
+    serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
-// pub async fn upsert_team_players(conn: PgConn, new: Vec<NewTeamPlayer>) -> Result<usize, diesel::result::Error>{
-//     db::upsert_team_players(&conn, new)
-// }
+pub async fn upsert_teams(req: WSReq, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
+    let deserialized = serde_json::from_value(req.data)?;
+    println!("{:?}", &deserialized);
+    let upserted= db::upsert_teams(&conn, deserialized)?;
+    publish_teams(ws_conns, &upserted).await;
+    let resp_msg = WSMsgOut::resp(req.message_id, req.method, upserted);
+    serde_json::to_string(&resp_msg).map_err(|e| e.into())
+}
+
+pub async fn upsert_players(req: WSReq, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
+    let deserialized = serde_json::from_value(req.data)?;
+    println!("{:?}", &deserialized);
+    let upserted= db::upsert_players(&conn, deserialized)?;
+    publish_players(ws_conns, &upserted).await;
+    let resp_msg = WSMsgOut::resp(req.message_id, req.method, upserted);
+    serde_json::to_string(&resp_msg).map_err(|e| e.into())
+}
+
+pub async fn upsert_team_players(req: WSReq, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
+    let deserialized = serde_json::from_value(req.data)?;
+    println!("{:?}", &deserialized);
+    let upserted= db::upsert_team_players(&conn, deserialized)?;
+    publish_team_players(ws_conns, &upserted).await;
+    let resp_msg = WSMsgOut::resp(req.message_id, req.method, upserted);
+    serde_json::to_string(&resp_msg).map_err(|e| e.into())
+}
+
+pub async fn upsert_team_match_results(req: WSReq, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
+    let deserialized: Vec<NewTeamMatchResult> = serde_json::from_value(req.data)?;
+    println!("{:?}", &deserialized);
+    let match_ids: Vec<Uuid> = deserialized.iter().map(|x| x.match_id).collect();
+    let upserted= db::upsert_team_match_results(&conn, deserialized)?;
+    let competition_n_match_ids = db::get_competition_ids_for_matches(&conn, &match_ids)?;
+    let comp_to_match_ids: HashMap<Uuid, Uuid> = competition_n_match_ids.into_iter().collect();
+    publish_results::<TeamMatchResult>(ws_conns, &upserted, comp_to_match_ids).await;
+    let resp_msg = WSMsgOut::resp(req.message_id, req.method, upserted);
+    serde_json::to_string(&resp_msg).map_err(|e| e.into())
+}
+
+pub async fn upsert_player_match_results(req: WSReq, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
+    let deserialized: Vec<NewPlayerResult> = serde_json::from_value(req.data)?;
+    println!("{:?}", &deserialized);
+    let match_ids: Vec<Uuid> = deserialized.iter().map(|x| x.match_id).collect();
+    let upserted= db::upsert_player_match_results(&conn, deserialized)?;
+    let competition_n_match_ids = db::get_competition_ids_for_matches(&conn, &match_ids)?;
+    let comp_to_match_ids: HashMap<Uuid, Uuid> = competition_n_match_ids.into_iter().collect();
+    publish_results::<PlayerResult>(ws_conns, &upserted, comp_to_match_ids).await;
+    let resp_msg = WSMsgOut::resp(req.message_id, req.method, upserted);
+    serde_json::to_string(&resp_msg).map_err(|e| e.into())
+}
+
+pub async fn upsert_team_series_results(req: WSReq, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
+    let deserialized: Vec<NewTeamSeriesResult> = serde_json::from_value(req.data)?;
+    println!("{:?}", &deserialized);
+    let series_ids: Vec<Uuid> = deserialized.iter().map(|x| x.series_id).collect();
+    let upserted= db::upsert_team_series_results(&conn, deserialized)?;
+    let competition_n_series_ids = db::get_competition_ids_for_series(&conn, &series_ids)?;
+    let comp_to_series_ids: HashMap<Uuid, Uuid> = competition_n_series_ids.into_iter().collect();
+    publish_results::<TeamSeriesResult>(ws_conns, &upserted, comp_to_series_ids).await;
+    let resp_msg = WSMsgOut::resp(req.message_id, req.method, upserted);
+    serde_json::to_string(&resp_msg).map_err(|e| e.into())
+}
+
+pub fn upsert_series_teams(req: WSReq, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
+    Ok("dog".to_string())
+}

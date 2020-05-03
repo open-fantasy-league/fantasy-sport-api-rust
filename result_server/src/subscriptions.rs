@@ -1,4 +1,4 @@
-use crate::WsConnection;
+use crate::WSConnection_;
 use crate::models;
 use uuid::Uuid;
 use std::collections::HashSet;
@@ -8,23 +8,23 @@ pub struct Subscriptions{
     pub all_competitions: bool
 }
 
-impl Subscriptions{
-    pub fn new() -> Subscriptions {
+impl warp_ws_server::Subscriptions for Subscriptions{
+    fn new() -> Subscriptions {
         Subscriptions{teams: false, competitions: HashSet::new(), all_competitions: false}
     }
 }
 
-pub async fn sub_to_competitions<'a, T: Iterator<Item = &'a Uuid>>(ws_user: &mut WsConnection, competition_ids: T){
+pub async fn sub_to_competitions<'a, T: Iterator<Item = &'a Uuid>>(ws_user: &mut WSConnection_, competition_ids: T){
     competition_ids.for_each(|cid| {
         println!("Adding subscription {}", cid); ws_user.subscriptions.competitions.insert(*cid);
     });
 }
 
-pub async fn sub_to_all_competitions(ws_user: &mut WsConnection, toggle: bool){
+pub async fn sub_to_all_competitions(ws_user: &mut WSConnection_, toggle: bool){
     ws_user.subscriptions.all_competitions = toggle
 }
 
-pub async fn sub_to_teams(ws_user: &mut WsConnection, toggle: bool){
+pub async fn sub_to_teams(ws_user: &mut WSConnection_, toggle: bool){
     ws_user.subscriptions.teams = toggle
 }
 

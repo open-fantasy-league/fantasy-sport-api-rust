@@ -14,3 +14,58 @@ tomorrow2:
 - another attempt at question mark error-handling in main  DONE
 - base simple fantasy messages (user-join. upsert-league)
 - add position to players (position can change over time)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+@dnsco If you dont mind extra-lines/boilerplate and you are using postgresql.
+
+This works for me
+
+    diesel::insert_into(table)
+        .values(new)
+        .on_conflict(league_id)
+        .do_update()
+        .set((
+            meta.eq(excluded(meta)),
+            name.eq(excluded(name)),
+            team_size.eq(excluded(team_size)),
+            competition_id.eq(excluded(competition_id)),
+            squad_size.eq(excluded(squad_size)),
+            max_players_per_team.eq(excluded(max_players_per_team)),
+            max_players_per_position.eq(excluded(max_players_per_position)),
+        ))
+        //.set(new) would work for single upsert, but not bulk upsert. As the Vec doesnt impl AsChangeset
+        .get_results(conn)
+
+Extra notes:
+I was interested in 'partial-bulk-upsert', where null values indicate "Dont update. leave as-is".
+However this looks very tricky/effort.
+
+because if you do it in raw SQL, you'll notice it tries the INSERT with the null values (likely to error for un-nullable colums), before anything else....so it errors with "cant insert null", rather than hitting the on conflict for Pkey.
+
+Whilst could write some postgresql hooks/functions to achieve this, is awkward and far outside realm of diesel.

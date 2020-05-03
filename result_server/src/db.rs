@@ -6,11 +6,10 @@ use diesel::prelude::*;
 use diesel::ExpressionMethods;
 use diesel::RunQueryDsl;
 use diesel::{sql_query, sql_types};
-use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 //use frunk::labelled::transform_from;
 use crate::handlers::{ApiNewPlayer, ApiNewTeam};
-use crate::DieselTimespan;
+use warp_ws_server::utils::my_timespan_format::DieselTimespan;
 use itertools::{Itertools, izip};
 
 pub type CompetitionHierarchy = Vec<(Competition, Vec<(Series, Vec<TeamSeriesResult>, Vec<SeriesTeam>, Vec<(Match, Vec<PlayerResult>, Vec<TeamMatchResult>)>)>)>;

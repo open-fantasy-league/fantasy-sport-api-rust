@@ -10,7 +10,7 @@ use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 //use warp_ws_server::utils::my_timespan_format::DieselTimespan;
 
-pub fn upsert_leagues<'a>(
+pub fn insert_leagues(
     conn: &PgConnection,
     new: Vec<NewLeague>,
 ) -> Result<Vec<League>, diesel::result::Error> {
@@ -34,5 +34,16 @@ pub fn upsert_leagues<'a>(
             max_players_per_team.eq(excluded(max_players_per_team)),
             max_players_per_position.eq(excluded(max_players_per_position)),
         ))
+        //.set(new) would work for single upsert, but not bulk upsert. As the Vec doesnt impl AsChangeset
         .get_results(conn)
+}
+
+pub fn update_league(
+    conn: &PgConnection,
+    new: UpdateLeague,
+) -> Result<League, diesel::result::Error> {
+    use crate::schema::leagues::{dsl::*, table};
+    diesel::update(table).filter(league_id.eq(new.league_id))
+        .set(new)
+        .get_result(conn)
 }

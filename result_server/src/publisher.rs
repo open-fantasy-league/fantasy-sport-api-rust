@@ -1,13 +1,13 @@
 use crate::models;
-use crate::WsConnections;
 use crate::subscriptions::subscribed_comps;
 use warp::ws;
 use std::collections::HashMap;
 use uuid::Uuid;
-use crate::handlers::WSMsgOut;
+use warp_ws_server::*;
 use serde::Serialize;
+use crate::WSConnections_;
 
-pub async fn publish_competitions(ws_conns: &mut WsConnections, competitions: &Vec<models::Competition>){
+pub async fn publish_competitions(ws_conns: &mut WSConnections_, competitions: &Vec<models::Competition>){
 
     for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
         let subscribed_comps: Vec<&models::Competition> = subscribed_comps(&wsconn.subscriptions, competitions);
@@ -26,7 +26,7 @@ pub async fn publish_competitions(ws_conns: &mut WsConnections, competitions: &V
     };
 }
 
-pub async fn publish_series(ws_conns: &mut WsConnections, series: &Vec<models::Series>){
+pub async fn publish_series(ws_conns: &mut WSConnections_, series: &Vec<models::Series>){
 
     for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
         let subscribed: Vec<&models::Series>  = series.iter()
@@ -46,7 +46,7 @@ pub async fn publish_series(ws_conns: &mut WsConnections, series: &Vec<models::S
     };
 }
 
-pub async fn publish_matches(ws_conns: &mut WsConnections, matches: &Vec<models::Match>, series_to_competitions: HashMap<Uuid, Uuid>){
+pub async fn publish_matches(ws_conns: &mut WSConnections_, matches: &Vec<models::Match>, series_to_competitions: HashMap<Uuid, Uuid>){
     for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
         let subscribed: Vec<&models::Match>  = matches.iter()
             .filter(|x| wsconn.subscriptions.competitions.contains(&series_to_competitions.get(&x.series_id).unwrap())).collect();
@@ -66,7 +66,7 @@ pub async fn publish_matches(ws_conns: &mut WsConnections, matches: &Vec<models:
 }
 
 
-pub async fn publish_teams(ws_conns: &mut WsConnections, teams: &Vec<models::Team>){
+pub async fn publish_teams(ws_conns: &mut WSConnections_, teams: &Vec<models::Team>){
     // TODO This doesnt include team-names that were mutated by their name-timestamp being 
     for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
         if wsconn.subscriptions.teams{
@@ -83,7 +83,7 @@ pub async fn publish_teams(ws_conns: &mut WsConnections, teams: &Vec<models::Tea
     };
 }
 
-pub async fn publish_players(ws_conns: &mut WsConnections, players: &Vec<models::Player>){
+pub async fn publish_players(ws_conns: &mut WSConnections_, players: &Vec<models::Player>){
     // TODO This doesnt include team-names that were mutated by their name-timestamp being 
     for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
         if wsconn.subscriptions.teams{
@@ -100,7 +100,7 @@ pub async fn publish_players(ws_conns: &mut WsConnections, players: &Vec<models:
     };
 }
 
-pub async fn publish_team_players(ws_conns: &mut WsConnections, team_players: &Vec<models::TeamPlayer>){
+pub async fn publish_team_players(ws_conns: &mut WSConnections_, team_players: &Vec<models::TeamPlayer>){
     // TODO This doesnt include team-names that were mutated by their name-timestamp being 
     for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
         if wsconn.subscriptions.teams{
@@ -117,7 +117,7 @@ pub async fn publish_team_players(ws_conns: &mut WsConnections, team_players: &V
     };
 }
 
-// pub async fn publish_team_match_results(ws_conns: &mut WsConnections, results: &Vec<models::TeamMatchResult>, match_to_comp_ids: HashMap<Uuid, Uuid>){
+// pub async fn publish_team_match_results(ws_conns: &mut WSConnections_, results: &Vec<models::TeamMatchResult>, match_to_comp_ids: HashMap<Uuid, Uuid>){
 //     // TODO cache in-case lots of people have same filters
 //     for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
 //         let subscribed_results: Vec<&models::TeamMatchResult>  = results.iter()
@@ -135,7 +135,7 @@ pub async fn publish_team_players(ws_conns: &mut WsConnections, team_players: &V
 //     };
 // }
 
-// pub async fn publish_team_series_results(ws_conns: &mut WsConnections, results: &Vec<models::TeamSeriesResult>, match_to_comp_ids: HashMap<Uuid, Uuid>){
+// pub async fn publish_team_series_results(ws_conns: &mut WSConnections_, results: &Vec<models::TeamSeriesResult>, match_to_comp_ids: HashMap<Uuid, Uuid>){
 //     // TODO cache in-case lots of people have same filters
 //     for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
 //         let subscribed_results: Vec<&models::TeamMatchResult>  = results.iter()
@@ -154,7 +154,7 @@ pub async fn publish_team_players(ws_conns: &mut WsConnections, team_players: &V
 // }
 
 pub async fn publish_results<'a, T: models::Publishable + models::HasId + Serialize>
-    (ws_conns: &mut WsConnections, results: &Vec<T>, id_to_comp_ids: HashMap<Uuid, Uuid>){
+    (ws_conns: &mut WSConnections_, results: &Vec<T>, id_to_comp_ids: HashMap<Uuid, Uuid>){
     // TODO cache in-case lots of people have same filters
     for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
         let subscribed_results: Vec<&T>  = results.iter()
