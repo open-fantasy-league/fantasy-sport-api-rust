@@ -314,7 +314,8 @@ async fn main() {
     let ws_conns = Arc::new(Mutex::new(HashMap::new()));
     // Turn our "state" into a new Filter...
     let ws_conns_filt = warp::any().map(move || ws_conns.clone());
-    let ws_router = warp::any().and(warp::ws()).and(ws_conns_filt).map(move |ws: warp::ws::Ws, ws_conns|{
+    let ws_router = warp::any().and(warp::ws()).and(ws_conns_filt)
+        .map(move |ws: warp::ws::Ws, ws_conns|{
             let pool = pool.clone();
             ws.on_upgrade(move |socket| handle_ws_conn(socket, pool, ws_conns))
         });

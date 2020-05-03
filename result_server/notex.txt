@@ -10,6 +10,7 @@ tomorrow:
 
 
 tomorrow2:
-- sort out passing in ws_conns vs ws_conns
-- another attempt at question mark error-handling in main
+- sort out passing in ws_conns vs ws_conns DONE
+- another attempt at question mark error-handling in main  DONE
 - base simple fantasy messages (user-join. upsert-league)
+- add position to players (position can change over time)

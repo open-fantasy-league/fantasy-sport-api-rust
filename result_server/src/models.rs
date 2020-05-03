@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 use serde_json;
 use uuid::Uuid;
 
+
+//https://kotiri.com/2018/01/31/postgresql-diesel-rust-types.html
 #[derive(Queryable, Serialize, Debug, Identifiable, Associations)]
 #[primary_key(competition_id)]
 pub struct Competition {
