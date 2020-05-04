@@ -1,3 +1,4 @@
+#![macro_use]
 use crate::models::*;
 use diesel::pg::expression::dsl::any;
 use diesel::pg::upsert::excluded;
@@ -9,10 +10,18 @@ use diesel::{sql_query, sql_types};
 use uuid::Uuid;
 //use frunk::labelled::transform_from;
 use crate::handlers::{ApiNewPlayer, ApiNewTeam};
+use itertools::{izip, Itertools};
 use warp_ws_server::utils::my_timespan_format::DieselTimespan;
-use itertools::{Itertools, izip};
 
-pub type CompetitionHierarchy = Vec<(Competition, Vec<(Series, Vec<TeamSeriesResult>, Vec<SeriesTeam>, Vec<(Match, Vec<PlayerResult>, Vec<TeamMatchResult>)>)>)>;
+pub type CompetitionHierarchy = Vec<(
+    Competition,
+    Vec<(
+        Series,
+        Vec<TeamSeriesResult>,
+        Vec<SeriesTeam>,
+        Vec<(Match, Vec<PlayerResult>, Vec<TeamMatchResult>)>,
+    )>,
+)>;
 
 //sql_function! {fn coalesce<T: sql_types::NotNull>(a: sql_types::Nullable<T>, b: T) -> T;}
 //sql_function!(fn trim_team_name_timespans(new_team_id sql_types::Uuid, new_timespan sql_types::Range<sql_types::Timestamptz>) -> ());
@@ -54,6 +63,22 @@ pub fn upsert_competitions<'a>(
         ))
         //.set(name.eq(coalesce::<sql_types::Text>(excluded(name), name)))
         .get_results(conn)
+}
+
+macro_rules! insert {
+    ($conn:expr, $table:expr, $aggregate:expr) => {
+        diesel::insert_into($table)
+            .values($aggregate)
+            .get_results($conn);
+    };
+}
+
+pub fn insert_competitions(
+    conn: &PgConnection,
+    new: Vec<NewCompetition>,
+) -> Result<Vec<Competition>, diesel::result::Error> {
+    use crate::schema::competitions::table;
+    diesel::insert_into(table).values(new).get_results(conn)
 }
 
 pub fn upsert_serieses<'a>(
@@ -216,17 +241,20 @@ pub fn upsert_team_players<'a>(
 ) -> Result<Vec<TeamPlayer>, diesel::result::Error> {
     use crate::schema::team_players;
     let num_entries = new.len();
-    new.iter().map(|n| {
-        // map looks useless but want to pass our insertable onto fold-results OK part
-        trim_timespans(conn, "team_player", n.player_id, n.timespan).map(|_| n)
-    }).fold_results(Vec::with_capacity(num_entries), |mut v, o| {
-        v.push(o);
-        v
-    }).and_then(|nn| {
-        diesel::insert_into(team_players::table)
-            .values(nn)
-            .get_results(conn)
-    })
+    new.iter()
+        .map(|n| {
+            // map looks useless but want to pass our insertable onto fold-results OK part
+            trim_timespans(conn, "team_player", n.player_id, n.timespan).map(|_| n)
+        })
+        .fold_results(Vec::with_capacity(num_entries), |mut v, o| {
+            v.push(o);
+            v
+        })
+        .and_then(|nn| {
+            diesel::insert_into(team_players::table)
+                .values(nn)
+                .get_results(conn)
+        })
 }
 
 pub fn upsert_team_match_results(
@@ -309,9 +337,7 @@ pub fn get_competition_ids_for_matches(
         .load(conn)
 }
 
-pub fn get_all_teams(
-    conn: &PgConnection,
-) -> Result<Vec<(Team, TeamName)>, diesel::result::Error> {
+pub fn get_all_teams(conn: &PgConnection) -> Result<Vec<(Team, TeamName)>, diesel::result::Error> {
     use crate::schema::{team_names, teams};
     teams::table.inner_join(team_names::table).load(conn)
 }
@@ -323,9 +349,7 @@ pub fn get_all_players(
     players::table.inner_join(player_names::table).load(conn)
 }
 
-pub fn get_all_team_players(
-    conn: &PgConnection,
-) -> Result<Vec<TeamPlayer>, diesel::result::Error> {
+pub fn get_all_team_players(conn: &PgConnection) -> Result<Vec<TeamPlayer>, diesel::result::Error> {
     use crate::schema::team_players;
     team_players::table.load(conn)
 }
@@ -339,7 +363,7 @@ pub fn get_all_competitions(
 
 pub fn get_full_competitions(
     conn: &PgConnection,
-    competition_ids: Vec<Uuid>
+    competition_ids: Vec<Uuid>,
 ) -> Result<CompetitionHierarchy, diesel::result::Error> {
     use crate::schema::competitions;
     let comps = competitions::table
@@ -347,19 +371,25 @@ pub fn get_full_competitions(
         .load::<Competition>(conn)?;
     let series = Series::belonging_to(&comps).load::<Series>(conn)?;
     let matches = Match::belonging_to(&series).load::<Match>(conn)?;
-    let team_series_results = TeamSeriesResult::belonging_to(&series).load::<TeamSeriesResult>(conn)?;
+    let team_series_results =
+        TeamSeriesResult::belonging_to(&series).load::<TeamSeriesResult>(conn)?;
     let team_series = SeriesTeam::belonging_to(&series).load::<SeriesTeam>(conn)?;
-    let team_match_results = TeamMatchResult::belonging_to(&matches).load::<TeamMatchResult>(conn)?;
+    let team_match_results =
+        TeamMatchResult::belonging_to(&matches).load::<TeamMatchResult>(conn)?;
     let player_results = PlayerResult::belonging_to(&matches).load::<PlayerResult>(conn)?;
     let grouped_player_results = player_results.grouped_by(&matches);
     let grouped_team_match_results = team_match_results.grouped_by(&matches);
     let grouped_team_series_results = team_series_results.grouped_by(&series);
     let grouped_series_teams = team_series.grouped_by(&series);
-    let matches_and_match_results: Vec<Vec<(Match, Vec<PlayerResult>, Vec<TeamMatchResult>)>> = izip!(matches, grouped_player_results, grouped_team_match_results)
-        .grouped_by(&series);
-    let series_lvl = izip!(series, grouped_team_series_results, grouped_series_teams, matches_and_match_results)
-        .grouped_by(&comps);
-    let everything: CompetitionHierarchy = comps.into_iter().zip(series_lvl)
-        .collect();
+    let matches_and_match_results: Vec<Vec<(Match, Vec<PlayerResult>, Vec<TeamMatchResult>)>> =
+        izip!(matches, grouped_player_results, grouped_team_match_results).grouped_by(&series);
+    let series_lvl = izip!(
+        series,
+        grouped_team_series_results,
+        grouped_series_teams,
+        matches_and_match_results
+    )
+    .grouped_by(&comps);
+    let everything: CompetitionHierarchy = comps.into_iter().zip(series_lvl).collect();
     Ok(everything)
 }

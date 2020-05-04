@@ -10,6 +10,8 @@ use uuid::Uuid;
 use itertools::Itertools;
 use crate::subscriptions::*;
 use crate::publisher::*;
+use crate::schema;
+use crate::diesel::RunQueryDsl;  // imported here so that can run db macros
 
 #[derive(Deserialize, LabelledGeneric, Debug)]
 pub struct ApiSubTeams{
@@ -302,6 +304,22 @@ pub async fn sub_teams(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnection
 //     }
 //     Box::pin(hmmm(req, competitions_out, ws_conns, user_ws_id))
 // }
+
+pub async fn insert_competitions(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
+    let deserialized: Vec<NewCompetition> = serde_json::from_value(req.data)?;
+    println!("{:?}", &deserialized);
+    let comps: Vec<Competition> = insert!(&conn, schema::competitions::table, deserialized)?;
+    //let comps = db::insert_competitions(&conn, deserialized.into_iter().map(transform_from).collect_vec())?;
+    // assume anything upserted the user wants to subscribe to
+    if let Some(ws_user) = ws_conns.lock().await.get_mut(&user_ws_id){
+        sub_to_competitions(ws_user, comps.iter().map(|c| &c.competition_id)).await;
+    }
+    // TODO ideally would return response before awaiting publishing going out
+    publish_competitions(ws_conns, &comps).await;
+    println!("{:?}", &comps);
+    let resp_msg = WSMsgOut::resp(req.message_id, req.method, comps);
+    serde_json::to_string(&resp_msg).map_err(|e| e.into())
+}
 
 pub async fn upsert_competitions(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
     let deserialized: Vec<NewCompetition> = serde_json::from_value(req.data)?;

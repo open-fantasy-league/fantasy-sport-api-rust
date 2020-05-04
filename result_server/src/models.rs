@@ -1,10 +1,9 @@
 use super::schema::*;
-use warp_ws_server::utils::my_timespan_format::{self, DieselTimespan};
+use frunk::LabelledGeneric;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use uuid::Uuid;
-use frunk::LabelledGeneric;
-
+use warp_ws_server::utils::my_timespan_format::{self, DieselTimespan};
 
 //https://kotiri.com/2018/01/31/postgresql-diesel-rust-types.html
 #[derive(Queryable, Serialize, Debug, Identifiable, Associations)]
