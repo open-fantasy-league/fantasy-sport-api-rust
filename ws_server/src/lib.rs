@@ -10,6 +10,7 @@ mod db_pool;
 pub use db_pool::{PgPool, PgConn, pg_pool};
 pub mod utils;
 use serde::{Deserialize, Serialize};
+use async_trait::async_trait;
 // There's so many different error handling libraries to choose from
 // https://blog.yoshuawuyts.com/error-handling-survey/
 // Eventually will probably use snafu
@@ -73,7 +74,7 @@ pub struct WSReq {
 }
 
 #[derive(Debug, Clone)]
-pub struct InvalidRequestError{description: String}
+pub struct InvalidRequestError{pub description: String}
 
 impl fmt::Display for InvalidRequestError{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -96,7 +97,7 @@ pub fn ws_error_resp(error_msg: String) -> ws::Message{
     )
 }
 
-pub async fn handle_ws_conn<T: Subscriptions>(ws: ws::WebSocket, pg_pool: PgPool, mut ws_conns: WSConnections<T>, methods: WSMethods<T>) {
+pub async fn handle_ws_conn<T: Subscriptions, U: WSHandler<T>>(ws: ws::WebSocket, pg_pool: PgPool, mut ws_conns: WSConnections<T>) {
     // https://github.com/seanmonstar/warp/blob/master/examples/websockets_chat.rs
     let (ws_send, mut ws_recv) = ws.split();
     let (tx, rx) = mpsc::unbounded_channel();
@@ -120,7 +121,7 @@ pub async fn handle_ws_conn<T: Subscriptions>(ws: ws::WebSocket, pg_pool: PgPool
             // pgpool get should probably be deferred until after we unwrap/get websocket message
             // but trying like this as worried about ownership of pool, moving it into funcs
             Ok(msg) => match pg_pool.get(){
-                Ok(conn) => handle_ws_msg(msg, conn, &mut ws_conns, ws_id, &methods).await,
+                Ok(conn) => handle_ws_msg::<T, U>(msg, conn, &mut ws_conns, ws_id).await,
                 Err(e) => ws_error_resp(e.to_string())
             },
             Err(e) => {
@@ -147,12 +148,12 @@ pub async fn handle_ws_conn<T: Subscriptions>(ws: ws::WebSocket, pg_pool: PgPool
     }
 }
 
-async fn handle_ws_msg<T: Subscriptions>(
-    msg: ws::Message, conn: PgConn, ws_conns: &mut WSConnections<T>, user_ws_id: Uuid, methods: &WSMethods<T>
+async fn handle_ws_msg<T: Subscriptions, U: WSHandler<T>>(
+    msg: ws::Message, conn: PgConn, ws_conns: &mut WSConnections<T>, user_ws_id: Uuid
 ) -> ws::Message{
     match msg.to_str(){
         // Can't get await inside `and_then`/`map` function chains to work properly
-        Ok(msg_str) => match ws_req_resp(msg_str.to_string(), conn, ws_conns, user_ws_id, methods).await{
+        Ok(msg_str) => match U::ws_req_resp(msg_str.to_string(), conn, ws_conns, user_ws_id).await{
             Ok(text) => ws::Message::text(text),
             Err(e) => ws_error_resp(e.to_string())
         },
@@ -160,15 +161,22 @@ async fn handle_ws_msg<T: Subscriptions>(
     }
 }
 
-async fn ws_req_resp<T: Subscriptions>(
-    msg: String, conn: PgConn, ws_conns: &mut WSConnections<T>, user_ws_id: Uuid, methods: &WSMethods<T>
-) -> Result<String, BoxError>{
-    let req: WSReq = serde_json::from_str(&msg)?;
-    println!("{}", &req.data);
-    let method = methods.get(&req.method.to_string())
-        .ok_or(Box::new(InvalidRequestError{description: req.method.to_string()}))?;
-    method(req, conn, ws_conns, user_ws_id).await
+#[async_trait]
+pub trait WSHandler<T: Subscriptions>{
+    async fn ws_req_resp(
+        msg: String, conn: PgConn, ws_conns: &mut WSConnections<T>, user_ws_id: Uuid
+    ) -> Result<String, BoxError>;
 }
+
+// async fn ws_req_resp<T: Subscriptions>(
+//     msg: String, conn: PgConn, ws_conns: &mut WSConnections<T>, user_ws_id: Uuid, methods: &WSMethods<T>
+// ) -> Result<String, BoxError>{
+//     let req: WSReq = serde_json::from_str(&msg)?;
+//     println!("{}", &req.data);
+//     let method = methods.get(&req.method.to_string())
+//         .ok_or(Box::new(InvalidRequestError{description: req.method.to_string()}))?;
+//     method(req, conn, ws_conns, user_ws_id).await
+// }
 
 #[cfg(test)]
 mod tests {

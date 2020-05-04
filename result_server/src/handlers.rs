@@ -285,24 +285,40 @@ pub async fn sub_teams(req: WSReq, conn: PgConn, ws_conns: &mut WSConnections_, 
     let resp_msg = WSMsgOut::resp(req.message_id, req.method, data);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
-use std::pin::Pin;
-pub fn upsert_competitions(req: WSReq, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Pin<Box<dyn Future<Output=Result<String, BoxError>> + Send + Sync>>{
+// use std::pin::Pin;
+// pub fn upsert_competitions(req: WSReq, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Pin<Box<dyn Future<Output=Result<String, BoxError>> + Send + Sync>>{
+//     let deserialized: Vec<NewCompetition> = serde_json::from_value(req.data).expect("fuck");
+//     println!("{:?}", &deserialized);
+//     let competitions_out= db::upsert_competitions(&conn, deserialized.into_iter().map(transform_from).collect_vec()).expect("fuck");
+//     async fn hmmm(req: WSReq, competitions_out: Vec<Competition>, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
+//         // assume anything upserted the user wants to subscribe to
+//         if let Some(ws_user) = ws_conns.lock().await.get_mut(&user_ws_id){
+//             sub_to_competitions(ws_user, competitions_out.iter().map(|c| &c.competition_id)).await;
+//         }
+//         // TODO ideally would return response before awaiting publishing going out
+//         publish_competitions(ws_conns, &competitions_out).await;
+//         println!("{:?}", &competitions_out);
+//         let resp_msg = WSMsgOut::resp(req.message_id, req.method, competitions_out);
+//         let out = serde_json::to_string(&resp_msg).map_err(|e| e.into());
+//         out
+//     }
+//     Box::pin(hmmm(req, competitions_out, ws_conns, user_ws_id))
+// }
+
+pub async fn upsert_competitions2(req: WSReq, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
     let deserialized: Vec<NewCompetition> = serde_json::from_value(req.data).expect("fuck");
     println!("{:?}", &deserialized);
     let competitions_out= db::upsert_competitions(&conn, deserialized.into_iter().map(transform_from).collect_vec()).expect("fuck");
-    async fn hmmm(req: WSReq, competitions_out: Vec<Competition>, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
-        // assume anything upserted the user wants to subscribe to
-        if let Some(ws_user) = ws_conns.lock().await.get_mut(&user_ws_id){
-            sub_to_competitions(ws_user, competitions_out.iter().map(|c| &c.competition_id)).await;
-        }
-        // TODO ideally would return response before awaiting publishing going out
-        publish_competitions(ws_conns, &competitions_out).await;
-        println!("{:?}", &competitions_out);
-        let resp_msg = WSMsgOut::resp(req.message_id, req.method, competitions_out);
-        let out = serde_json::to_string(&resp_msg).map_err(|e| e.into());
-        out
+    // assume anything upserted the user wants to subscribe to
+    if let Some(ws_user) = ws_conns.lock().await.get_mut(&user_ws_id){
+        sub_to_competitions(ws_user, competitions_out.iter().map(|c| &c.competition_id)).await;
     }
-    Box::pin(hmmm(req, competitions_out, ws_conns, user_ws_id))
+    // TODO ideally would return response before awaiting publishing going out
+    publish_competitions(ws_conns, &competitions_out).await;
+    println!("{:?}", &competitions_out);
+    let resp_msg = WSMsgOut::resp(req.message_id, req.method, competitions_out);
+    let out = serde_json::to_string(&resp_msg).map_err(|e| e.into());
+    out
 }
 
 pub async fn upsert_series(req: WSReq, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{

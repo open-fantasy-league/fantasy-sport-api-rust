@@ -22,3 +22,4 @@ frunk_core = "0.3.1"
 itertools = "0.9.0"
 futures = "^0.3"
 warp_ws_server = { path = "../ws_server" }
+async-trait = "0.1.30"
