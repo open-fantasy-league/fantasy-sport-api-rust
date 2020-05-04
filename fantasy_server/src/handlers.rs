@@ -2,7 +2,7 @@ use warp_ws_server::*;
 use crate::{db, WSConnections_};
 use uuid::Uuid;
 
-pub fn insert_leagues(req: WSReq, conn: PgConn, _: &mut WSConnections_, _: Uuid) -> Result<String, BoxError>{
+pub async fn insert_leagues(req: WSReq<'_>, conn: PgConn, _: &mut WSConnections_, _: Uuid) -> Result<String, BoxError>{
     let deserialized = serde_json::from_value(req.data)?;
     println!("{:?}", &deserialized);
     let leagues = db::insert_leagues(&conn, deserialized)?;
@@ -14,7 +14,7 @@ pub fn insert_leagues(req: WSReq, conn: PgConn, _: &mut WSConnections_, _: Uuid)
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
-pub fn update_league(req: WSReq, conn: PgConn, _: &mut WSConnections_, _: Uuid) -> Result<String, BoxError>{
+pub async fn update_league(req: WSReq<'_>, conn: PgConn, _: &mut WSConnections_, _: Uuid) -> Result<String, BoxError>{
     let deserialized = serde_json::from_value(req.data)?;
     println!("{:?}", &deserialized);
     let league = db::update_league(&conn, deserialized)?;

@@ -3,27 +3,35 @@ extern crate diesel;
 use dotenv::dotenv;
 use std::env;
 use warp::*;
-use std::sync::Arc;
-use warp_ws_server;
-use std::collections::{HashSet, HashMap};
+use warp_ws_server::*;
 use uuid::Uuid;
 mod handlers;
 use handlers::*;
 mod db;
 mod schema;
 mod models;
+mod subscriptions;
+use subscriptions::Subscriptions;
+use async_trait::async_trait;
 
-pub type WSConnections_ = warp_ws_server::WSConnections<Subscriptions>;
+pub type WSConnections_ = warp_ws_server::WSConnections<subscriptions::Subscriptions>;
 
-pub struct Subscriptions{
-    pub teams: bool,
-    pub competitions: HashSet<Uuid>,
-    pub all_competitions: bool
+struct A{
 }
 
-impl warp_ws_server::Subscriptions for Subscriptions{
-    fn new() -> Subscriptions {
-        Subscriptions{teams: false, competitions: HashSet::new(), all_competitions: false}
+#[async_trait]
+impl WSHandler<subscriptions::Subscriptions> for A{
+
+    async fn ws_req_resp(
+        msg: String, conn: PgConn, ws_conns: &mut WSConnections<subscriptions::Subscriptions>, user_ws_id: Uuid
+    ) -> Result<String, BoxError>{
+        let req: WSReq = serde_json::from_str(&msg)?;
+        println!("{}", &req.data);
+        match req.method{
+            "insert_leagues" => insert_leagues(req, conn, ws_conns, user_ws_id).await,
+            "update_league" => update_league(req, conn, ws_conns, user_ws_id).await,
+            uwotm8 => Err(Box::new(InvalidRequestError{description: uwotm8.to_string()}))
+        }
     }
 }
 
@@ -36,16 +44,10 @@ async fn main() {
     let ws_conns =  warp_ws_server::ws_conns::<Subscriptions>();
     let ws_conns_filt = warp::any().map(move || ws_conns.clone());
 
-    let mut methods: HashMap<String, warp_ws_server::WSMethod<Subscriptions>> = HashMap::new();
-    methods.insert("insert_leagues".to_string(), Box::new(insert_leagues));
-    methods.insert("update_league".to_string(), Box::new(update_league));
-    let shareable_methods = Arc::new(methods);
-    let methods_filt = warp::any().map(move || Arc::clone(&shareable_methods));
-
-    let ws_router = warp::any().and(warp::ws()).and(ws_conns_filt).and(methods_filt)
-        .map(move |ws: warp::ws::Ws, ws_conns, methods|{
+    let ws_router = warp::any().and(warp::ws()).and(ws_conns_filt)
+        .map(move |ws: warp::ws::Ws, ws_conns|{
             let pool = pool.clone();
-            ws.on_upgrade(move |socket| warp_ws_server::handle_ws_conn::<Subscriptions>(socket, pool, ws_conns, methods))
+            ws.on_upgrade(move |socket| warp_ws_server::handle_ws_conn::<subscriptions::Subscriptions, A>(socket, pool, ws_conns))
         });
     warp::serve(ws_router).run(([127, 0, 0, 1], 3030)).await;
 }

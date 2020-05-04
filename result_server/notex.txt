@@ -18,14 +18,24 @@ tomorrow2:
 
 
 
+tuesday 4:
+- add functionality for player positions
+- refudge bulk-insert bulk update (can for now internally do a shitty map and separate updates)
 
+wednes 5:
+- league setup (i.e has periods, has set draft time)...oh add num_draftees per draft
 
+thursda 6:
+- a draft can happen
 
+friday 7: 
+- thread to process draft/advance it if no-one picks
 
+saturday:
+- start leaderboard db/server
 
-
-
-
+sunday:
+- docker container to boot/run things
 
 
 

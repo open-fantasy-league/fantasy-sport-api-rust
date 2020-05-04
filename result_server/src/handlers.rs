@@ -3,7 +3,6 @@ use crate::db;
 use std::collections::HashMap;
 use warp_ws_server::*;
 use warp_ws_server::utils::my_timespan_format::{self, DieselTimespan};
-use frunk::labelled::LabelledGeneric;
 use frunk::labelled::transform_from;
 use crate::models::*;
 use crate::WSConnections_;
@@ -11,7 +10,6 @@ use uuid::Uuid;
 use itertools::Itertools;
 use crate::subscriptions::*;
 use crate::publisher::*;
-use futures::{future,Future};
 
 #[derive(Deserialize, LabelledGeneric, Debug)]
 pub struct ApiSubTeams{
@@ -305,7 +303,7 @@ pub async fn sub_teams(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnection
 //     Box::pin(hmmm(req, competitions_out, ws_conns, user_ws_id))
 // }
 
-pub async fn upsert_competitions2(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
+pub async fn upsert_competitions(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
     let deserialized: Vec<NewCompetition> = serde_json::from_value(req.data)?;
     println!("{:?}", &deserialized);
     let competitions_out= db::upsert_competitions(&conn, deserialized.into_iter().map(transform_from).collect_vec())?;
@@ -414,6 +412,6 @@ pub async fn upsert_team_series_results(req: WSReq<'_>, conn: PgConn, ws_conns: 
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
-pub fn upsert_series_teams(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
+pub async fn upsert_series_teams(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
     Ok("dog".to_string())
 }
