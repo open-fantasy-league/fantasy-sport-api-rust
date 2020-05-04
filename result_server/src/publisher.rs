@@ -13,7 +13,7 @@ pub async fn publish_competitions(ws_conns: &mut WSConnections_, competitions: &
         let subscribed_comps: Vec<&models::Competition> = subscribed_comps(&wsconn.subscriptions, competitions);
         println!("subscribed_comps: {:?}", subscribed_comps);
         // TODO cache in-case lots of people have same filters
-        let push_msg = WSMsgOut::push("competitions".to_string(), subscribed_comps);
+        let push_msg = WSMsgOut::push("competitions", subscribed_comps);
         let subscribed_comps_json_r = serde_json::to_string(&push_msg);
         match subscribed_comps_json_r.as_ref(){
             Ok(subscribed_comps_json) => {
@@ -33,7 +33,7 @@ pub async fn publish_series(ws_conns: &mut WSConnections_, series: &Vec<models::
             .filter(|s| wsconn.subscriptions.competitions.contains(&s.competition_id)).collect();
         println!("subscribed_series: {:?}", subscribed);
         // TODO cache in-case lots of people have same filters
-        let push_msg = WSMsgOut::push("series".to_string(), subscribed);
+        let push_msg = WSMsgOut::push("series", subscribed);
         let subscribed_json_r = serde_json::to_string(&push_msg);
         match subscribed_json_r.as_ref(){
             Ok(subscribed_json) => {
@@ -52,7 +52,7 @@ pub async fn publish_matches(ws_conns: &mut WSConnections_, matches: &Vec<models
             .filter(|x| wsconn.subscriptions.competitions.contains(&series_to_competitions.get(&x.series_id).unwrap())).collect();
         println!("subscribed_series: {:?}", subscribed);
         // TODO cache in-case lots of people have same filters
-        let push_msg = WSMsgOut::push("matches".to_string(), subscribed);
+        let push_msg = WSMsgOut::push("matches", subscribed);
         let subscribed_json_r = serde_json::to_string(&push_msg);
         match subscribed_json_r.as_ref(){
             Ok(subscribed_json) => {
@@ -70,7 +70,7 @@ pub async fn publish_teams(ws_conns: &mut WSConnections_, teams: &Vec<models::Te
     // TODO This doesnt include team-names that were mutated by their name-timestamp being 
     for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
         if wsconn.subscriptions.teams{
-            let push_msg = WSMsgOut::push("teams".to_string(), teams);
+            let push_msg = WSMsgOut::push("teams", teams);
             match serde_json::to_string(&push_msg).as_ref(){
                 Ok(subscribed_json) => {
                     if let Err(publish) = wsconn.tx.send(Ok(ws::Message::text(subscribed_json))){
@@ -87,7 +87,7 @@ pub async fn publish_players(ws_conns: &mut WSConnections_, players: &Vec<models
     // TODO This doesnt include team-names that were mutated by their name-timestamp being 
     for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
         if wsconn.subscriptions.teams{
-            let push_msg = WSMsgOut::push("players".to_string(), players);
+            let push_msg = WSMsgOut::push("players", players);
             match serde_json::to_string(&push_msg).as_ref(){
                 Ok(subscribed_json) => {
                     if let Err(publish) = wsconn.tx.send(Ok(ws::Message::text(subscribed_json))){
@@ -104,7 +104,7 @@ pub async fn publish_team_players(ws_conns: &mut WSConnections_, team_players: &
     // TODO This doesnt include team-names that were mutated by their name-timestamp being 
     for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
         if wsconn.subscriptions.teams{
-            let push_msg = WSMsgOut::push("players".to_string(), team_players);
+            let push_msg = WSMsgOut::push("players", team_players);
             match serde_json::to_string(&push_msg).as_ref(){
                 Ok(subscribed_json) => {
                     if let Err(publish) = wsconn.tx.send(Ok(ws::Message::text(subscribed_json))){
@@ -159,7 +159,7 @@ pub async fn publish_results<T: models::Publishable + models::HasId + Serialize>
     for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
         let subscribed_results: Vec<&T>  = results.iter()
             .filter(|x| wsconn.subscriptions.competitions.contains(&id_to_comp_ids.get(&x.get_id()).unwrap())).collect();
-        let push_msg = WSMsgOut::push(T::message_type().to_string(), subscribed_results);
+        let push_msg = WSMsgOut::push(T::message_type(), subscribed_results);
         let subscribed_json_r = serde_json::to_string(&push_msg);
         match subscribed_json_r.as_ref(){
             Ok(subscribed_json) => {

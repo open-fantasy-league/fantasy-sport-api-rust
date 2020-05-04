@@ -35,7 +35,6 @@ pub type WSConnection_ = warp_ws_server::WSConnection<subscriptions::Subscriptio
 //     ) -> Result<String, BoxError>;
 // }
 struct A{
-
 }
 
 #[async_trait]
@@ -46,9 +45,8 @@ impl WSHandler<subscriptions::Subscriptions> for A{
     ) -> Result<String, BoxError>{
         let req: WSReq = serde_json::from_str(&msg)?;
         println!("{}", &req.data);
-        let stringybob = String::from("upsert_competitions");
-        match req.method.clone(){
-            a if a == stringybob => upsert_competitions2(req, conn, ws_conns, user_ws_id).await,
+        match req.method{
+            "upsert_competitions" => upsert_competitions2(req, conn, ws_conns, user_ws_id).await,
             uwotm8 => Err(Box::new(InvalidRequestError{description: uwotm8.to_string()}))
         }
     }

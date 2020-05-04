@@ -44,32 +44,32 @@ impl<T: Subscriptions> WSConnection<T>{
 }
 
 #[derive(Serialize)]
-pub struct WSMsgOut<T: Serialize> {
+pub struct WSMsgOut<'a, T: Serialize> {
     pub message_id: Uuid,
-    pub mode: String,
-    pub message_type: String,
+    pub mode: &'a str,
+    pub message_type: &'a str,
     pub data: T
 }
 
-impl<T: Serialize> WSMsgOut<T>{
-    pub fn resp(message_id: Uuid, message_type: String, data: T) -> Self{
-        return Self{message_id: message_id, message_type: message_type, mode: "resp".to_string(), data: data}
+impl<'a, T: Serialize> WSMsgOut<'a, T>{
+    pub fn resp(message_id: Uuid, message_type: &'a str, data: T) -> Self{
+        return Self{message_id: message_id, message_type: message_type, mode: "resp", data: data}
     }
 
-    pub fn push(message_type: String, data: T) -> Self{
-        return Self{message_id: Uuid::new_v4(), message_type: message_type, mode: "push".to_string(), data: data}
+    pub fn push(message_type: &'a str, data: T) -> Self{
+        return Self{message_id: Uuid::new_v4(), message_type: message_type, mode: "push", data: data}
     }
 
     pub fn error(data: T) -> Self{
-        return Self{message_id: Uuid::new_v4(), message_type: "unknown".to_string(), mode: "error".to_string(), data: data}
+        return Self{message_id: Uuid::new_v4(), message_type: "unknown", mode: "error", data: data}
     }
 }
 
 
 #[derive(Deserialize)]
-pub struct WSReq {
+pub struct WSReq<'a> {
     pub message_id: Uuid,
-    pub method: String,
+    pub method: &'a str,
     pub data: serde_json::Value
 }
 
