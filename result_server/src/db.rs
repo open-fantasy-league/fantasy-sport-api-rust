@@ -53,6 +53,15 @@ macro_rules! update {
     };
 }
 
+macro_rules! update_2pkey {
+    ($conn:expr, $table_name:ident, $pkey:ident, $pkey2:ident, $changeset:expr) => {
+        diesel::update(schema::$table_name::table).filter(schema::$table_name::dsl::$pkey.eq($changeset.$pkey))
+            .filter(schema::$table_name::dsl::$pkey2.eq($changeset.$pkey2))
+            .set($changeset)
+            .get_result($conn);
+    };
+}
+
 
 // pub fn upsert_serieses<'a>(
 //     conn: &PgConnection,

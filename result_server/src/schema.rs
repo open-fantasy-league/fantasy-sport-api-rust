@@ -39,7 +39,7 @@ table! {
     player_results (match_id, player_id) {
         player_id -> Uuid,
         match_id -> Uuid,
-        result -> Jsonb,
+        result -> Nullable<Jsonb>,
         meta -> Jsonb,
     }
 }
@@ -62,17 +62,10 @@ table! {
 }
 
 table! {
-    series_teams (series_id, team_id) {
-        series_id -> Uuid,
-        team_id -> Uuid,
-    }
-}
-
-table! {
     team_match_results (match_id, team_id) {
         team_id -> Uuid,
         match_id -> Uuid,
-        result -> Text,
+        result -> Nullable<Text>,
         meta -> Jsonb,
     }
 }
@@ -106,7 +99,7 @@ table! {
     team_series_results (series_id, team_id) {
         team_id -> Uuid,
         series_id -> Uuid,
-        result -> Text,
+        result -> Nullable<Text>,
         meta -> Jsonb,
     }
 }

@@ -113,14 +113,14 @@ impl ApiSeriesNew{
     }
 }
 
-#[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations, Clone)]
-#[primary_key(series_id, team_id)]
-#[belongs_to(Series)]
-#[table_name = "series_teams"]
-pub struct SeriesTeam {
-    series_id: Uuid,
-    pub team_id: Uuid,
-}
+// #[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations, Clone)]
+// #[primary_key(series_id, team_id)]
+// #[belongs_to(Series)]
+// #[table_name = "series_teams"]
+// pub struct SeriesTeam {
+//     series_id: Uuid,
+//     pub team_id: Uuid,
+// }
 
 impl Publishable for ApiSeriesNew {
     fn message_type<'a>() -> &'a str {
