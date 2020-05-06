@@ -40,7 +40,7 @@ pub struct UpdateSeries {
     pub timespan: Option<DieselTimespan>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ApiSeries{
     pub series_id: Uuid,
     pub name: String,
@@ -53,7 +53,7 @@ pub struct ApiSeries{
 }
 
 impl ApiSeries{
-    pub fn insertable(&self, competition_id: Uuid) -> (Series, Vec<Match>, Vec<PlayerResult>, Vec<TeamMatchResult>, Vec<SeriesTeam>, Vec<TeamSeriesResult>){
+    pub fn insertable(self, competition_id: Uuid) -> (Series, Vec<Match>, Vec<PlayerResult>, Vec<TeamMatchResult>, Vec<SeriesTeam>, Vec<TeamSeriesResult>){
         let (mut player_results, mut team_match_results) = (vec![], vec![]);
         let series_id = self.series_id;
         let matches = self.matches
@@ -82,7 +82,7 @@ pub struct ApiNewSeries{
 }
 
 
-#[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations)]
+#[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations, Clone)]
 #[primary_key(series_id, team_id)]
 #[belongs_to(Series)]
 #[table_name = "series_teams"]

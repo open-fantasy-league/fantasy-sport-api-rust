@@ -152,7 +152,10 @@ pub struct ApiSubCompetitions{
 pub async fn insert_competitions(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
     let comps: Vec<ApiCompetition> = serde_json::from_value(req.data)?;
     println!("{:?}", &comps);
-    let insert_res = ApiCompetition::insert(conn, &comps).await?;
+    // Need to clone comps, so that can still publish it, after has been "consumed" adding to db.
+    // It's possible to just borrow it in db-insertion,
+    // but it leads to having to specify lifetimes on nearly EVERYTHING. Not worth the hassle unless need perf
+    let insert_res = ApiCompetition::insert(conn, comps.clone()).await?;
    // let comps: Vec<Competition> = insert!(&conn, schema::competitions::table, deserialized)?;
     // assume anything upserted the user wants to subscribe to
     if let Some(ws_user) = ws_conns.lock().await.get_mut(&user_ws_id){

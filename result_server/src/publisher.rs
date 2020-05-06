@@ -8,8 +8,8 @@ use crate::WSConnections_;
 use crate::types::{competitions::*, series::*, matches::*, teams::*, results::*, players::*};
 use itertools::Itertools;
 
-pub trait Publishable<'a> {
-    fn message_type() -> &'a str;
+pub trait Publishable {
+    fn message_type<'a>() -> &'a str;
     fn get_hierarchy_id(&self) -> Uuid;
 }
 

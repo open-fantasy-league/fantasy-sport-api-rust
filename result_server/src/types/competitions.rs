@@ -12,7 +12,7 @@ use itertools::Itertools;
 use crate::diesel::RunQueryDsl;  // imported here so that can run db macros
 use crate::diesel::ExpressionMethods;
 
-#[derive(Deserialize, Serialize, Debug, LabelledGeneric)]
+#[derive(Deserialize, Serialize, Debug, LabelledGeneric, Clone)]
 pub struct ApiCompetition{
     pub competition_id: Uuid,
     pub name: String,
@@ -75,7 +75,7 @@ impl ApiCompetition{
         }).collect_vec()
     }
 
-    pub async fn insert(conn: PgConn, comps: &Vec<ApiCompetition>) -> Result<bool, diesel::result::Error>{
+    pub async fn insert(conn: PgConn, comps: Vec<ApiCompetition>) -> Result<bool, diesel::result::Error>{
         // Couldnt get awkward flat_map and unzip_n to work properly
         let (
             mut series, mut matches, mut player_results, mut team_match_results,

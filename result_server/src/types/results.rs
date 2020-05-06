@@ -8,18 +8,18 @@ use frunk::LabelledGeneric;
 use super::{matches::Match, series::Series};
 use crate::publisher::Publishable;
 
-#[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations)]
+#[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations, Clone)]
 #[primary_key(match_id, team_id)]
-#[belongs_to(Match<'a>)]
+#[belongs_to(Match)]
 #[table_name = "team_match_results"]
-pub struct TeamMatchResult<'a> {
+pub struct TeamMatchResult {
     pub team_id: Uuid,
     pub match_id: Uuid,
     pub result: String,
     pub meta: serde_json::Value,
 }
 
-#[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations)]
+#[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations, Clone)]
 #[primary_key(series_id, team_id)]
 #[belongs_to(Series)]
 #[table_name = "team_series_results"]
@@ -30,18 +30,18 @@ pub struct TeamSeriesResult {
     pub meta: serde_json::Value,
 }
 
-#[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations)]
+#[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations, Clone)]
 #[primary_key(match_id, player_id)]
-#[belongs_to(Match<'a>)]
+#[belongs_to(Match)]
 #[table_name = "player_results"]
-pub struct PlayerResult<'a> {
+pub struct PlayerResult {
     pub player_id: Uuid,
     pub match_id: Uuid,
     pub result: serde_json::Value,
     pub meta: serde_json::Value,
 }
 
-impl<'a> Publishable for TeamMatchResult<'a> {
+impl Publishable for TeamMatchResult {
     fn message_type<'a>() -> &'a str {
         "team_match_results"
     }
@@ -51,7 +51,7 @@ impl<'a> Publishable for TeamMatchResult<'a> {
     }
 }
 
-impl<'a> Publishable<'a> for PlayerResult<'a> {
+impl Publishable for PlayerResult {
     fn message_type<'a>() -> &'a str {
         "player_match_results"
     }
@@ -61,7 +61,7 @@ impl<'a> Publishable<'a> for PlayerResult<'a> {
     }
 }
 
-impl<'a> Publishable for TeamSeriesResult {
+impl Publishable for TeamSeriesResult {
     fn message_type<'a>() -> &'a str {
         "team_series_results"
     }

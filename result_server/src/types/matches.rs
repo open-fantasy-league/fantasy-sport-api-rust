@@ -14,13 +14,13 @@ use crate::publisher::Publishable;
 #[belongs_to(Series)]
 #[primary_key(match_id)]
 #[table_name = "matches"]
-pub struct Match<'a> {
-    pub match_id: &'a Uuid,
-    pub name: &'a String,
-    pub series_id: &'a Uuid,
-    pub meta: &'a serde_json::Value,
+pub struct Match {
+    pub match_id: Uuid,
+    pub name: String,
+    pub series_id: Uuid,
+    pub meta: serde_json::Value,
     #[serde(with = "my_timespan_format")]
-    pub timespan: &'a DieselTimespan,
+    pub timespan: DieselTimespan,
 }
 
 #[derive(Deserialize, LabelledGeneric, Debug, AsChangeset)]
@@ -35,7 +35,7 @@ pub struct UpdateMatch {
     pub timespan: Option<DieselTimespan>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ApiMatch{
     pub match_id: Uuid,
     pub name: String,
@@ -47,9 +47,9 @@ pub struct ApiMatch{
 }
 
 impl ApiMatch{
-    pub fn insertable(&self, series_id: Uuid) -> (Match, Vec<PlayerResult>, Vec<TeamMatchResult>){
+    pub fn insertable(self, series_id: Uuid) -> (Match, Vec<PlayerResult>, Vec<TeamMatchResult>){
         (
-            Match{match_id: self.match_id, name: &self.name, meta: self.meta, timespan: self.timespan, series_id},
+            Match{match_id: self.match_id, name: self.name, meta: self.meta, timespan: self.timespan, series_id},
             self.player_results,
             self.team_results
         )
