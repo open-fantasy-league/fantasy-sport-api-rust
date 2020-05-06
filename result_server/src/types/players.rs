@@ -1,25 +1,43 @@
 use serde::{Deserialize, Serialize};
 use warp_ws_server::utils::my_timespan_format::{self, DieselTimespan};
 use warp_ws_server::utils::my_timespan_format_opt;
+use warp_ws_server::PgConn;
 use crate::schema::*;
 use uuid::Uuid;
 use serde_json;
 use frunk::LabelledGeneric;
+use frunk::labelled::transform_from;
+use std::collections::HashMap;
+use crate::publisher::Publishable;
+use crate::diesel::RunQueryDsl;  // imported here so that can run db macros
+use crate::diesel::ExpressionMethods;
+use itertools::Itertools;
 
-#[derive(Queryable, LabelledGeneric, Serialize, Debug)]
+#[derive(Insertable, Deserialize, LabelledGeneric, Queryable, Serialize, Debug)]
+#[table_name = "players"]
 pub struct Player {
     pub player_id: Uuid,
     pub meta: serde_json::Value,
 }
 
-#[derive(LabelledGeneric, Deserialize, Debug, Insertable)]
-#[table_name = "players"]
-pub struct PlayerNew {
-    pub player_id: Option<Uuid>,
-    pub meta: serde_json::Value
+
+#[derive(Serialize, Deserialize, Debug, LabelledGeneric, Clone)]
+pub struct ApiPlayer{
+    pub player_id: Uuid,
+    pub meta: serde_json::Value,
+    pub names: Vec<ApiPlayerName>,
+    pub positions: Vec<ApiPlayerPosition>
 }
 
-#[derive(Debug, LabelledGeneric, Queryable, Serialize, Identifiable, Associations)]
+#[derive(Deserialize, Serialize, LabelledGeneric, AsChangeset, Debug)]
+#[primary_key(player_id)]
+#[table_name = "players"]
+pub struct PlayerUpdate {
+    pub player_id: Uuid,
+    pub meta: Option<serde_json::Value>,
+}
+
+#[derive(Insertable, Queryable, Deserialize, Serialize, Debug, Identifiable, Associations, LabelledGeneric)]
 #[primary_key(player_name_id)]
 #[belongs_to(Player)]
 pub struct PlayerName {
@@ -32,99 +50,110 @@ pub struct PlayerName {
     pub timespan: DieselTimespan,
 }
 
-#[derive(Debug, Insertable, Deserialize, LabelledGeneric)]
-#[table_name = "player_names"]
-pub struct PlayerNameNew {
-    pub player_id: Uuid,
-    pub name: String,
-    #[serde(with = "my_timespan_format")]
-    pub timespan: DieselTimespan,
-}
-
-#[derive(Queryable, Serialize, Debug, Identifiable, Associations)]
+#[derive(Insertable, Queryable, Deserialize, Serialize, Debug, Identifiable, Associations, LabelledGeneric)]
 #[primary_key(player_position_id)]
 #[belongs_to(Player)]
 pub struct PlayerPosition {
     #[serde(skip_serializing)]
     player_position_id: Uuid,
+    #[serde(skip_serializing)]
     pub player_id: Uuid,
     pub position: String,
     #[serde(with = "my_timespan_format")]
     pub timespan: DieselTimespan,
 }
 
-#[derive(Insertable, Deserialize, LabelledGeneric)]
-#[table_name = "player_positions"]
-pub struct PlayerPositionIn {
-    pub player_id: Uuid,
-    pub position: String,
-    #[serde(with = "my_timespan_format")]
-    pub timespan: DieselTimespan,
-}
+// #[derive(Deserialize, LabelledGeneric, AsChangeset)]
+// #[primary_key(player_id)]
+// #[table_name = "players"]
+// pub struct UpdatePlayer {
+//     pub player_id: Uuid,
+//     pub meta: Option<serde_json::Value>,
+// }
 
-#[derive(Serialize, Deserialize, Debug, LabelledGeneric)]
-pub struct ApiPlayerName{
+#[derive(Deserialize, Serialize, LabelledGeneric, Debug, Clone)]
+pub struct ApiPlayerName {
     pub name: String,
     #[serde(with = "my_timespan_format")]
     pub timespan: DieselTimespan,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct ApiPlayerPosition{
+#[derive(Deserialize, Serialize, LabelledGeneric, Debug, Clone)]
+pub struct ApiPlayerPosition {
     pub position: String,
     #[serde(with = "my_timespan_format")]
     pub timespan: DieselTimespan,
 }
 
-#[derive(LabelledGeneric, Deserialize, Debug)]
-pub struct ApiPlayerIn{
-    pub player_id: Option<Uuid>,
-    pub meta: serde_json::Value,
-    pub names: Vec<ApiPlayerName>,
-    pub positions: Vec<ApiPlayerPosition>
-}
-
-#[derive(Serialize, LabelledGeneric, Debug)]
-pub struct ApiPlayerOut{
-    pub player_id: Uuid,
-    pub meta: serde_json::Value,
-    pub names: Vec<ApiPlayerName>,
-    pub positions: Vec<ApiPlayerPosition>
-}
-
-// #[derive(Deserialize, LabelledGeneric, Debug)]
-// pub struct ApiNewPlayer{
-//     pub player_id: Option<Uuid>,
-//     pub name: String,
-//     pub meta: serde_json::Value,
-//     #[serde(with = "my_timespan_format")]
-//     // Its naive having initial player position and their name share a timespan,
-//     // but fudge it! Improve later
-//     pub timespan: DieselTimespan,
-//     pub position: Option<String>
-// }
-
-// impl ApiPlayer{
+impl ApiPlayer{
     
-//     pub fn from_rows(rows: Vec<(Player, PlayerName, PlayerPosition)>) -> Vec<Self>{
-//         // Group rows by team-id using hashmap, build a list of different team names
-//         // Assume if a team has no names ever, we dont care about it
-//         let mut acc: HashMap<Uuid, (Player, Vec<PlayerName>, Vec<PlayerPosition>)> = HashMap::new();
-//         acc = rows.into_iter().fold(acc, |mut acc, (player, player_name, position)| {
-//             match acc.get_mut(&player.player_id) {
-//                 Some(t) => {t.1.push(player_name); t.2.push(position)},
-//                 None => {acc.insert(player.player_id, (player, vec![player_name], vec![position]));},
-//             }
-//             acc
-//         });
+    pub fn from_rows(rows: Vec<(Player, PlayerName, PlayerPosition)>) -> Vec<Self>{
+        // Group rows by player-id using hashmap, build a list of different player names
+        // Assume if a player has no names ever, we dont care about it
+        let mut acc: HashMap<Uuid, (Player, Vec<ApiPlayerName>, Vec<ApiPlayerPosition>)> = HashMap::new();
+        acc = rows.into_iter().fold(acc, |mut acc, (player, player_name, player_position)| {
+            let player_name: ApiPlayerName = transform_from(player_name);
+            let player_position: ApiPlayerPosition = transform_from(player_position);
+            match acc.get_mut(&player.player_id) {
+                Some(t) => {t.1.push(player_name);t.2.push(player_position)},
+                None => {acc.insert(player.player_id, (player, vec![player_name], vec![player_position]));},
+            }
+            acc
+        });
 
-//         acc.into_iter().map(|(pid, v)|{
-//             Self{
-//                 player_id: pid,
-//                 meta: v.0.meta,
-//                 names: v.1.into_iter().map(|tn| ApiPlayerName{name: tn.name, timespan: tn.timespan}).collect_vec()
-//             }
-//         })
-//         .collect_vec()
-//     }
-// }
+        acc.into_iter().map(|(player_id, v)|{
+            Self{
+                player_id: player_id,
+                meta: v.0.meta,
+                names: v.1,
+                positions: v.2
+            }
+        })
+        .collect_vec()
+    }
+
+    pub async fn insert(conn: PgConn, players: Vec<Self>) -> Result<bool, diesel::result::Error>{
+        let names: Vec<PlayerName> = players.clone().into_iter().flat_map(|t| {
+            let player_id = t.player_id;
+            t.names.into_iter().map(|n| {
+                PlayerName{
+                    player_name_id: Uuid::new_v4(), player_id, name: n.name, timespan: n.timespan
+                }
+            }).collect_vec()
+        }).collect();
+        insert_exec!(&conn, player_names::table, names)?;
+        let raw_players: Vec<Player> = players.into_iter().map(transform_from).collect();
+        insert_exec!(&conn, players::table, raw_players)?;
+        Ok(true)
+    }
+}
+
+impl Publishable for ApiPlayer {
+    fn message_type<'a>() -> &'a str {
+        "player"
+    }
+
+    fn get_hierarchy_id(&self) -> Uuid {
+        self.player_id
+    }
+}
+
+impl Publishable for Player {
+    fn message_type<'a>() -> &'a str {
+        "player"
+    }
+
+    fn get_hierarchy_id(&self) -> Uuid {
+        self.player_id
+    }
+}
+
+impl Publishable for PlayerUpdate {
+    fn message_type<'a>() -> &'a str {
+        "player_update"
+    }
+
+    fn get_hierarchy_id(&self) -> Uuid {
+        self.player_id
+    }
+}

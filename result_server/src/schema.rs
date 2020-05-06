@@ -110,8 +110,6 @@ joinable!(player_positions -> players (player_id));
 joinable!(player_results -> matches (match_id));
 joinable!(player_results -> players (player_id));
 joinable!(series -> competitions (competition_id));
-joinable!(series_teams -> series (series_id));
-joinable!(series_teams -> teams (team_id));
 joinable!(team_match_results -> matches (match_id));
 joinable!(team_match_results -> teams (team_id));
 joinable!(team_names -> teams (team_id));
@@ -128,7 +126,6 @@ allow_tables_to_appear_in_same_query!(
     player_results,
     players,
     series,
-    series_teams,
     team_match_results,
     team_names,
     team_players,

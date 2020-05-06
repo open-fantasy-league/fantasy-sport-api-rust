@@ -15,7 +15,7 @@ use crate::publisher::Publishable;
 pub struct TeamMatchResult {
     pub team_id: Uuid,
     pub match_id: Uuid,
-    pub result: String,
+    pub result: Option<String>,
     pub meta: serde_json::Value,
 }
 
@@ -38,7 +38,7 @@ pub struct TeamMatchResultUpdate {
 pub struct TeamSeriesResult {
     pub team_id: Uuid,
     pub series_id: Uuid,
-    pub result: String,
+    pub result: Option<String>,
     pub meta: serde_json::Value,
 }
 
@@ -60,7 +60,7 @@ pub struct TeamSeriesResultUpdate {
 pub struct PlayerResult {
     pub player_id: Uuid,
     pub match_id: Uuid,
-    pub result: serde_json::Value,
+    pub result: Option<serde_json::Value>,
     pub meta: serde_json::Value,
 }
 

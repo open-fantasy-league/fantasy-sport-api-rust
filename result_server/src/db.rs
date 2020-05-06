@@ -16,7 +16,7 @@ use crate::types::{competitions::*, series::*, matches::*, teams::*, results::*,
 //sql_function!(fn trim_team_name_timespans(new_team_id sql_types::Uuid, new_timespan sql_types::Range<sql_types::Timestamptz>) -> ());
 //sql_function!(trim_team_name_timespans, WTF, (new_team_id: sql_types::Uuid, new_timespan: sql_types::Range<sql_types::Timestamptz>) -> ());
 
-fn trim_timespans(
+pub fn trim_timespans(
     conn: &PgConnection,
     table_name: &str,
     id: Uuid,
@@ -60,6 +60,23 @@ macro_rules! update_2pkey {
             .set($changeset)
             .get_result($conn);
     };
+}
+
+pub async fn insert_team_names(
+    conn: &PgConnection,
+    new: Vec<ApiTeamNameNew>,
+) -> Result<Vec<TeamName>, diesel::result::Error> {
+    use crate::schema::team_names;
+    // trim_timespans(conn, "team_name", t.team_id, new_timespan)
+    let num_entries = new.len();
+    let _ = new.iter().map(|n|{
+        // TODO return trimming so can publish
+        trim_timespans(conn, "team_name", n.team_id, n.timespan)
+    }).fold_results(Vec::with_capacity(num_entries), |mut v, o| {
+                        v.push(o);
+                        v
+    })?;
+    insert!(conn, team_names::table, new)
 }
 
 
@@ -382,20 +399,17 @@ pub fn get_full_competitions(
     let matches = Match::belonging_to(&series).load::<Match>(conn)?;
     let team_series_results =
         TeamSeriesResult::belonging_to(&series).load::<TeamSeriesResult>(conn)?;
-    let team_series = SeriesTeam::belonging_to(&series).load::<SeriesTeam>(conn)?;
     let team_match_results =
         TeamMatchResult::belonging_to(&matches).load::<TeamMatchResult>(conn)?;
     let player_results = PlayerResult::belonging_to(&matches).load::<PlayerResult>(conn)?;
     let grouped_player_results = player_results.grouped_by(&matches);
     let grouped_team_match_results = team_match_results.grouped_by(&matches);
     let grouped_team_series_results = team_series_results.grouped_by(&series);
-    let grouped_series_teams = team_series.grouped_by(&series);
     let matches_and_match_results: Vec<Vec<(Match, Vec<PlayerResult>, Vec<TeamMatchResult>)>> =
         izip!(matches, grouped_player_results, grouped_team_match_results).grouped_by(&series);
     let series_lvl = izip!(
         series,
         grouped_team_series_results,
-        grouped_series_teams,
         matches_and_match_results
     )
     .grouped_by(&comps);

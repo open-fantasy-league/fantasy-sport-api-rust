@@ -50,7 +50,6 @@ pub type CompetitionHierarchy = Vec<(
     Vec<(
         Series,
         Vec<TeamSeriesResult>,
-        Vec<SeriesTeam>,
         Vec<(Match, Vec<PlayerResult>, Vec<TeamMatchResult>)>,
     )>,
 )>;
@@ -61,10 +60,10 @@ impl ApiCompetition{
         rows.into_iter().map(|(c, v)| {
             Self{
                 competition_id: c.competition_id, name: c.name, meta: c.meta, timespan: c.timespan,
-                series: v.into_iter().map(|(s, tr, st, v)|{
+                series: v.into_iter().map(|(s, tr, v)|{
                     ApiSeries{
                         series_id: s.series_id, name: s.name, meta: s.meta, timespan: s.timespan,
-                        teams: st, team_results: tr, matches: v.into_iter().map(|(m, pr, tr)|{
+                        team_results: tr, matches: v.into_iter().map(|(m, pr, tr)|{
                             ApiMatch{
                                 match_id: m.match_id, name: m.name, meta: m.meta, timespan: m.timespan,
                                 player_results: pr, team_results: tr
@@ -76,21 +75,20 @@ impl ApiCompetition{
         }).collect_vec()
     }
 
-    pub async fn insert(conn: PgConn, comps: Vec<ApiCompetition>) -> Result<bool, diesel::result::Error>{
+    pub async fn insert(conn: PgConn, comps: Vec<Self>) -> Result<bool, diesel::result::Error>{
         // Couldnt get awkward flat_map and unzip_n to work properly
         let (
             mut series, mut matches, mut player_results, mut team_match_results,
-            mut series_teams, mut team_results
-        ) = (vec![], vec![], vec![], vec![], vec![], vec![]);
+            mut team_results
+        ) = (vec![], vec![], vec![], vec![], vec![]);
         let raw_comps: Vec<Competition> = comps.into_iter().map(|c|{
             let competition_id = c.competition_id;
             let mut new_series = c.series.into_iter().map(|s| {
                 let (
                     s2, mut new_matches, mut new_player_res, mut new_team_match_res,
-                    mut new_teams, mut new_team_results
+                    mut new_team_results
                 ) = s.insertable(competition_id);
                 matches.append(&mut new_matches);
-                series_teams.append(&mut new_teams);
                 team_results.append(&mut new_team_results);
                 player_results.append(&mut new_player_res);
                 team_match_results.append(&mut new_team_match_res);
@@ -102,7 +100,6 @@ impl ApiCompetition{
         //let raw_comps: Vec<Competition> = comps.into_iter().map(transform_from).collect_vec();
         insert_exec!(&conn, schema::competitions::table, raw_comps)?;
         insert_exec!(&conn, schema::series::table, series)?;
-        insert_exec!(&conn, schema::series_teams::table, series_teams)?;
         insert_exec!(&conn, schema::matches::table, matches)?;
         insert_exec!(&conn, schema::player_results::table, player_results)?;
         insert_exec!(&conn, schema::team_match_results::table, team_match_results)?;

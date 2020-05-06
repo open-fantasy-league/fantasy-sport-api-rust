@@ -31,7 +31,7 @@ pub struct Series {
 #[derive(Deserialize, LabelledGeneric, Debug, AsChangeset)]
 #[primary_key(series_id)]
 #[table_name = "series"]
-pub struct UpdateSeries {
+pub struct SeriesUpdate {
     pub series_id: Uuid,
     pub competition_id: Option<Uuid>,
     pub name: Option<String>,
@@ -48,12 +48,11 @@ pub struct ApiSeries{
     #[serde(with = "my_timespan_format")]
     pub timespan: DieselTimespan,
     pub matches: Vec<ApiMatch>,
-    pub teams: Vec<SeriesTeam>,
     pub team_results: Vec<TeamSeriesResult>,
 }
 
 impl ApiSeries{
-    pub fn insertable(self, competition_id: Uuid) -> (Series, Vec<Match>, Vec<PlayerResult>, Vec<TeamMatchResult>, Vec<SeriesTeam>, Vec<TeamSeriesResult>){
+    pub fn insertable(self, competition_id: Uuid) -> (Series, Vec<Match>, Vec<PlayerResult>, Vec<TeamMatchResult>, Vec<TeamSeriesResult>){
         let (mut player_results, mut team_match_results) = (vec![], vec![]);
         let series_id = self.series_id;
         let matches = self.matches
@@ -65,7 +64,7 @@ impl ApiSeries{
             }).collect_vec();
         (
             Series{series_id: self.series_id, name: self.name, meta: self.meta, timespan: self.timespan, competition_id},
-            matches, player_results, team_match_results, self.teams, self.team_results
+            matches, player_results, team_match_results, self.team_results
         )
     }
 }
@@ -79,7 +78,6 @@ pub struct ApiSeriesNew{
     #[serde(with = "my_timespan_format")]
     pub timespan: DieselTimespan,
     pub matches: Vec<ApiMatch>,
-    pub teams: Vec<SeriesTeam>,
     pub team_results: Vec<TeamSeriesResult>,
 }
 
@@ -88,9 +86,9 @@ impl ApiSeriesNew{
         // TODO EWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW
         // I think i need to define my own iterator so flatmap can flatmap nicely?
         let(
-            mut series_teams, mut matches, mut player_results, mut team_match_results,
+            mut matches, mut player_results, mut team_match_results,
             mut team_results
-        ) = (vec![], vec![], vec![], vec![], vec![]);
+        ) = (vec![], vec![], vec![], vec![]);
         let series = new
             .into_iter().map(|s|{
                 let comp_id = s.competition_id;
@@ -99,12 +97,10 @@ impl ApiSeriesNew{
                 matches.append(&mut tup.1);
                 player_results.append(&mut tup.2);
                 team_match_results.append(&mut tup.3);
-                series_teams.append(&mut tup.4);
-                team_results.append(&mut tup.5);
+                team_results.append(&mut tup.4);
                 tup.0
             }).collect_vec();
             insert_exec!(conn, series::table, series)?;
-            insert_exec!(conn, series_teams::table, series_teams)?;
             insert_exec!(conn, matches::table, matches)?;
             insert_exec!(conn, player_results::table, player_results)?;
             insert_exec!(conn, team_match_results::table, team_match_results)?;
