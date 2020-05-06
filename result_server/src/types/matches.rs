@@ -13,6 +13,8 @@ use warp_ws_server::PgConn;
 use itertools::Itertools;
 use crate::diesel::RunQueryDsl;  // imported here so that can run db macros
 use crate::diesel::ExpressionMethods;
+use async_trait::async_trait;
+use crate::db;
 
 
 #[derive(Insertable, Deserialize, LabelledGeneric, Queryable, Serialize, Debug, Identifiable, Associations)]
@@ -74,7 +76,7 @@ impl ApiMatch{
 }
 
 impl ApiMatchNew{
-    pub async fn insert(conn: PgConn, new: Vec<ApiMatchNew>) -> Result<bool, diesel::result::Error>{
+    pub async fn insert(conn: &PgConn, new: Vec<ApiMatchNew>) -> Result<bool, diesel::result::Error>{
         let (mut player_results, mut team_match_results) = (vec![], vec![]);
         let matches: Vec<Match> = new
             .into_iter().map(|m|{
@@ -85,14 +87,24 @@ impl ApiMatchNew{
                 team_match_results.append(&mut tup.2);
                 tup.0
             }).collect_vec();
-            insert_exec!(&conn, matches::table, matches)?;
-            insert_exec!(&conn, player_results::table, player_results)?;
-            insert_exec!(&conn, team_match_results::table, team_match_results)?;
+            insert_exec!(conn, matches::table, matches)?;
+            insert_exec!(conn, player_results::table, player_results)?;
+            insert_exec!(conn, team_match_results::table, team_match_results)?;
             Ok(true)
     }
 }
 
-impl Publishable for ApiMatch {
+impl Publishable for Match {
+    fn message_type<'a>() -> &'a str {
+        "matches_update"
+    }
+
+    fn get_hierarchy_id(&self) -> Uuid {
+        self.match_id
+    }
+}
+
+impl Publishable for ApiMatchNew {
     fn message_type<'a>() -> &'a str {
         "matches"
     }
@@ -101,3 +113,17 @@ impl Publishable for ApiMatch {
         self.match_id
     }
 }
+
+// use crate::handlers::ServerInsertable;
+
+// #[async_trait]
+// impl ServerInsertable for ApiMatchNew{
+//     fn comp_id_map_tup(
+//         conn: PgConn,
+//         me: &Vec<Self>,
+//     ) -> Result<Vec<(Uuid, Uuid)>, diesel::result::Error>{
+//         let series_ids: Vec<Uuid> = me.iter().map(|s| s.series_id).dedup().collect();
+//         db::get_competition_ids_for_series(&conn, &series_ids)
+//     }
+
+// }

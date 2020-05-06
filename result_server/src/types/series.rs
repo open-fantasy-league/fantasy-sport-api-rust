@@ -131,3 +131,13 @@ impl Publishable for ApiSeriesNew {
         self.series_id
     }
 }
+
+impl Publishable for Series {
+    fn message_type<'a>() -> &'a str {
+        "series_update"
+    }
+
+    fn get_hierarchy_id(&self) -> Uuid {
+        self.series_id
+    }
+}
