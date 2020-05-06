@@ -40,7 +40,7 @@ pub struct UpdateSeries {
     pub timespan: Option<DieselTimespan>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, LabelledGeneric)]
 pub struct ApiSeries{
     pub series_id: Uuid,
     pub name: String,
@@ -70,17 +70,48 @@ impl ApiSeries{
     }
 }
 
-#[derive(Deserialize, LabelledGeneric, Debug)]
-pub struct ApiNewSeries{
-    pub series_id: Option<Uuid>,
+#[derive(Deserialize, Serialize, LabelledGeneric, Debug, Clone)]
+pub struct ApiSeriesNew{
+    pub series_id: Uuid,
     pub competition_id: Uuid,
     pub name: String,
     pub meta: serde_json::Value,
     #[serde(with = "my_timespan_format")]
     pub timespan: DieselTimespan,
-    pub teams: Vec<Uuid>,
+    pub matches: Vec<ApiMatch>,
+    pub teams: Vec<SeriesTeam>,
+    pub team_results: Vec<TeamSeriesResult>,
 }
 
+impl ApiSeriesNew{
+    pub async fn insert(conn: &PgConn, new: Vec<ApiSeriesNew>) -> Result<bool, diesel::result::Error>{
+        // TODO EWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW
+        // I think i need to define my own iterator so flatmap can flatmap nicely?
+        let(
+            mut series_teams, mut matches, mut player_results, mut team_match_results,
+            mut team_results
+        ) = (vec![], vec![], vec![], vec![], vec![]);
+        let series = new
+            .into_iter().map(|s|{
+                let comp_id = s.competition_id;
+                let s2: ApiSeries = transform_from(s);
+                let mut tup = s2.insertable(comp_id);
+                matches.append(&mut tup.1);
+                player_results.append(&mut tup.2);
+                team_match_results.append(&mut tup.3);
+                series_teams.append(&mut tup.4);
+                team_results.append(&mut tup.5);
+                tup.0
+            }).collect_vec();
+            insert_exec!(conn, series::table, series)?;
+            insert_exec!(conn, series_teams::table, series_teams)?;
+            insert_exec!(conn, matches::table, matches)?;
+            insert_exec!(conn, player_results::table, player_results)?;
+            insert_exec!(conn, team_match_results::table, team_match_results)?;
+            insert_exec!(conn, team_series_results::table, team_results)?;
+            Ok(true)
+    }
+}
 
 #[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations, Clone)]
 #[primary_key(series_id, team_id)]
@@ -91,7 +122,7 @@ pub struct SeriesTeam {
     pub team_id: Uuid,
 }
 
-impl Publishable for ApiSeries {
+impl Publishable for ApiSeriesNew {
     fn message_type<'a>() -> &'a str {
         "series"
     }

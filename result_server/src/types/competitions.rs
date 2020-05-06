@@ -11,6 +11,7 @@ use super::{series::*, matches::*, results::*};
 use itertools::Itertools;
 use crate::diesel::RunQueryDsl;  // imported here so that can run db macros
 use crate::diesel::ExpressionMethods;
+use crate::publisher::Publishable;
 
 #[derive(Deserialize, Serialize, Debug, LabelledGeneric, Clone)]
 pub struct ApiCompetition{
@@ -108,5 +109,15 @@ impl ApiCompetition{
         insert_exec!(&conn, schema::team_series_results::table, team_results)?;
         return Ok(true)
 
+    }
+}
+
+impl Publishable for Competition {
+    fn message_type<'a>() -> &'a str {
+        "competition_update"
+    }
+
+    fn get_hierarchy_id(&self) -> Uuid {
+        self.competition_id
     }
 }

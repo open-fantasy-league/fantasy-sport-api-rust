@@ -12,7 +12,7 @@ use crate::publisher::*;
 use crate::schema;
 use crate::diesel::RunQueryDsl;  // imported here so that can run db macros
 use crate::diesel::ExpressionMethods;
-use crate::types::competitions::ApiCompetition;
+use crate::types::{competitions::*, series::*, teams::*, matches::*, results::*};
 
 #[derive(Deserialize, LabelledGeneric, Debug)]
 pub struct ApiSubTeams{
@@ -61,17 +61,6 @@ pub struct ApiSubCompetitions{
 //     }
 // }
 
-// pub async fn insert_competitions_with_children(conn: PgConn, new: Vec<ApiCompetition>) -> Result<bool, diesel::result::Error>{
-//     let insert_res = ApiCompetition::insert(conn, new).await;
-//     // if let Some(ws_user) = ws_conns.lock().await.get_mut(&user_ws_id){
-//     //     sub_to_competitions(ws_user, new.iter().map(|c| &c.competition_id)).await;
-//     // }
-//     // // TODO ideally would return response before awaiting publishing going out
-//     publish_competitions(ws_conns, &new).await;
-//     // println!("{:?}", &new);
-//     // let resp_msg = WSMsgOut::resp(req.message_id, req.method, new);
-//     // serde_json::to_string(&resp_msg).map_err(|e| e.into())
-// }
 
 //pub async fn upsert_serieses(conn: PgConn, mut new: Vec<ApiNewSeries>) -> Result<impl warp::Reply, warp::Rejection>{
 // pub async fn upsert_series_with_children(conn: PgConn, mut new: Vec<ApiNewSeries>) -> Result<Vec<Series>, diesel::result::Error>{
@@ -156,11 +145,6 @@ pub async fn insert_competitions(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WS
     // It's possible to just borrow it in db-insertion,
     // but it leads to having to specify lifetimes on nearly EVERYTHING. Not worth the hassle unless need perf
     let insert_res = ApiCompetition::insert(conn, comps.clone()).await?;
-   // let comps: Vec<Competition> = insert!(&conn, schema::competitions::table, deserialized)?;
-    // assume anything upserted the user wants to subscribe to
-    if let Some(ws_user) = ws_conns.lock().await.get_mut(&user_ws_id){
-        sub_to_competitions(ws_user, comps.iter().map(|c| &c.competition_id)).await;
-    }
     // TODO ideally would return response before awaiting publishing going out
     publish_competitions(ws_conns, &comps).await;
     println!("{:?}", &comps);
@@ -168,24 +152,39 @@ pub async fn insert_competitions(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WS
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
-// pub async fn update_competitions(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
-//     let deserialized: Vec<UpdateCompetition> = serde_json::from_value(req.data)?;
-//     println!("{:?}", &deserialized);
-//     let comps: Vec<Competition> = conn.build_transaction().run(|| {
-//         deserialized.iter().map(|c| {
-//         update!(&conn, competitions, competition_id, c)
-//     }).collect::<Result<Vec<Competition>, _>>()})?;
-//     //let comps = db::insert_competitions(&conn, deserialized.into_iter().map(transform_from).collect_vec())?;
-//     // assume anything upserted the user wants to subscribe to
-//     if let Some(ws_user) = ws_conns.lock().await.get_mut(&user_ws_id){
-//         sub_to_competitions(ws_user, comps.iter().map(|c| &c.competition_id)).await;
-//     }
-//     // TODO ideally would return response before awaiting publishing going out
-//     publish_competitions(ws_conns, &comps).await;
-//     println!("{:?}", &comps);
-//     let resp_msg = WSMsgOut::resp(req.message_id, req.method, comps);
-//     serde_json::to_string(&resp_msg).map_err(|e| e.into())
-// }
+pub async fn update_competitions(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
+    let deserialized: Vec<UpdateCompetition> = serde_json::from_value(req.data)?;
+    println!("{:?}", &deserialized);
+    let comps: Vec<Competition> = conn.build_transaction().run(|| {
+        deserialized.iter().map(|c| {
+        update!(&conn, competitions, competition_id, c)
+    }).collect::<Result<Vec<Competition>, _>>()})?;
+    // TODO ideally would return response before awaiting publishing going out
+    publish_for_comp::<Competition>(
+        ws_conns, &comps,
+         comps.iter().map(|c| (c.competition_id, c.competition_id)).collect()
+        ).await;
+    let resp_msg = WSMsgOut::resp(req.message_id, req.method, comps);
+    serde_json::to_string(&resp_msg).map_err(|e| e.into())
+}
+
+pub async fn insert_series(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
+    let deserialized: Vec<ApiSeriesNew> = serde_json::from_value(req.data)?;
+    println!("{:?}", &deserialized);
+    // Need to clone comps, so that can still publish it, after has been "consumed" adding to db.
+    // It's possible to just borrow it in db-insertion,
+    // but it leads to having to specify lifetimes on nearly EVERYTHING. Not worth the hassle unless need perf
+    ApiSeriesNew::insert(&conn, deserialized.clone()).await?;
+   // let comps: Vec<Competition> = insert!(&conn, schema::competitions::table, deserialized)?;
+    // assume anything upserted the user wants to subscribe to
+    // TODO ideally would return response before awaiting publishing going out
+    let comp_and_series_ids = db::get_competition_ids_for_series(
+        &conn, &deserialized.iter().map(|s|s.series_id).collect()
+    )?;
+    publish_for_comp::<ApiSeriesNew>(ws_conns, &deserialized, comp_and_series_ids.into_iter().collect()).await;
+    let resp_msg = WSMsgOut::resp(req.message_id, req.method, deserialized);
+    serde_json::to_string(&resp_msg).map_err(|e| e.into())
+}
 
 // pub async fn insert_series(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
 //     let deserialized = serde_json::from_value(req.data)?;

@@ -14,7 +14,7 @@ pub struct Player {
 
 #[derive(LabelledGeneric, Deserialize, Debug, Insertable)]
 #[table_name = "players"]
-pub struct NewPlayer {
+pub struct PlayerNew {
     pub player_id: Option<Uuid>,
     pub meta: serde_json::Value
 }
@@ -91,3 +91,40 @@ pub struct ApiPlayerOut{
     pub names: Vec<ApiPlayerName>,
     pub positions: Vec<ApiPlayerPosition>
 }
+
+// #[derive(Deserialize, LabelledGeneric, Debug)]
+// pub struct ApiNewPlayer{
+//     pub player_id: Option<Uuid>,
+//     pub name: String,
+//     pub meta: serde_json::Value,
+//     #[serde(with = "my_timespan_format")]
+//     // Its naive having initial player position and their name share a timespan,
+//     // but fudge it! Improve later
+//     pub timespan: DieselTimespan,
+//     pub position: Option<String>
+// }
+
+// impl ApiPlayer{
+    
+//     pub fn from_rows(rows: Vec<(Player, PlayerName, PlayerPosition)>) -> Vec<Self>{
+//         // Group rows by team-id using hashmap, build a list of different team names
+//         // Assume if a team has no names ever, we dont care about it
+//         let mut acc: HashMap<Uuid, (Player, Vec<PlayerName>, Vec<PlayerPosition>)> = HashMap::new();
+//         acc = rows.into_iter().fold(acc, |mut acc, (player, player_name, position)| {
+//             match acc.get_mut(&player.player_id) {
+//                 Some(t) => {t.1.push(player_name); t.2.push(position)},
+//                 None => {acc.insert(player.player_id, (player, vec![player_name], vec![position]));},
+//             }
+//             acc
+//         });
+
+//         acc.into_iter().map(|(pid, v)|{
+//             Self{
+//                 player_id: pid,
+//                 meta: v.0.meta,
+//                 names: v.1.into_iter().map(|tn| ApiPlayerName{name: tn.name, timespan: tn.timespan}).collect_vec()
+//             }
+//         })
+//         .collect_vec()
+//     }
+// }

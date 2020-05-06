@@ -5,9 +5,14 @@ use crate::schema::*;
 use uuid::Uuid;
 use serde_json;
 use frunk::LabelledGeneric;
+use frunk::labelled::transform_from;
 use super::series::Series;
 use super::results::{TeamMatchResult, PlayerResult};
 use crate::publisher::Publishable;
+use warp_ws_server::PgConn;
+use itertools::Itertools;
+use crate::diesel::RunQueryDsl;  // imported here so that can run db macros
+use crate::diesel::ExpressionMethods;
 
 
 #[derive(Insertable, Deserialize, LabelledGeneric, Queryable, Serialize, Debug, Identifiable, Associations)]
@@ -35,9 +40,21 @@ pub struct UpdateMatch {
     pub timespan: Option<DieselTimespan>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, LabelledGeneric)]
 pub struct ApiMatch{
     pub match_id: Uuid,
+    pub name: String,
+    pub meta: serde_json::Value,
+    #[serde(with = "my_timespan_format")]
+    pub timespan: DieselTimespan,
+    pub player_results: Vec<PlayerResult>,
+    pub team_results: Vec<TeamMatchResult>
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, LabelledGeneric)]
+pub struct ApiMatchNew{
+    pub match_id: Uuid,
+    pub series_id: Uuid,
     pub name: String,
     pub meta: serde_json::Value,
     #[serde(with = "my_timespan_format")]
@@ -53,6 +70,25 @@ impl ApiMatch{
             self.player_results,
             self.team_results
         )
+    }
+}
+
+impl ApiMatchNew{
+    pub async fn insert(conn: PgConn, new: Vec<ApiMatchNew>) -> Result<bool, diesel::result::Error>{
+        let (mut player_results, mut team_match_results) = (vec![], vec![]);
+        let matches: Vec<Match> = new
+            .into_iter().map(|m|{
+                let series_id = m.series_id;
+                let m2: ApiMatch = transform_from(m);
+                let mut tup = m2.insertable(series_id);
+                player_results.append(&mut tup.1);
+                team_match_results.append(&mut tup.2);
+                tup.0
+            }).collect_vec();
+            insert_exec!(&conn, matches::table, matches)?;
+            insert_exec!(&conn, player_results::table, player_results)?;
+            insert_exec!(&conn, team_match_results::table, team_match_results)?;
+            Ok(true)
     }
 }
 
