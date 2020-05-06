@@ -1,7 +1,8 @@
 use crate::WSConnection_;
-use crate::models;
 use uuid::Uuid;
 use std::collections::HashSet;
+use crate::types::competitions::*;
+
 pub struct Subscriptions{
     pub teams: bool,
     pub competitions: HashSet<Uuid>,
@@ -29,9 +30,9 @@ pub async fn sub_to_teams(ws_user: &mut WSConnection_, toggle: bool){
 }
 
 // TODO make generic with series and matches, T and closure for competition_id? or trait for HasCompetition?
-pub fn subscribed_comps<'a>(subscriptions: &Subscriptions, all_comps: &'a Vec<models::Competition>) -> Vec<&'a models::Competition>{
+pub fn subscribed_comps<'a>(subscriptions: &Subscriptions, all_comps: &'a Vec<ApiCompetition>) -> Vec<&'a ApiCompetition>{
     match subscriptions.all_competitions{
-        // turn from &Vec<models::Competition> into Vec<&models::Competition>
+        // turn from &Vec<Competition> into Vec<&Competition>
         // Passing in &Vec to func, so that publish and send response can 'share' competition. i.e. publishing doesnt consume it.
         // However is probably simpler to set up so can just clone it, and this func mvoes Vec, rather than ref
         true => all_comps.iter().collect(),

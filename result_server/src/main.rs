@@ -7,8 +7,8 @@ use std::env;
 use warp_ws_server;
 use warp::*;
 mod schema;
-mod models;
 mod db;
+mod types;
 mod handlers;
 use handlers::*;
 mod publisher;
@@ -34,18 +34,19 @@ impl WSHandler<subscriptions::Subscriptions> for A{
         let req: WSReq = serde_json::from_str(&msg)?;
         println!("{}", &req.data);
         match req.method{
-            "sub_competitions" => sub_competitions(req, conn, ws_conns, user_ws_id).await,
-            "sub_teams" => sub_teams(req, conn, ws_conns, user_ws_id).await,
-            "upsert_competitions" => upsert_competitions(req, conn, ws_conns, user_ws_id).await,
-            "upsert_series" => upsert_series(req, conn, ws_conns, user_ws_id).await,
-            "upsert_matches" => upsert_matches(req, conn, ws_conns, user_ws_id).await,
-            "upsert_series_teams" => upsert_series_teams(req, conn, ws_conns, user_ws_id).await,
-            "upsert_teams" => upsert_teams(req, conn, ws_conns, user_ws_id).await,
-            "upsert_players" => upsert_players(req, conn, ws_conns, user_ws_id).await,
-            "upsert_team_players" => upsert_team_players(req, conn, ws_conns, user_ws_id).await,
-            "upsert_team_match_results" => upsert_team_match_results(req, conn, ws_conns, user_ws_id).await,
-            "upsert_team_series_results" => upsert_team_series_results(req, conn, ws_conns, user_ws_id).await,
-            "upsert_player_match_results" => upsert_player_match_results(req, conn, ws_conns, user_ws_id).await,
+            // "sub_competitions" => sub_competitions(req, conn, ws_conns, user_ws_id).await,
+            // "sub_teams" => sub_teams(req, conn, ws_conns, user_ws_id).await,
+            // "insert_competitions" => insert_competitions(req, conn, ws_conns, user_ws_id).await,
+            // "update_competitions" => update_competitions(req, conn, ws_conns, user_ws_id).await,
+            // "upsert_series" => upsert_series(req, conn, ws_conns, user_ws_id).await,
+            // "upsert_matches" => upsert_matches(req, conn, ws_conns, user_ws_id).await,
+            // "upsert_series_teams" => upsert_series_teams(req, conn, ws_conns, user_ws_id).await,
+            // "upsert_teams" => upsert_teams(req, conn, ws_conns, user_ws_id).await,
+            // "upsert_players" => upsert_players(req, conn, ws_conns, user_ws_id).await,
+            // "upsert_team_players" => upsert_team_players(req, conn, ws_conns, user_ws_id).await,
+            // "upsert_team_match_results" => upsert_team_match_results(req, conn, ws_conns, user_ws_id).await,
+            // "upsert_team_series_results" => upsert_team_series_results(req, conn, ws_conns, user_ws_id).await,
+            // "upsert_player_match_results" => upsert_player_match_results(req, conn, ws_conns, user_ws_id).await,
             uwotm8 => Err(Box::new(InvalidRequestError{description: uwotm8.to_string()}))
         }
     }

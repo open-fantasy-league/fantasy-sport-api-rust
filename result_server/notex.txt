@@ -19,6 +19,7 @@ tomorrow2:
 
 
 tuesday 4:
+- ah fuck it just dupe the ids
 - add functionality for player positions
 - refudge bulk-insert bulk update (can for now internally do a shitty map and separate updates)
 
