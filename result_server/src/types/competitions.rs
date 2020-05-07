@@ -118,3 +118,19 @@ impl Publishable for Competition {
         self.competition_id
     }
 }
+
+pub trait IsCompetition{
+    fn competition_id(&self) -> Uuid;
+}
+
+impl IsCompetition for Competition{
+    fn competition_id(&self) -> Uuid{
+        self.competition_id
+    }
+}
+
+impl IsCompetition for ApiCompetition{
+    fn competition_id(&self) -> Uuid{
+        self.competition_id
+    }
+}

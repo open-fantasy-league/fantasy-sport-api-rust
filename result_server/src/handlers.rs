@@ -426,47 +426,46 @@ pub async fn insert_player_positions(req: WSReq<'_>, conn: PgConn, ws_conns: &mu
 //     })
 // }
 
-// pub async fn sub_competitions(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
-//     let deserialized: ApiSubCompetitions = serde_json::from_value(req.data)?;
-//     // let ws_user = ws_conns.lock().await.get_mut(&user_ws_id).ok_or("Webscoket gone away")?;
-//     // why does this need splitting into two lines?
-//     // ANd is it holding the lock for this whole scope? doesnt need to
-//     let mut hmmmm = ws_conns.lock().await;
-//     let ws_user = hmmmm.get_mut(&user_ws_id).ok_or("Websocket gone away")?;
-//     if let Some(toggle) = deserialized.all{
-//         sub_to_all_competitions(ws_user, toggle).await;
-//     }
-//     else if let Some(competition_ids) = deserialized.competition_ids{
-//         sub_to_competitions(ws_user, competition_ids.iter()).await;
-//     }
-//     else{
-//         return Err(Box::new(InvalidRequestError{description: String::from("sub_competitions must specify either 'all' or 'competition_ids'")}))
-//     }
-//     let all_competitions = db::get_all_competitions(&conn)?;
-//     let subscribed_comps: Vec<&Competition> = subscribed_comps(&ws_user.subscriptions, &all_competitions);
-//     let comp_rows = db::get_full_competitions(
-//         &conn,
-//             subscribed_comps.iter().map(|x| x.competition_id).collect()
-//     )?;
-//     let data = ApiCompetition::from_rows(comp_rows);
-//     let resp_msg = WSMsgOut::resp(req.message_id, req.method, data);
-//     serde_json::to_string(&resp_msg).map_err(|e| e.into())
-// }
+pub async fn sub_competitions(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
+    let deserialized: ApiSubCompetitions = serde_json::from_value(req.data)?;
+    // let ws_user = ws_conns.lock().await.get_mut(&user_ws_id).ok_or("Webscoket gone away")?;
+    // why does this need splitting into two lines?
+    // ANd is it holding the lock for this whole scope? doesnt need to
+    let mut hmmmm = ws_conns.lock().await;
+    let ws_user = hmmmm.get_mut(&user_ws_id).ok_or("Websocket gone away")?;
+    if let Some(toggle) = deserialized.all{
+        sub_to_all_competitions(ws_user, toggle).await;
+    }
+    else if let Some(competition_ids) = deserialized.competition_ids{
+        sub_to_competitions(ws_user, competition_ids.iter()).await;
+    }
+    else{
+        return Err(Box::new(InvalidRequestError{description: String::from("sub_competitions must specify either 'all' or 'competition_ids'")}))
+    }
+    let all_competitions = db::get_all_competitions(&conn)?;
+    let subscribed_comps: Vec<&Competition> = subscribed_comps::<Competition>(&ws_user.subscriptions, &all_competitions);
+    let comp_rows = db::get_full_competitions(
+        &conn, subscribed_comps.iter().map(|x| x.competition_id).collect()
+    )?;
+    let data = ApiCompetition::from_rows(comp_rows);
+    let resp_msg = WSMsgOut::resp(req.message_id, req.method, data);
+    serde_json::to_string(&resp_msg).map_err(|e| e.into())
+}
 
-// pub async fn sub_teams(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
-//     let deserialized: ApiSubTeams = serde_json::from_value(req.data)?;
-//     let mut hmmmm = ws_conns.lock().await;
-//     let ws_user = hmmmm.get_mut(&user_ws_id).ok_or("Websocket gone away")?;
-//     println!("{:?}", &deserialized);
-//     sub_to_teams(ws_user, deserialized.toggle).await;
+pub async fn sub_teams(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
+    let deserialized: ApiSubTeams = serde_json::from_value(req.data)?;
+    let mut hmmmm = ws_conns.lock().await;
+    let ws_user = hmmmm.get_mut(&user_ws_id).ok_or("Websocket gone away")?;
+    println!("{:?}", &deserialized);
+    sub_to_teams(ws_user, deserialized.toggle).await;
 
-//     let team_out = db::get_all_teams(&conn).map(|rows| ApiTeam::from_rows(rows))?;
-//     let players_out = db::get_all_players(&conn).map(|rows| ApiPlayer::from_rows(rows))?;
-//     let team_players_out = db::get_all_team_players(&conn)?;
-//     let data = ApiTeamsAndPlayers{teams: team_out, players: players_out, team_players: team_players_out};
-//     let resp_msg = WSMsgOut::resp(req.message_id, req.method, data);
-//     serde_json::to_string(&resp_msg).map_err(|e| e.into())
-// }
+    let team_out = db::get_all_teams(&conn).map(|rows| ApiTeam::from_rows(rows))?;
+    let players_out = db::get_all_players(&conn).map(|rows| ApiPlayer::from_rows(rows))?;
+    let team_players_out = db::get_all_team_players(&conn)?;
+    let data = ApiTeamsAndPlayers{teams: team_out, players: players_out, team_players: team_players_out};
+    let resp_msg = WSMsgOut::resp(req.message_id, req.method, data);
+    serde_json::to_string(&resp_msg).map_err(|e| e.into())
+}
 
 // Nice idea but Deserilize complains about different liftimes
 // TODO Work out why and how to fix

@@ -29,8 +29,9 @@ pub async fn sub_to_teams(ws_user: &mut WSConnection_, toggle: bool){
     ws_user.subscriptions.teams = toggle
 }
 
+
 // TODO make generic with series and matches, T and closure for competition_id? or trait for HasCompetition?
-pub fn subscribed_comps<'a>(subscriptions: &Subscriptions, all_comps: &'a Vec<ApiCompetition>) -> Vec<&'a ApiCompetition>{
+pub fn subscribed_comps<'a, T: IsCompetition>(subscriptions: &Subscriptions, all_comps: &'a Vec<T>) -> Vec<&'a T>{
     match subscriptions.all_competitions{
         // turn from &Vec<Competition> into Vec<&Competition>
         // Passing in &Vec to func, so that publish and send response can 'share' competition. i.e. publishing doesnt consume it.
@@ -38,7 +39,7 @@ pub fn subscribed_comps<'a>(subscriptions: &Subscriptions, all_comps: &'a Vec<Ap
         true => all_comps.iter().collect(),
         false => {
             all_comps.iter()
-            .filter(|c| subscriptions.competitions.contains(&c.competition_id))
+            .filter(|c| subscriptions.competitions.contains(&c.competition_id()))
             .collect()
         }
     }

@@ -17,7 +17,7 @@ pub trait Publishable {
 pub async fn publish_competitions(ws_conns: &mut WSConnections_, competitions: &Vec<ApiCompetition>){
 
     for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
-        let subscribed_comps = subscribed_comps(&wsconn.subscriptions, competitions);
+        let subscribed_comps = subscribed_comps::<ApiCompetition>(&wsconn.subscriptions, competitions);
         println!("subscribed_comps: {:?}", subscribed_comps);
         // TODO cache in-case lots of people have same filters
         let push_msg = WSMsgOut::push("competitions", subscribed_comps);

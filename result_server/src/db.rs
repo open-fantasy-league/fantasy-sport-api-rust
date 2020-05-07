@@ -478,9 +478,9 @@ pub fn get_all_teams(conn: &PgConnection) -> Result<Vec<(Team, TeamName)>, diese
 
 pub fn get_all_players(
     conn: &PgConnection,
-) -> Result<Vec<(Player, PlayerName)>, diesel::result::Error> {
-    use crate::schema::{player_names, players};
-    players::table.inner_join(player_names::table).load(conn)
+) -> Result<Vec<(Player, PlayerName, PlayerPosition)>, diesel::result::Error> {
+    use crate::schema::{player_names, players, player_positions};
+    players::table.inner_join(player_names::table).inner_join(player_positions::table).load(conn)
 }
 
 pub fn get_all_team_players(conn: &PgConnection) -> Result<Vec<TeamPlayer>, diesel::result::Error> {
