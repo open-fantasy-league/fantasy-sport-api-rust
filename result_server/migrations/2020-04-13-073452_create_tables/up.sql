@@ -88,7 +88,7 @@ CREATE TABLE team_series_results(
 	team_id UUID NOT NULL REFERENCES teams,
 	series_id UUID NOT NULL REFERENCES series,
 	result TEXT,
-	meta JSONB NOT NULL DEFAULT '{}'::jsonb
+	meta JSONB NOT NULL DEFAULT '{}'::jsonb,
 	PRIMARY KEY(series_id, team_id)
 );
 

@@ -35,7 +35,7 @@ pub struct ApiTeam{
 #[belongs_to(Team)]
 pub struct TeamName {
     #[serde(skip_serializing)]
-    team_name_id: Uuid,
+    pub team_name_id: Uuid,
     #[serde(skip_serializing)]
     pub team_id: Uuid,
     pub name: String,
@@ -83,13 +83,25 @@ pub struct TeamPlayer {
     pub timespan: DieselTimespan,
 }
 
-#[derive(Queryable, Deserialize, Serialize, Debug, Clone)]
+#[derive(Queryable, Insertable, LabelledGeneric, Deserialize, Serialize, Debug, Clone)]
+#[table_name = "team_players"]
 pub struct ApiTeamPlayer {
     pub team_id: Uuid,
     pub player_id: Uuid,
     #[serde(with = "my_timespan_format")]
     pub timespan: DieselTimespan,
 }
+
+// #[derive(Deserialize, Insertable, LabelledGeneric, Debug, Clone)]
+// #[table_name = "team_players"]
+// pub struct ApiTeamPlayerNew {
+//     pub team_player_id: Uuid,
+//     pub team_id: Uuid,
+//     pub player_id: Uuid,
+//     #[serde(with = "my_timespan_format")]
+//     pub timespan: DieselTimespan,
+// }
+
 
 impl ApiTeam{
     
@@ -143,25 +155,19 @@ impl Publishable for ApiTeam {
     }
 }
 
-impl ApiTeamPlayer{
-    pub async fn insert(conn: PgConn, team_players: Vec<Self>) -> Result<bool, diesel::result::Error>{
-        let num_entries = team_players.len();
-        let mut raw_team_players = Vec::with_capacity(num_entries);
-        conn.build_transaction().run(|| {
-            let trims = team_players.into_iter().map(|tp| {
-                raw_team_players.push(TeamPlayer{team_player_id: Uuid::new_v4(), team_id: tp.team_id, player_id: tp.player_id, timespan: tp.timespan});
-                db::trim_timespans(&conn, "team_player", tp.team_id, tp.timespan)
-            }).fold_results(Vec::with_capacity(num_entries), |mut v, o| {
-                v.push(o);
-                v
-            })?;
-            insert_exec!(&conn, team_players::table, raw_team_players)?;
-            Ok(true)
-        })
-    }
-}
+// impl ApiTeamPlayer{
+//     pub async fn insert(conn: PgConn, team_players: Vec<Self>) -> Result<bool, diesel::result::Error>{
+//         let num_entries = team_players.len();
+//         let mut raw_team_players = Vec::with_capacity(num_entries);
+//         conn.build_transaction().run(|| {
+//             let trimmed: Vec<TeamPlayer> = trim_timespans_many::<ApiTeamPlayerNew, TeamPlayer>(conn, "team_player", new)?;
+//             insert_exec!(&conn, team_players::table, raw_team_players)?;
+//             Ok(true)
+//         })
+//     }
+// }
 
-impl Publishable for ApiTeamPlayer {
+impl Publishable for TeamPlayer {
     fn message_type<'a>() -> &'a str {
         "team_player"
     }

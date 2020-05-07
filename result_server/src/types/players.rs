@@ -12,6 +12,7 @@ use crate::publisher::Publishable;
 use crate::diesel::RunQueryDsl;  // imported here so that can run db macros
 use crate::diesel::ExpressionMethods;
 use itertools::Itertools;
+use crate::db;
 
 #[derive(Insertable, Deserialize, LabelledGeneric, Queryable, Serialize, Debug)]
 #[table_name = "players"]
@@ -78,8 +79,27 @@ pub struct ApiPlayerName {
     pub timespan: DieselTimespan,
 }
 
+
+#[derive(Deserialize, Insertable, LabelledGeneric, Debug, Clone)]
+#[table_name = "player_names"]
+pub struct ApiPlayerNameNew {
+    pub player_id: Uuid,
+    pub name: String,
+    #[serde(with = "my_timespan_format")]
+    pub timespan: DieselTimespan,
+}
+
 #[derive(Deserialize, Serialize, LabelledGeneric, Debug, Clone)]
 pub struct ApiPlayerPosition {
+    pub position: String,
+    #[serde(with = "my_timespan_format")]
+    pub timespan: DieselTimespan,
+}
+
+#[derive(Deserialize, Insertable, LabelledGeneric, Debug, Clone)]
+#[table_name = "player_positions"]
+pub struct ApiPlayerPositionNew {
+    pub player_id: Uuid,
     pub position: String,
     #[serde(with = "my_timespan_format")]
     pub timespan: DieselTimespan,
@@ -151,6 +171,26 @@ impl Publishable for Player {
 impl Publishable for PlayerUpdate {
     fn message_type<'a>() -> &'a str {
         "player_update"
+    }
+
+    fn get_hierarchy_id(&self) -> Uuid {
+        self.player_id
+    }
+}
+
+impl Publishable for PlayerName {
+    fn message_type<'a>() -> &'a str {
+        "player_name"
+    }
+
+    fn get_hierarchy_id(&self) -> Uuid {
+        self.player_id
+    }
+}
+
+impl Publishable for PlayerPosition {
+    fn message_type<'a>() -> &'a str {
+        "player_position"
     }
 
     fn get_hierarchy_id(&self) -> Uuid {

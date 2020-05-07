@@ -256,9 +256,9 @@ pub async fn update_players(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConne
 pub async fn insert_team_players(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
     let deserialized: Vec<ApiTeamPlayer> = serde_json::from_value(req.data)?;
     println!("{:?}", &deserialized);
-    ApiTeamPlayer::insert(conn, deserialized.clone()).await?;
-    publish_for_teams::<ApiTeamPlayer>(ws_conns, &deserialized).await;
-    let resp_msg = WSMsgOut::resp(req.message_id, req.method, deserialized);
+    let out = db::insert_team_players(&conn, deserialized).await?;
+    publish_for_teams::<TeamPlayer>(ws_conns, &out).await;
+    let resp_msg = WSMsgOut::resp(req.message_id, req.method, out);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
@@ -272,10 +272,19 @@ pub async fn insert_team_names(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSCo
 }
 
 pub async fn insert_player_names(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
-    let deserialized: Vec<ApiTeamNameNew> = serde_json::from_value(req.data)?;
+    let deserialized: Vec<ApiPlayerNameNew> = serde_json::from_value(req.data)?;
     println!("{:?}", &deserialized);
-    let out = db::insert_team_names(&conn, deserialized).await?;
-    publish_for_teams::<TeamName>(ws_conns, &out).await;
+    let out = db::insert_player_names(&conn, deserialized).await?;
+    publish_for_teams::<PlayerName>(ws_conns, &out).await;
+    let resp_msg = WSMsgOut::resp(req.message_id, req.method, out);
+    serde_json::to_string(&resp_msg).map_err(|e| e.into())
+}
+
+pub async fn insert_player_positions(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
+    let deserialized: Vec<ApiPlayerPositionNew> = serde_json::from_value(req.data)?;
+    println!("{:?}", &deserialized);
+    let out = db::insert_player_positions(&conn, deserialized).await?;
+    publish_for_teams::<PlayerPosition>(ws_conns, &out).await;
     let resp_msg = WSMsgOut::resp(req.message_id, req.method, out);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }

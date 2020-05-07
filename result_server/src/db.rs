@@ -11,23 +11,11 @@ use frunk::labelled::transform_from;
 use itertools::{izip, Itertools};
 use warp_ws_server::utils::my_timespan_format::DieselTimespan;
 use crate::types::{competitions::*, series::*, matches::*, teams::*, results::*, players::*};
+use crate::schema;
 
 //sql_function! {fn coalesce<T: sql_types::NotNull>(a: sql_types::Nullable<T>, b: T) -> T;}
 //sql_function!(fn trim_team_name_timespans(new_team_id sql_types::Uuid, new_timespan sql_types::Range<sql_types::Timestamptz>) -> ());
-//sql_function!(trim_team_name_timespans, WTF, (new_team_id: sql_types::Uuid, new_timespan: sql_types::Range<sql_types::Timestamptz>) -> ());
-
-pub fn trim_timespans(
-    conn: &PgConnection,
-    table_name: &str,
-    id: Uuid,
-    timespan: DieselTimespan,
-) -> Result<usize, diesel::result::Error> {
-    // TODO this should return updated rows so can be published as changes
-    sql_query(format!("SELECT trim_{}_timespans($1, $2)", table_name))
-        .bind::<sql_types::Uuid, _>(id)
-        .bind::<sql_types::Range<sql_types::Timestamptz>, _>(timespan)
-        .execute(conn)
-}
+sql_function!(trim_team_name_timespans, WTF, (new_team_id: sql_types::Uuid, new_timespan: sql_types::Range<sql_types::Timestamptz>) -> TeamName);
 
 macro_rules! insert {
     ($conn:expr, $table:expr, $aggregate:expr) => {
@@ -62,22 +50,142 @@ macro_rules! update_2pkey {
     };
 }
 
+//sql_function!(trim_team_name_timespans, TrimTeamNameTimespan, (x: sql_types::Uuid, sql_types::Range<sql_types::Timestamptz>) -> Vec<TeamName>);
+
+// Fuck making this generic is hard
+pub fn trim_timespans_team_name(
+    conn: &PgConnection,
+    table_name: &str,
+    new: &Vec<ApiTeamNameNew>
+) -> Result<Vec<usize>, diesel::result::Error>{
+    let num_entries = new.len();
+    let trimmed: Vec<_> = new.iter().map(|n|{
+        sql_query(format!("SELECT * FROM trim_{}_timespans($1, $2)", table_name))
+            .bind::<sql_types::Uuid, _>(n.team_id)
+            .bind::<sql_types::Range<sql_types::Timestamptz>, _>(n.timespan)
+            .execute(conn)
+        
+    })
+    .fold_results(Vec::with_capacity(num_entries), |mut v, o| {
+                        v.push(o);
+                        v
+    })?;//.into_iter().flatten().collect();  // TODO is this really optimal?
+    Ok(trimmed)
+}
+
+pub fn trim_timespans_team_player(
+    conn: &PgConnection,
+    table_name: &str,
+    new: &Vec<ApiTeamPlayer>
+) -> Result<Vec<usize>, diesel::result::Error>{
+    let num_entries = new.len();
+    let trimmed: Vec<_> = new.iter().map(|n|{
+        sql_query(format!("SELECT trim_{}_timespans($1, $2)", table_name))
+            .bind::<sql_types::Uuid, _>(n.team_id)
+            .bind::<sql_types::Range<sql_types::Timestamptz>, _>(n.timespan)
+            .execute(conn)
+    })
+    .fold_results(Vec::with_capacity(num_entries), |mut v, o| {
+                        v.push(o);
+                        v
+    })?;//.into_iter().flatten().collect();  // TODO is this really optimal?
+    Ok(trimmed)
+}
+
+pub fn trim_timespans_player_name(
+    conn: &PgConnection,
+    table_name: &str,
+    new: &Vec<ApiPlayerNameNew>
+) -> Result<Vec<usize>, diesel::result::Error>{
+    let num_entries = new.len();
+    let trimmed: Vec<_> = new.iter().map(|n|{
+        sql_query(format!("SELECT trim_{}_timespans($1, $2)", table_name))
+            .bind::<sql_types::Uuid, _>(n.player_id)
+            .bind::<sql_types::Range<sql_types::Timestamptz>, _>(n.timespan)
+            .execute(conn)
+    })
+    .fold_results(Vec::with_capacity(num_entries), |mut v, o| {
+                        v.push(o);
+                        v
+    })?;//.into_iter().flatten().collect();  // TODO is this really optimal?
+    Ok(trimmed)
+}
+
+pub fn trim_timespans_player_position(
+    conn: &PgConnection,
+    table_name: &str,
+    new: &Vec<ApiPlayerPositionNew>
+) -> Result<Vec<usize>, diesel::result::Error>{
+    let num_entries = new.len();
+    let trimmed: Vec<_> = new.iter().map(|n|{
+        sql_query(format!("SELECT trim_{}_timespans($1, $2)", table_name))
+            .bind::<sql_types::Uuid, _>(n.player_id)
+            .bind::<sql_types::Range<sql_types::Timestamptz>, _>(n.timespan)
+            .execute(conn)
+    })
+    .fold_results(Vec::with_capacity(num_entries), |mut v, o| {
+                        v.push(o);
+                        v
+    })?;//.into_iter().flatten().collect();  // TODO is this really optimal?
+    Ok(trimmed)
+}
+
+// TODO to improve genericness of trimmed-timespans
+// would prob help to pass trim postgresql func a vector 
+
+// TODO maybe move these funcs onto struct::insert
 pub async fn insert_team_names(
     conn: &PgConnection,
     new: Vec<ApiTeamNameNew>,
 ) -> Result<Vec<TeamName>, diesel::result::Error> {
     use crate::schema::team_names;
     // trim_timespans(conn, "team_name", t.team_id, new_timespan)
-    let num_entries = new.len();
-    let _ = new.iter().map(|n|{
-        // TODO return trimming so can publish
-        trim_timespans(conn, "team_name", n.team_id, n.timespan)
-    }).fold_results(Vec::with_capacity(num_entries), |mut v, o| {
-                        v.push(o);
-                        v
-    })?;
-    insert!(conn, team_names::table, new)
+    let trimmed: Vec<_> = trim_timespans_team_name(conn, "team_name", &new)?;
+    //let trimmed: Vec<TeamName> = trim_timespans_many::<ApiTeamNameNew, TeamName>(conn, "team_name", new)?;
+    let inserted: Vec<TeamName> = insert!(conn, team_names::table, new)?;
+    //inserted.append(&mut trimmed);
+    Ok(inserted)
 }
+
+pub async fn insert_player_names(
+    conn: &PgConnection,
+    new: Vec<ApiPlayerNameNew>,
+) -> Result<Vec<PlayerName>, diesel::result::Error> {
+    use crate::schema::player_names;
+    // trim_timespans(conn, "team_name", t.team_id, new_timespan)
+    let num_entries = new.len();
+    let trimmed: Vec<_> = trim_timespans_player_name(conn, "player_name", &new)?;
+    let inserted: Vec<PlayerName> = insert!(conn, player_names::table, new)?;
+    //inserted.append(&mut trimmed);
+    Ok(inserted)
+}
+
+pub async fn insert_player_positions(
+    conn: &PgConnection,
+    new: Vec<ApiPlayerPositionNew>,
+) -> Result<Vec<PlayerPosition>, diesel::result::Error> {
+    use crate::schema::player_positions;
+    // trim_timespans(conn, "team_name", t.team_id, new_timespan)
+    let num_entries = new.len();
+    let trimmed: Vec<_> = trim_timespans_player_position(conn, "player_position", &new)?;
+    let inserted: Vec<PlayerPosition> = insert!(conn, player_positions::table, new)?;
+    //inserted.append(&mut trimmed);
+    Ok(inserted)
+}
+
+pub async fn insert_team_players(
+    conn: &PgConnection,
+    new: Vec<ApiTeamPlayer>,
+) -> Result<Vec<TeamPlayer>, diesel::result::Error> {
+    use crate::schema::team_players;
+    // trim_timespans(conn, "team_name", t.team_id, new_timespan)
+    let num_entries = new.len();
+    let trimmed: Vec<_> = trim_timespans_team_player(conn, "team_player", &new)?;
+    let inserted: Vec<TeamPlayer> = insert!(conn, team_players::table, new)?;
+    //inserted.append(&mut trimmed);
+    Ok(inserted)
+}
+
 
 
 // pub fn upsert_serieses<'a>(
