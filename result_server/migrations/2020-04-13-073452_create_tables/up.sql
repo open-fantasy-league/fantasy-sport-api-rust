@@ -48,11 +48,11 @@ CREATE TABLE player_names(
 	timespan TSTZRANGE NOT NULL DEFAULT tstzrange(now(), 'infinity', '[)')
 );
 
-CREATE TABLE series_teams(
-	series_id UUID NOT NULL REFERENCES series,
-	team_id UUID NOT NULL REFERENCES teams,
-	PRIMARY KEY(series_id, team_id)
-);
+-- CREATE TABLE series_teams(
+-- 	series_id UUID NOT NULL REFERENCES series,
+-- 	team_id UUID NOT NULL REFERENCES teams,
+-- 	PRIMARY KEY(series_id, team_id)
+-- );
 
 CREATE TABLE team_players(
 	team_player_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -62,11 +62,11 @@ CREATE TABLE team_players(
 );
 
 CREATE TABLE player_results(
-	player_result_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 	player_id UUID NOT NULL REFERENCES players,
 	match_id UUID NOT NULL REFERENCES matches,
-	result JSONB NOT NULL DEFAULT '{}'::jsonb,
-	meta JSONB NOT NULL DEFAULT '{}'::jsonb
+	result JSONB,
+	meta JSONB NOT NULL DEFAULT '{}'::jsonb,
+	PRIMARY KEY(match_id, player_id)
 );
 
 CREATE TABLE player_positions(
@@ -77,19 +77,19 @@ CREATE TABLE player_positions(
 );
 
 CREATE TABLE team_match_results(
-	team_match_result_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 	team_id UUID NOT NULL REFERENCES teams,
 	match_id UUID NOT NULL REFERENCES matches,
-	result TEXT NOT NULL,
-	meta JSONB NOT NULL DEFAULT '{}'::jsonb
+	result TEXT,
+	meta JSONB NOT NULL DEFAULT '{}'::jsonb,
+	PRIMARY KEY(match_id, team_id)
 );
 
 CREATE TABLE team_series_results(
-	team_series_result_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 	team_id UUID NOT NULL REFERENCES teams,
 	series_id UUID NOT NULL REFERENCES series,
-	result TEXT NOT NULL,
+	result TEXT,
 	meta JSONB NOT NULL DEFAULT '{}'::jsonb
+	PRIMARY KEY(series_id, team_id)
 );
 
 CREATE INDEX series_competition_idx on series(competition_id);
@@ -104,8 +104,8 @@ CREATE INDEX player_results_player_idx on player_results(player_id);
 -- composite index wouldnt work with both questions
 CREATE INDEX team_players_idx_1 on team_players(team_id);
 CREATE INDEX team_players_idx_2 on team_players(player_id);
-CREATE INDEX series_teams_idx_1 on series_teams(series_id);
-CREATE INDEX series_teams_idx_2 on series_teams(team_id);
+--CREATE INDEX series_teams_idx_1 on series_teams(series_id);
+--CREATE INDEX series_teams_idx_2 on series_teams(team_id);
 CREATE INDEX player_names_idx on player_names(player_id);
 CREATE INDEX team_names_idx on team_names(team_id);
 CREATE INDEX player_positions_idx on player_positions(player_id);
@@ -117,4 +117,6 @@ CREATE INDEX competition_timespan_idx on competitions USING gist (timespan);
 CREATE INDEX series_timespan_idx on series USING gist (timespan);
 CREATE INDEX matches_timespan_idx on matches USING gist (timespan);
 CREATE INDEX team_players_timespan_idx on team_players USING gist (timespan);
-CREATE INDEX player_positions_timespan_idx on player_positions USING gist (timespan);
+ALTER TABLE team_names ADD CONSTRAINT non_overlap_team_name_timespan EXCLUDE USING gist (timespan WITH &&);
+ALTER TABLE player_names ADD CONSTRAINT non_overlap_player_name_timespan EXCLUDE USING gist (timespan WITH &&);
+ALTER TABLE player_positions ADD CONSTRAINT non_overlap_player_position_timespan EXCLUDE USING gist (timespan WITH &&);
