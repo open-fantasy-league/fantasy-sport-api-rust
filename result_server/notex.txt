@@ -23,22 +23,22 @@ tuesday 4:
 - add functionality for player positions
 - refudge bulk-insert bulk update (can for now internally do a shitty map and separate updates)
 
-wednes 5:
-- return trims and publish them
-- update-db for nullable stuff and removing some prim-keys
+friday 5:
 - transactions in result
 - league setup (i.e has periods, has set draft time)...oh add num_draftees per draft
+- switch to diesel-utils
+- investigate futures.join for multi query over two awaits
 
-thursda 6:
+sat 6:
 - a draft can happen
 
-friday 7: 
+sun 7: 
 - thread to process draft/advance it if no-one picks
 
-saturday:
+mon:
 - start leaderboard db/server
 
-sunday:
+tue:
 - docker container to boot/run things
 
 

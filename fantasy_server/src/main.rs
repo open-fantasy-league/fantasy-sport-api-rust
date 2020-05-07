@@ -15,6 +15,7 @@ mod types;
 use subscriptions::Subscriptions;
 use async_trait::async_trait;
 
+
 pub type WSConnections_ = warp_ws_server::WSConnections<subscriptions::Subscriptions>;
 
 struct A{
@@ -29,8 +30,8 @@ impl WSHandler<subscriptions::Subscriptions> for A{
         let req: WSReq = serde_json::from_str(&msg)?;
         println!("{}", &req.data);
         match req.method{
-            "insert_leagues" => insert_leagues(req, conn, ws_conns, user_ws_id).await,
-            "update_league" => update_league(req, conn, ws_conns, user_ws_id).await,
+            "insert_leagues" => insert_leagues(req, conn, ws_conns).await,
+            "update_league" => update_leagues(req, conn, ws_conns).await,
             uwotm8 => Err(Box::new(InvalidRequestError{description: uwotm8.to_string()}))
         }
     }

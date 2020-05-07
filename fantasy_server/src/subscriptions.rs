@@ -1,13 +1,15 @@
 use uuid::Uuid;
 use std::collections::HashSet;
 pub struct Subscriptions{
-    pub teams: bool,
-    pub competitions: HashSet<Uuid>,
-    pub all_competitions: bool
+    pub external_users: bool,
+    pub leagues: HashSet<Uuid>,
+    pub drafts: HashSet<Uuid>,
+    pub all_leagues: bool,
+    pub all_drafts: bool
 }
 
 impl warp_ws_server::Subscriptions for Subscriptions{
     fn new() -> Subscriptions {
-        Subscriptions{teams: false, competitions: HashSet::new(), all_competitions: false}
+        Subscriptions{external_users: false, leagues: HashSet::new(), drafts: HashSet::new(), all_leagues: false, all_drafts: false}
     }
 }
