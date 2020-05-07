@@ -82,7 +82,7 @@ pub struct ApiSeriesNew{
 }
 
 impl ApiSeriesNew{
-    pub async fn insert(conn: &PgConn, new: Vec<ApiSeriesNew>) -> Result<bool, diesel::result::Error>{
+    pub fn insert(conn: &PgConn, new: Vec<ApiSeriesNew>) -> Result<bool, diesel::result::Error>{
         // TODO EWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW
         // I think i need to define my own iterator so flatmap can flatmap nicely?
         let(

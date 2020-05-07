@@ -76,7 +76,7 @@ impl ApiMatch{
 }
 
 impl ApiMatchNew{
-    pub async fn insert(conn: &PgConn, new: Vec<ApiMatchNew>) -> Result<bool, diesel::result::Error>{
+    pub fn insert(conn: &PgConn, new: Vec<ApiMatchNew>) -> Result<bool, diesel::result::Error>{
         let (mut player_results, mut team_match_results) = (vec![], vec![]);
         let matches: Vec<Match> = new
             .into_iter().map(|m|{

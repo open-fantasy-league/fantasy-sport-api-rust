@@ -10,12 +10,13 @@ use uuid::Uuid;
 use frunk::labelled::transform_from;
 use itertools::{izip, Itertools};
 use warp_ws_server::utils::my_timespan_format::DieselTimespan;
+use warp_ws_server::PgConn;
 use crate::types::{competitions::*, series::*, matches::*, teams::*, results::*, players::*};
 use crate::schema;
 
 //sql_function! {fn coalesce<T: sql_types::NotNull>(a: sql_types::Nullable<T>, b: T) -> T;}
 //sql_function!(fn trim_team_name_timespans(new_team_id sql_types::Uuid, new_timespan sql_types::Range<sql_types::Timestamptz>) -> ());
-sql_function!(trim_team_name_timespans, WTF, (new_team_id: sql_types::Uuid, new_timespan: sql_types::Range<sql_types::Timestamptz>) -> TeamName);
+//sql_function!(trim_team_name_timespans, WTF, (new_team_id: sql_types::Uuid, new_timespan: sql_types::Range<sql_types::Timestamptz>) -> TeamName);
 
 macro_rules! insert {
     ($conn:expr, $table:expr, $aggregate:expr) => {
@@ -135,53 +136,53 @@ pub fn trim_timespans_player_position(
 
 // TODO maybe move these funcs onto struct::insert
 pub async fn insert_team_names(
-    conn: &PgConnection,
+    conn: PgConn,
     new: Vec<ApiTeamNameNew>,
 ) -> Result<Vec<TeamName>, diesel::result::Error> {
     use crate::schema::team_names;
     // trim_timespans(conn, "team_name", t.team_id, new_timespan)
-    let trimmed: Vec<_> = trim_timespans_team_name(conn, "team_name", &new)?;
+    let trimmed: Vec<_> = trim_timespans_team_name(&conn, "team_name", &new)?;
     //let trimmed: Vec<TeamName> = trim_timespans_many::<ApiTeamNameNew, TeamName>(conn, "team_name", new)?;
-    let inserted: Vec<TeamName> = insert!(conn, team_names::table, new)?;
+    let inserted: Vec<TeamName> = insert!(&conn, team_names::table, new)?;
     //inserted.append(&mut trimmed);
     Ok(inserted)
 }
 
 pub async fn insert_player_names(
-    conn: &PgConnection,
+    conn: PgConn,
     new: Vec<ApiPlayerNameNew>,
 ) -> Result<Vec<PlayerName>, diesel::result::Error> {
     use crate::schema::player_names;
     // trim_timespans(conn, "team_name", t.team_id, new_timespan)
     let num_entries = new.len();
-    let trimmed: Vec<_> = trim_timespans_player_name(conn, "player_name", &new)?;
-    let inserted: Vec<PlayerName> = insert!(conn, player_names::table, new)?;
+    let trimmed: Vec<_> = trim_timespans_player_name(&conn, "player_name", &new)?;
+    let inserted: Vec<PlayerName> = insert!(&conn, player_names::table, new)?;
     //inserted.append(&mut trimmed);
     Ok(inserted)
 }
 
 pub async fn insert_player_positions(
-    conn: &PgConnection,
+    conn: PgConn,
     new: Vec<ApiPlayerPositionNew>,
 ) -> Result<Vec<PlayerPosition>, diesel::result::Error> {
     use crate::schema::player_positions;
     // trim_timespans(conn, "team_name", t.team_id, new_timespan)
     let num_entries = new.len();
-    let trimmed: Vec<_> = trim_timespans_player_position(conn, "player_position", &new)?;
-    let inserted: Vec<PlayerPosition> = insert!(conn, player_positions::table, new)?;
+    let trimmed: Vec<_> = trim_timespans_player_position(&conn, "player_position", &new)?;
+    let inserted: Vec<PlayerPosition> = insert!(&conn, player_positions::table, new)?;
     //inserted.append(&mut trimmed);
     Ok(inserted)
 }
 
 pub async fn insert_team_players(
-    conn: &PgConnection,
+    conn: PgConn,
     new: Vec<ApiTeamPlayer>,
 ) -> Result<Vec<TeamPlayer>, diesel::result::Error> {
     use crate::schema::team_players;
     // trim_timespans(conn, "team_name", t.team_id, new_timespan)
     let num_entries = new.len();
-    let trimmed: Vec<_> = trim_timespans_team_player(conn, "team_player", &new)?;
-    let inserted: Vec<TeamPlayer> = insert!(conn, team_players::table, new)?;
+    let trimmed: Vec<_> = trim_timespans_team_player(&conn, "team_player", &new)?;
+    let inserted: Vec<TeamPlayer> = insert!(&conn, team_players::table, new)?;
     //inserted.append(&mut trimmed);
     Ok(inserted)
 }

@@ -38,9 +38,9 @@ impl WSHandler<subscriptions::Subscriptions> for A{
             "sub_teams" => sub_teams(req, conn, ws_conns, user_ws_id).await,
             "insert_competitions" => insert_competitions(req, conn, ws_conns).await,
             "update_competitions" => update_competitions(req, conn, ws_conns).await,
-            //"insert_series" => insert_series(req, conn, ws_conns).await,
+            "insert_series" => insert_series(req, conn, ws_conns).await,
             "update_series" => update_series(req, conn, ws_conns).await,
-            //"insert_matches" => insert_matches(req, conn, ws_conns).await,
+            "insert_matches" => insert_matches(req, conn, ws_conns).await,
             "update_matches" => update_matches(req, conn, ws_conns).await,
             "insert_team_series_results" => insert_team_series_results(req, conn, ws_conns).await,
             "update_team_series_results" => update_team_series_results(req, conn, ws_conns).await,
@@ -52,10 +52,10 @@ impl WSHandler<subscriptions::Subscriptions> for A{
             "update_teams" => update_teams(req, conn, ws_conns).await,
             "insert_players" => insert_players(req, conn, ws_conns).await,
             "update_players" => update_players(req, conn, ws_conns).await,
-            //"insert_team_players" => insert_team_players(req, conn, ws_conns).await,
-            //"insert_team_names" => insert_team_names(req, conn, ws_conns).await,
-            //"insert_player_names" => insert_player_names(req, conn, ws_conns).await,
-            //"insert_player_positions" => insert_player_positions(req, conn, ws_conns).await,
+            "insert_team_players" => insert_team_players(req, conn, ws_conns).await,
+            "insert_team_names" => insert_team_names(req, conn, ws_conns).await,
+            "insert_player_names" => insert_player_names(req, conn, ws_conns).await,
+            "insert_player_positions" => insert_player_positions(req, conn, ws_conns).await,
             uwotm8 => Err(Box::new(InvalidRequestError{description: uwotm8.to_string()}))
         }
     }

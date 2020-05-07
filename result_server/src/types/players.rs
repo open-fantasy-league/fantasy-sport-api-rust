@@ -132,7 +132,7 @@ impl ApiPlayer{
         .collect_vec()
     }
 
-    pub async fn insert(conn: PgConn, players: Vec<Self>) -> Result<bool, diesel::result::Error>{
+    pub fn insert(conn: PgConn, players: Vec<Self>) -> Result<bool, diesel::result::Error>{
         let names: Vec<PlayerName> = players.clone().into_iter().flat_map(|t| {
             let player_id = t.player_id;
             t.names.into_iter().map(|n| {

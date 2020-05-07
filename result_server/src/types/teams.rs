@@ -128,7 +128,7 @@ impl ApiTeam{
         .collect_vec()
     }
 
-    pub async fn insert(conn: PgConn, teams: Vec<Self>) -> Result<bool, diesel::result::Error>{
+    pub fn insert(conn: PgConn, teams: Vec<Self>) -> Result<bool, diesel::result::Error>{
         let names: Vec<TeamName> = teams.clone().into_iter().flat_map(|t| {
             let team_id = t.team_id;
             t.names.into_iter().map(|n| {

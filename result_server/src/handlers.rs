@@ -71,7 +71,7 @@ pub async fn insert_series(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnec
     // Need to clone comps, so that can still publish it, after has been "consumed" adding to db.
     // It's possible to just borrow it in db-insertion,
     // but it leads to having to specify lifetimes on nearly EVERYTHING. Not worth the hassle unless need perf
-    ApiSeriesNew::insert(&conn, deserialized.clone()).await?;
+    ApiSeriesNew::insert(&conn, deserialized.clone())?;
    // let comps: Vec<Competition> = insert!(&conn, schema::competitions::table, deserialized)?;
     // assume anything upserted the user wants to subscribe to
     // TODO ideally would return response before awaiting publishing going out
@@ -105,7 +105,7 @@ pub async fn insert_matches(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConne
     // Need to clone comps, so that can still publish it, after has been "consumed" adding to db.
     // It's possible to just borrow it in db-insertion,
     // but it leads to having to specify lifetimes on nearly EVERYTHING. Not worth the hassle unless need perf
-    ApiMatchNew::insert(&conn, deserialized.clone()).await?;
+    ApiMatchNew::insert(&conn, deserialized.clone())?;
    // let comps: Vec<Competition> = insert!(&conn, schema::competitions::table, deserialized)?;
     // assume anything upserted the user wants to subscribe to
     // TODO ideally would return response before awaiting publishing going out
@@ -214,7 +214,7 @@ pub async fn update_player_results(req: WSReq<'_>, conn: PgConn, ws_conns: &mut 
 pub async fn insert_teams(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
     let deserialized: Vec<ApiTeam> = serde_json::from_value(req.data)?;
     println!("{:?}", &deserialized);
-    ApiTeam::insert(conn, deserialized.clone()).await?;
+    ApiTeam::insert(conn, deserialized.clone())?;
     publish_for_teams::<ApiTeam>(ws_conns, &deserialized).await;
     let resp_msg = WSMsgOut::resp(req.message_id, req.method, deserialized);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
@@ -235,7 +235,7 @@ pub async fn update_teams(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnect
 pub async fn insert_players(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
     let deserialized: Vec<ApiPlayer> = serde_json::from_value(req.data)?;
     println!("{:?}", &deserialized);
-    ApiPlayer::insert(conn, deserialized.clone()).await?;
+    ApiPlayer::insert(conn, deserialized.clone())?;
     publish_for_teams::<ApiPlayer>(ws_conns, &deserialized).await;
     let resp_msg = WSMsgOut::resp(req.message_id, req.method, deserialized);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
@@ -256,7 +256,7 @@ pub async fn update_players(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConne
 pub async fn insert_team_players(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
     let deserialized: Vec<ApiTeamPlayer> = serde_json::from_value(req.data)?;
     println!("{:?}", &deserialized);
-    let out = db::insert_team_players(&conn, deserialized).await?;
+    let out = db::insert_team_players(conn, deserialized).await?;
     publish_for_teams::<TeamPlayer>(ws_conns, &out).await;
     let resp_msg = WSMsgOut::resp(req.message_id, req.method, out);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
@@ -265,7 +265,7 @@ pub async fn insert_team_players(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WS
 pub async fn insert_team_names(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
     let deserialized: Vec<ApiTeamNameNew> = serde_json::from_value(req.data)?;
     println!("{:?}", &deserialized);
-    let out = db::insert_team_names(&conn, deserialized).await?;
+    let out = db::insert_team_names(conn, deserialized).await?;
     publish_for_teams::<TeamName>(ws_conns, &out).await;
     let resp_msg = WSMsgOut::resp(req.message_id, req.method, out);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
@@ -274,7 +274,7 @@ pub async fn insert_team_names(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSCo
 pub async fn insert_player_names(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
     let deserialized: Vec<ApiPlayerNameNew> = serde_json::from_value(req.data)?;
     println!("{:?}", &deserialized);
-    let out = db::insert_player_names(&conn, deserialized).await?;
+    let out = db::insert_player_names(conn, deserialized).await?;
     publish_for_teams::<PlayerName>(ws_conns, &out).await;
     let resp_msg = WSMsgOut::resp(req.message_id, req.method, out);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
@@ -283,7 +283,7 @@ pub async fn insert_player_names(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WS
 pub async fn insert_player_positions(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
     let deserialized: Vec<ApiPlayerPositionNew> = serde_json::from_value(req.data)?;
     println!("{:?}", &deserialized);
-    let out = db::insert_player_positions(&conn, deserialized).await?;
+    let out = db::insert_player_positions(conn, deserialized).await?;
     publish_for_teams::<PlayerPosition>(ws_conns, &out).await;
     let resp_msg = WSMsgOut::resp(req.message_id, req.method, out);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
