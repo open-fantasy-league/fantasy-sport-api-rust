@@ -1,4 +1,4 @@
-use crate::models::*;
+use crate::types::{leagues::*, users::*};
 use diesel::pg::expression::dsl::any;
 use diesel::pg::upsert::excluded;
 use diesel::pg::PgConnection;
@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 pub fn insert_leagues(
     conn: &PgConnection,
-    new: Vec<NewLeague>,
+    new: Vec<League>,
 ) -> Result<Vec<League>, diesel::result::Error> {
     use crate::schema::leagues::{dsl::*, table};
     // This "semi-upsert" doesnt work in postgres because it checks the inserts for null-ness, before other things,
@@ -40,7 +40,7 @@ pub fn insert_leagues(
 
 pub fn update_league(
     conn: &PgConnection,
-    new: UpdateLeague,
+    new: LeagueUpdate,
 ) -> Result<League, diesel::result::Error> {
     use crate::schema::leagues::{dsl::*, table};
     diesel::update(table).filter(league_id.eq(new.league_id))

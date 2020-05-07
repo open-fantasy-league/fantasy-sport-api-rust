@@ -11,6 +11,7 @@ mod db;
 mod schema;
 mod models;
 mod subscriptions;
+mod types;
 use subscriptions::Subscriptions;
 use async_trait::async_trait;
 
