@@ -1,8 +1,8 @@
 use uuid::Uuid;
 use std::collections::HashSet;
 use crate::WSConnection_;
-use crate::types::{leagues::*, users::*};
 use serde::Deserialize;
+use crate::publisher::Publishable;
 
 // Maybe split up subscriptions into a hashmap is better for commonising?
 pub struct Subscriptions{
@@ -30,13 +30,15 @@ pub struct ApiSubExternalUsers{
 
 #[derive(Deserialize, Debug)]
 pub struct ApiSubDrafts{
-    pub draft_ids: Option<Vec<Uuid>>,
+    pub sub_draft_ids: Option<Vec<Uuid>>,
+    pub unsub_draft_ids: Option<Vec<Uuid>>,
     pub all: Option<bool>
 }
 
 #[derive(Deserialize, Debug)]
 pub struct ApiSubLeagues{
-    pub league_ids: Option<Vec<Uuid>>,
+    pub sub_league_ids: Option<Vec<Uuid>>,
+    pub unsub_league_ids: Option<Vec<Uuid>>,
     pub all: Option<bool>
 }
 
@@ -47,9 +49,23 @@ pub async fn sub_to_leagues<'a, T: Iterator<Item = &'a Uuid>>(ws_user: &mut WSCo
     });
 }
 
+pub async fn unsub_to_leagues<'a, T: Iterator<Item = &'a Uuid>>(ws_user: &mut WSConnection_, ids: T){
+    // TODO failure handling, does it panic?
+    ids.for_each(|id| {
+        println!("Adding subscription {}", id); ws_user.subscriptions.leagues.remove(id);
+    });
+}
+
 pub async fn sub_to_drafts<'a, T: Iterator<Item = &'a Uuid>>(ws_user: &mut WSConnection_, ids: T){
     ids.for_each(|id| {
         println!("Adding subscription {}", id); ws_user.subscriptions.drafts.insert(*id);
+    });
+}
+
+pub async fn unsub_to_drafts<'a, T: Iterator<Item = &'a Uuid>>(ws_user: &mut WSConnection_, ids: T){
+    // TODO failure handling, does it panic?
+    ids.for_each(|id| {
+        println!("Adding subscription {}", id); ws_user.subscriptions.drafts.remove(id);
     });
 }
 
@@ -67,7 +83,7 @@ pub async fn sub_to_external_users(ws_user: &mut WSConnection_, toggle: bool){
 
 
 // TODO make generic with series and matches, T and closure for competition_id? or trait for HasCompetition?
-pub fn subscribed_leagues<'a, T: Subscribable>(subscriptions: &Subscriptions, all: &'a Vec<T>) -> Vec<&'a T>{
+pub fn subscribed_leagues<'a, T: Publishable>(subscriptions: &Subscriptions, all: &'a Vec<T>) -> Vec<&'a T>{
     match subscriptions.all_leagues{
         // turn from &Vec<Competition> into Vec<&Competition>
         // Passing in &Vec to func, so that publish and send response can 'share' competition. i.e. publishing doesnt consume it.
@@ -81,7 +97,7 @@ pub fn subscribed_leagues<'a, T: Subscribable>(subscriptions: &Subscriptions, al
     }
 }
 
-pub fn subscribed_drafts<'a, T: Subscribable>(subscriptions: &Subscriptions, all: &'a Vec<T>) -> Vec<&'a T>{
+pub fn subscribed_drafts<'a, T: Publishable>(subscriptions: &Subscriptions, all: &'a Vec<T>) -> Vec<&'a T>{
     match subscriptions.all_drafts{
         // turn from &Vec<Competition> into Vec<&Competition>
         // Passing in &Vec to func, so that publish and send response can 'share' competition. i.e. publishing doesnt consume it.

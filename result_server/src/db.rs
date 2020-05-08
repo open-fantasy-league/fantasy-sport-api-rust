@@ -9,8 +9,7 @@ use diesel::{sql_query, sql_types};
 use uuid::Uuid;
 use frunk::labelled::transform_from;
 use itertools::{izip, Itertools};
-use warp_ws_server::utils::my_timespan_format::DieselTimespan;
-use warp_ws_server::PgConn;
+use diesel_utils::{PgConn, my_timespan_format::DieselTimespan};
 use crate::types::{competitions::*, series::*, matches::*, teams::*, results::*, players::*};
 use crate::schema;
 

@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use crate::db;
 use std::collections::HashMap;
 use warp_ws_server::*;
-use warp_ws_server::utils::my_timespan_format::{self, DieselTimespan};
+use diesel_utils::{PgConn, my_timespan_format::{self, DieselTimespan}};
 use frunk::labelled::transform_from;
 use crate::WSConnections_;
 use uuid::Uuid;
@@ -34,7 +34,7 @@ pub async fn insert_competitions(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WS
     // but it leads to having to specify lifetimes on nearly EVERYTHING. Not worth the hassle unless need perf
     ApiCompetition::insert(conn, comps.clone()).await?;
     // TODO ideally would return response before awaiting publishing going out
-    publish_competitions(ws_conns, &comps).await;
+    publish_for_comp::<ApiCompetition>(ws_conns, &comps, comps.iter().map(|c| (c.competition_id, c.competition_id)).collect()).await;
     println!("{:?}", &comps);
     let resp_msg = WSMsgOut::resp(req.message_id, req.method, comps);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
@@ -427,11 +427,11 @@ pub async fn sub_competitions(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSCon
     if let Some(toggle) = deserialized.all{
         sub_to_all_competitions(ws_user, toggle).await;
     }
-    else if let Some(competition_ids) = deserialized.competition_ids{
+    if let Some(competition_ids) = deserialized.sub_competition_ids{
         sub_to_competitions(ws_user, competition_ids.iter()).await;
     }
-    else{
-        return Err(Box::new(InvalidRequestError{description: String::from("sub_competitions must specify either 'all' or 'competition_ids'")}))
+    if let Some(competition_ids) = deserialized.unsub_competition_ids{
+        unsub_to_competitions(ws_user, competition_ids.iter()).await;
     }
     let all_competitions = db::get_all_competitions(&conn)?;
     let subscribed_comps: Vec<&Competition> = subscribed_comps::<Competition>(&ws_user.subscriptions, &all_competitions);
@@ -449,6 +449,9 @@ pub async fn sub_teams(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnection
     let ws_user = hmmmm.get_mut(&user_ws_id).ok_or("Websocket gone away")?;
     println!("{:?}", &deserialized);
     sub_to_teams(ws_user, deserialized.toggle).await;
+
+    // TODO kind of weird code-duping in match arms.
+    // would be nice to just return data, but either have to make an enum, or Box<dyn Serialize?> (couldnt even get that to work)
     let resp = match deserialized.toggle{
         true => {
             let team_out = db::get_all_teams(&conn).map(|rows| ApiTeam::from_rows(rows))?;

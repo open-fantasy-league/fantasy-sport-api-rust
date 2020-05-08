@@ -6,7 +6,7 @@ CREATE TABLE leagues(
     squad_size INT NOT NULL,
     competition_id UUID NOT NULL,
     meta JSONB NOT NULL DEFAULT '{}',
-    teams_per_draft NOT NULL,
+    teams_per_draft INT NOT NULL,
     max_players_per_team INT NOT NULL DEFAULT 256,
     max_players_per_position INT NOT NULL DEFAULT 256
 );
@@ -14,7 +14,7 @@ CREATE TABLE leagues(
 CREATE TABLE periods(
     period_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     league_id UUID NOT NULL REFERENCES leagues,
-    name String NOT NULL,
+    name TEXT NOT NULL,
     timespan TSTZRANGE NOT NULL DEFAULT tstzrange(now(), 'infinity', '[)'),
     meta JSONB NOT NULL DEFAULT '{}',
     points_multiplier REAL NOT NULL DEFAULT 1.0
@@ -76,7 +76,7 @@ CREATE TABLE draft_choices(
 );
 
 CREATE TABLE draft_queues(
-    fantasy_team_id UUID PRIMARY KEY REFERENCES fantasy_team,
+    fantasy_team_id UUID PRIMARY KEY REFERENCES fantasy_teams,
     player_ids UUID[] NOT NULL DEFAULT ARRAY[]::uuid[]
 );
 

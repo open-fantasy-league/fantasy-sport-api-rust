@@ -9,15 +9,15 @@ table! {
 table! {
     draft_choices (draft_choice_id) {
         draft_choice_id -> Uuid,
-        draft_user_id -> Uuid,
+        team_draft_id -> Uuid,
         timespan -> Tstzrange,
         pick_id -> Nullable<Uuid>,
     }
 }
 
 table! {
-    draft_queues (user_id) {
-        user_id -> Uuid,
+    draft_queues (fantasy_team_id) {
+        fantasy_team_id -> Uuid,
         player_ids -> Array<Uuid>,
     }
 }
@@ -32,17 +32,26 @@ table! {
 }
 
 table! {
-    draft_users (draft_user_id) {
-        draft_user_id -> Uuid,
-        draft_id -> Uuid,
-        user_id -> Uuid,
+    external_users (external_user_id) {
+        external_user_id -> Uuid,
+        name -> Text,
+        meta -> Jsonb,
     }
 }
 
 table! {
-    external_users (external_user_id) {
+    fantasy_team_money (fantasy_team_id) {
+        fantasy_team_id -> Uuid,
+        money_int -> Int4,
+    }
+}
+
+table! {
+    fantasy_teams (fantasy_team_id) {
+        fantasy_team_id -> Uuid,
+        name -> Text,
+        league_id -> Uuid,
         external_user_id -> Uuid,
-        username -> Text,
         meta -> Jsonb,
     }
 }
@@ -55,9 +64,9 @@ table! {
         squad_size -> Int4,
         competition_id -> Uuid,
         meta -> Jsonb,
+        teams_per_draft -> Int4,
         max_players_per_team -> Int4,
         max_players_per_position -> Int4,
-        users_per_draft -> Int4,
     }
 }
 
@@ -75,7 +84,7 @@ table! {
 table! {
     picks (pick_id) {
         pick_id -> Uuid,
-        user_id -> Uuid,
+        fantasy_team_id -> Uuid,
         player_id -> Uuid,
         timespan -> Tstzrange,
         active -> Bool,
@@ -92,47 +101,38 @@ table! {
 }
 
 table! {
-    user_money (user_id) {
-        user_id -> Uuid,
-        money_int -> Int4,
-    }
-}
-
-table! {
-    users (user_id) {
-        user_id -> Uuid,
-        username -> Text,
-        league_id -> Uuid,
-        external_user_id -> Uuid,
-        meta -> Jsonb,
+    team_drafts (team_draft_id) {
+        team_draft_id -> Uuid,
+        draft_id -> Uuid,
+        fantasy_team_id -> Uuid,
     }
 }
 
 joinable!(commissioners -> external_users (external_user_id));
-joinable!(draft_choices -> draft_users (draft_user_id));
 joinable!(draft_choices -> picks (pick_id));
-joinable!(draft_queues -> users (user_id));
-joinable!(draft_users -> drafts (draft_id));
-joinable!(draft_users -> users (user_id));
+joinable!(draft_choices -> team_drafts (team_draft_id));
+joinable!(draft_queues -> fantasy_teams (fantasy_team_id));
 joinable!(drafts -> periods (period_id));
+joinable!(fantasy_team_money -> fantasy_teams (fantasy_team_id));
+joinable!(fantasy_teams -> external_users (external_user_id));
+joinable!(fantasy_teams -> leagues (league_id));
 joinable!(periods -> leagues (league_id));
-joinable!(picks -> users (user_id));
+joinable!(picks -> fantasy_teams (fantasy_team_id));
 joinable!(stat_multipliers -> leagues (league_id));
-joinable!(user_money -> users (user_id));
-joinable!(users -> external_users (external_user_id));
-joinable!(users -> leagues (league_id));
+joinable!(team_drafts -> drafts (draft_id));
+joinable!(team_drafts -> fantasy_teams (fantasy_team_id));
 
 allow_tables_to_appear_in_same_query!(
     commissioners,
     draft_choices,
     draft_queues,
     drafts,
-    draft_users,
     external_users,
+    fantasy_team_money,
+    fantasy_teams,
     leagues,
     periods,
     picks,
     stat_multipliers,
-    user_money,
-    users,
+    team_drafts,
 );

@@ -1,7 +1,5 @@
 use serde::{Deserialize, Serialize};
-use warp_ws_server::utils::my_timespan_format::{self, DieselTimespan};
-use warp_ws_server::utils::my_timespan_format_opt;
-use warp_ws_server::PgConn;
+use diesel_utils::{PgConn, my_timespan_format::{self, DieselTimespan}, my_timespan_format_opt};
 use crate::schema::{self, *};
 use uuid::Uuid;
 use serde_json;
@@ -112,6 +110,16 @@ impl ApiCompetition{
 impl Publishable for Competition {
     fn message_type<'a>() -> &'a str {
         "competition_update"
+    }
+
+    fn get_hierarchy_id(&self) -> Uuid {
+        self.competition_id
+    }
+}
+
+impl Publishable for ApiCompetition {
+    fn message_type<'a>() -> &'a str {
+        "competition"
     }
 
     fn get_hierarchy_id(&self) -> Uuid {

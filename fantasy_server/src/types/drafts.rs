@@ -2,51 +2,75 @@ use crate::schema::*;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use uuid::Uuid;
-use crate::subscriptions::Subscribable;
+use crate::publisher::Publishable;
+use diesel_utils::DieselTimespan;
 
 //https://kotiri.com/2018/01/31/postgresql-diesel-rust-types.html
 #[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations)]
-#[primary_key(league_id)]
-pub struct League {
-    pub league_id: Uuid,
-    pub name: String,
-    pub team_size: i32,
-    pub squad_size: i32,
-    pub competition_id: Uuid,
+#[primary_key(draft_id)]
+pub struct Draft {
+    pub draft_id: Uuid,
+    pub interval_secs: i32,
+    pub period_id: Uuid,
     pub meta: serde_json::Value,
-    pub users_per_draft: i32,
-    pub max_players_per_team: i32,
-    pub max_players_per_position: i32
 }
 
 //http://diesel.rs/guides/all-about-updates/
 #[derive(AsChangeset, Deserialize, Debug)]
-#[table_name = "leagues"]
-#[primary_key(league_id)]
-pub struct LeagueUpdate {
-    pub league_id: Uuid,
-    pub name: Option<String>,
-    // So for nullable fields, this wont let you set them back to null.
-    // It's hard to support.
-    // TODO test difference between missing fields and null in json
+#[table_name = "drafts"]
+#[primary_key(draft_id)]
+pub struct DraftUpdate {
+    pub draft_id: Uuid,
+    pub interval_secs: Option<i32>,
+    pub period_id: Option<Uuid>,
     pub meta: Option<serde_json::Value>,
-    pub team_size: Option<i32>,
-    pub squad_size: Option<i32>,
-    pub competition_id: Option<Uuid>,
-    pub users_per_draft: Option<i32>,
-    // Think bug with
-    /*
-    If you wanted to assign NULL instead, you can either specify #[changeset_options(treat_none_as_null="true")] on the struct, 
-    or you can have the field be of type Option<Option<T>>
-    */
-    // sending in "arg": null in json doesnt null it in db. It deserializes to None, rather than Some(None)
-    // simpler to just make default a big number anyway. Then zero null-handling
-    pub max_players_per_team: Option<i32>,
-    pub max_players_per_position: Option<i32>
 }
 
-impl Subscribable for League{
+#[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations)]
+#[primary_key(team_draft_id)]
+pub struct TeamDraft {
+    pub team_draft_id: Uuid,
+    pub draft_id: Uuid,
+    pub fantasy_team_id: Uuid,
+}
+
+#[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations)]
+#[primary_key(draft_choice_id)]
+pub struct DraftChoice {
+    pub draft_choice_id: Uuid,
+    pub team_draft_id: Uuid,
+    pub timespan: DieselTimespan,
+    pub pick_id: Option<Uuid>,
+}
+
+#[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations)]
+#[primary_key(fantasy_team_id)]
+pub struct DraftQueue {
+    pub fantasy_team_id: Uuid,
+    pub player_ids: Vec<Uuid>,
+}
+
+
+#[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations)]
+#[primary_key(pick_id)]
+pub struct Pick {
+    pub pick_id: Uuid,
+    pub fantasy_team_id: Uuid,
+    pub player_id: Uuid,
+    pub timespan: DieselTimespan,
+    pub active: bool,
+}
+
+impl Publishable for Draft{
     fn subscription_id(&self) -> Uuid{
-        self.league_id
+        self.draft_id
+    }
+
+    fn message_type<'a>() -> &'a str{
+        "draft"
+    }
+
+    fn get_hierarchy_id(&self) -> Uuid{
+        self.draft_id
     }
 }

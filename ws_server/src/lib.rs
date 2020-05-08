@@ -6,9 +6,6 @@ use std::collections::{HashMap};
 use std::fmt;
 use std::pin::Pin;
 use warp::ws;
-mod db_pool;
-pub use db_pool::{PgPool, PgConn, pg_pool};
-pub mod utils;
 use serde::{Deserialize, Serialize};
 use async_trait::async_trait;
 // There's so many different error handling libraries to choose from
@@ -19,6 +16,15 @@ pub type BoxError = Box<dyn std::error::Error + Sync + Send + 'static>;
 // Maybe this lib should be agnostic to that, as it just focuses on a single connection
 // However not sure how to "pull stuff out of Arcs", maybe by design that wouldnt work. And wouldnt be threadsafe.
 pub type WSConnections<T> = Arc<Mutex<HashMap<Uuid, WSConnection<T>>>>;
+
+
+// TODO make PgConn and Pgpool generic
+use diesel::pg::PgConnection;
+use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
+
+
+type PgPool = Pool<ConnectionManager<PgConnection>>;
+type PgConn = PooledConnection<ConnectionManager<PgConnection>>;
 pub type WSMethod<T> = Box<dyn (Fn(WSReq, PgConn, &mut WSConnections<T>, Uuid) -> Pin<Box<dyn Future<Output=Result<String, BoxError>> + Send + Sync >>) + Send + Sync>;
 //pub type WSMethod<T> = Box<dyn Fn(WSReq, PgConn, &mut WSConnections<T>, Uuid) -> Result<String, BoxError> + Send + Sync>;
 // TODO this prob could be &str, but harder to get lifetimes to work

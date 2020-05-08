@@ -1,75 +1,13 @@
-use crate::subscriptions::subscribed_comps;
 use warp::ws;
 use std::collections::HashMap;
 use uuid::Uuid;
 use warp_ws_server::*;
 use serde::Serialize;
 use crate::WSConnections_;
-use crate::types::{competitions::*, series::*, matches::*, teams::*, results::*, players::*};
-use itertools::Itertools;
 
 pub trait Publishable {
     fn message_type<'a>() -> &'a str;
     fn get_hierarchy_id(&self) -> Uuid;
-}
-
-
-pub async fn publish_competitions(ws_conns: &mut WSConnections_, competitions: &Vec<ApiCompetition>){
-
-    for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
-        let subscribed_comps = subscribed_comps::<ApiCompetition>(&wsconn.subscriptions, competitions);
-        println!("subscribed_comps: {:?}", subscribed_comps);
-        // TODO cache in-case lots of people have same filters
-        let push_msg = WSMsgOut::push("competitions", subscribed_comps);
-        let subscribed_comps_json_r = serde_json::to_string(&push_msg);
-        match subscribed_comps_json_r.as_ref(){
-            Ok(subscribed_comps_json) => {
-                if let Err(publish) = wsconn.tx.send(Ok(ws::Message::text(subscribed_comps_json))){
-                    println!("Error publishing update {:?} to {} : {}", &subscribed_comps_json_r, uid, &publish)
-                };
-            },
-            Err(_) => println!("Error json serializing publisher update {:?} to {}", &subscribed_comps_json_r, uid)
-        };
-    };
-}
-
-pub async fn publish_series(ws_conns: &mut WSConnections_, series: &Vec<ApiSeries>, series_to_competitions: HashMap<Uuid, Uuid>){
-
-    for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
-        let subscribed  = series.iter()
-            .filter(|s| wsconn.subscriptions.competitions.contains(&series_to_competitions.get(&s.series_id).unwrap())).collect_vec();
-        println!("subscribed_series: {:?}", subscribed);
-        // TODO cache in-case lots of people have same filters
-        let push_msg = WSMsgOut::push("series", subscribed);
-        let subscribed_json_r = serde_json::to_string(&push_msg);
-        match subscribed_json_r.as_ref(){
-            Ok(subscribed_json) => {
-                if let Err(publish) = wsconn.tx.send(Ok(ws::Message::text(subscribed_json))){
-                    println!("Error publishing update {:?} to {} : {}", &subscribed_json, uid, &publish)
-                };
-            },
-            Err(_) => println!("Error json serializing publisher update {:?} to {}", &subscribed_json_r, uid)
-        };
-    };
-}
-
-pub async fn publish_matches(ws_conns: &mut WSConnections_, matches: &Vec<ApiMatch>, matches_to_competitions: HashMap<Uuid, Uuid>){
-    for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
-        let subscribed = matches.iter()
-            .filter(|x| wsconn.subscriptions.competitions.contains(&matches_to_competitions.get(&x.match_id).unwrap())).collect_vec();
-        println!("subscribed_series: {:?}", subscribed);
-        // TODO cache in-case lots of people have same filters
-        let push_msg = WSMsgOut::push("matches", subscribed);
-        let subscribed_json_r = serde_json::to_string(&push_msg);
-        match subscribed_json_r.as_ref(){
-            Ok(subscribed_json) => {
-                if let Err(publish) = wsconn.tx.send(Ok(ws::Message::text(subscribed_json))){
-                    println!("Error publishing update {:?} to {} : {}", &subscribed_json, uid, &publish)
-                };
-            },
-            Err(_) => println!("Error json serializing publisher update {:?} to {}", &subscribed_json_r, uid)
-        };
-    };
 }
 
 
@@ -85,40 +23,6 @@ pub async fn publish_for_teams<T: Publishable + Serialize + std::fmt::Debug>(ws_
                     };
                 },
                 Err(_) => println!("Error json serializing publisher update {:?} to {}", &publishables, uid)
-            };
-        }
-    };
-}
-
-pub async fn publish_players(ws_conns: &mut WSConnections_, players: &Vec<Player>){
-    // TODO This doesnt include team-names that were mutated by their name-timestamp being 
-    for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
-        if wsconn.subscriptions.teams{
-            let push_msg = WSMsgOut::push("players", players);
-            match serde_json::to_string(&push_msg).as_ref(){
-                Ok(subscribed_json) => {
-                    if let Err(publish) = wsconn.tx.send(Ok(ws::Message::text(subscribed_json))){
-                        println!("Error publishing update {:?} to {} : {}", &subscribed_json, uid, &publish)
-                    };
-                },
-                Err(_) => println!("Error json serializing publisher update {:?} to {}", &players, uid)
-            };
-        }
-    };
-}
-
-pub async fn publish_team_players(ws_conns: &mut WSConnections_, team_players: &Vec<TeamPlayer>){
-    // TODO This doesnt include team-names that were mutated by their name-timestamp being 
-    for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
-        if wsconn.subscriptions.teams{
-            let push_msg = WSMsgOut::push("players", team_players);
-            match serde_json::to_string(&push_msg).as_ref(){
-                Ok(subscribed_json) => {
-                    if let Err(publish) = wsconn.tx.send(Ok(ws::Message::text(subscribed_json))){
-                        println!("Error publishing update {:?} to {} : {}", &subscribed_json, uid, &publish)
-                    };
-                },
-                Err(_) => println!("Error json serializing publisher update {:?} to {}", &team_players, uid)
             };
         }
     };

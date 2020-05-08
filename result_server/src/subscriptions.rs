@@ -22,13 +22,20 @@ pub struct ApiSubTeams{
 }
 #[derive(Deserialize, LabelledGeneric, Debug)]
 pub struct ApiSubCompetitions{
-    pub competition_ids: Option<Vec<Uuid>>,
+    pub sub_competition_ids: Option<Vec<Uuid>>,
+    pub unsub_competition_ids: Option<Vec<Uuid>>,
     pub all: Option<bool>
 }
 
 pub async fn sub_to_competitions<'a, T: Iterator<Item = &'a Uuid>>(ws_user: &mut WSConnection_, competition_ids: T){
     competition_ids.for_each(|cid| {
         println!("Adding subscription {}", cid); ws_user.subscriptions.competitions.insert(*cid);
+    });
+}
+
+pub async fn unsub_to_competitions<'a, T: Iterator<Item = &'a Uuid>>(ws_user: &mut WSConnection_, competition_ids: T){
+    competition_ids.for_each(|cid| {
+        println!("Adding subscription {}", cid); ws_user.subscriptions.competitions.remove(cid);
     });
 }
 

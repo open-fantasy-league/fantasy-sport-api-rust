@@ -5,6 +5,7 @@ extern crate dotenv;
 use dotenv::dotenv;
 use std::env;
 use warp_ws_server;
+use diesel_utils::{pg_pool, PgConn};
 use warp::*;
 mod schema;
 mod db;
@@ -65,7 +66,7 @@ impl WSHandler<subscriptions::Subscriptions> for A{
 async fn main() {
     dotenv().ok();
     let db_url = env::var("RESULT_DB").expect("DATABASE_URL env var must be set");
-    let pool = warp_ws_server::pg_pool(db_url);
+    let pool = pg_pool(db_url);
 
     let ws_conns = warp_ws_server::ws_conns::<subscriptions::Subscriptions>();
     let ws_conns_filt = warp::any().map(move || ws_conns.clone());

@@ -6,17 +6,22 @@ use diesel_utils::*;
 use crate::schema::{self,*};
 use crate::diesel::RunQueryDsl;  // imported here so that can run db macros
 use crate::diesel::ExpressionMethods;
-use crate::types::{leagues::*};
+use crate::types::{leagues::*, users::*, drafts::*, fantasy_teams::*};
 use crate::subscriptions::*;
+use crate::publisher::*;
+use serde::{Serialize, Deserialize, de::DeserializeOwned};
 
-pub async fn insert_leagues(req: WSReq<'_>, conn: PgConn, _: &mut WSConnections_) -> Result<String, BoxError>{
+pub async fn insert_leagues(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
     let deserialized: Vec<League> = serde_json::from_value(req.data)?;
     println!("{:?}", &deserialized);
+    // TODO reduce the ridiculousness of the Values type
+    //let leagues: Vec<League> = db::insert::<League, leagues::table, diesel::insertable::OwnedBatchInsert<diesel::query_builder::ValuesClause<(_, _, _, _, _, _, _, _, _), schema::leagues::table>, schema::leagues::table>>(req, conn, leagues::table)?;
     let leagues: Vec<League> = insert!(&conn, leagues::table, deserialized)?;
-    // assume anything upserted the user wants to subscribe to
-    // TODO ideally would return response before awaiting publishing going out
-    //publish_leagues(ws_conns, &leagues).await;
     println!("{:?}", &leagues);
+    publish_for_leagues::<League>(
+        ws_conns, &leagues,
+        leagues.iter().map(|c| (c.league_id, c.league_id)).collect()
+        ).await;
     let resp_msg = WSMsgOut::resp(req.message_id, req.method, leagues);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
@@ -36,6 +41,32 @@ pub async fn update_leagues(req: WSReq<'_>, conn: PgConn, _: &mut WSConnections_
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
+pub async fn insert_periods(req: WSReq<'_>, conn: PgConn, _: &mut WSConnections_) -> Result<String, BoxError>{
+    let deserialized: Vec<Period> = serde_json::from_value(req.data)?;
+    println!("{:?}", &deserialized);
+    // TODO reduce the ridiculousness of the Values type
+    //let leagues: Vec<League> = db::insert::<League, leagues::table, diesel::insertable::OwnedBatchInsert<diesel::query_builder::ValuesClause<(_, _, _, _, _, _, _, _, _), schema::leagues::table>, schema::leagues::table>>(req, conn, leagues::table)?;
+    let leagues: Vec<Period> = insert!(&conn, periods::table, deserialized)?;
+    println!("{:?}", &leagues);
+    //publish_leagues(ws_conns, &leagues).await;
+    let resp_msg = WSMsgOut::resp(req.message_id, req.method, leagues);
+    serde_json::to_string(&resp_msg).map_err(|e| e.into())
+}
+
+pub async fn update_periods(req: WSReq<'_>, conn: PgConn, _: &mut WSConnections_) -> Result<String, BoxError>{
+    let deserialized: Vec<PeriodUpdate> = serde_json::from_value(req.data)?;
+    println!("{:?}", &deserialized);
+    let periods: Vec<Period> = conn.build_transaction().run(|| {
+        deserialized.iter().map(|c| {
+        update!(&conn, periods, period_id, c)
+    }).collect()})?;
+    // assume anything upserted the user wants to subscribe to
+    // TODO ideally would return response before awaiting publishing going out
+    //publish_leagues(ws_conns, &leagues).await;
+    let resp_msg = WSMsgOut::resp(req.message_id, req.method, periods);
+    serde_json::to_string(&resp_msg).map_err(|e| e.into())
+}
+
 // Could prob commonise the sub-methods into ws-server
 pub async fn sub_leagues(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
     let deserialized: ApiSubLeagues = serde_json::from_value(req.data)?;
@@ -47,11 +78,11 @@ pub async fn sub_leagues(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnecti
     if let Some(toggle) = deserialized.all{
         sub_to_all_leagues(ws_user, toggle).await;
     }
-    else if let Some(ids) = deserialized.league_ids{
+    if let Some(ids) = deserialized.sub_league_ids{
         sub_to_leagues(ws_user, ids.iter()).await;
     }
-    else{
-        return Err(Box::new(InvalidRequestError{description: String::from("sub_competitions must specify either 'all' or 'competition_ids'")}))
+    if let Some(ids) = deserialized.unsub_league_ids{
+        unsub_to_leagues(ws_user, ids.iter()).await;
     }
     let all = schema::leagues::table.load(&conn)?;
     let subscribed_to: Vec<&League> = subscribed_leagues::<League>(&ws_user.subscriptions, &all);
@@ -63,17 +94,20 @@ pub async fn sub_leagues(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnecti
 }
 
 pub async fn sub_drafts(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
-    let deserialized: ApiSubLeagues = serde_json::from_value(req.data)?;
+    let deserialized: ApiSubDrafts = serde_json::from_value(req.data)?;
     // let ws_user = ws_conns.lock().await.get_mut(&user_ws_id).ok_or("Webscoket gone away")?;
     // why does this need splitting into two lines?
     // ANd is it holding the lock for this whole scope? doesnt need to
     let mut hmmmm = ws_conns.lock().await;
     let ws_user = hmmmm.get_mut(&user_ws_id).ok_or("Websocket gone away")?;
     if let Some(toggle) = deserialized.all{
-        sub_to_all_leagues(ws_user, toggle).await;
+        sub_to_all_drafts(ws_user, toggle).await;
     }
-    else if let Some(ids) = deserialized.league_ids{
-        sub_to_leagues(ws_user, ids.iter()).await;
+    if let Some(ids) = deserialized.sub_draft_ids{
+        sub_to_drafts(ws_user, ids.iter()).await;
+    }
+    if let Some(ids) = deserialized.unsub_draft_ids{
+        unsub_to_drafts(ws_user, ids.iter()).await;
     }
     else{
         return Err(Box::new(InvalidRequestError{description: String::from("sub_competitions must specify either 'all' or 'competition_ids'")}))
@@ -108,33 +142,7 @@ pub async fn sub_external_users(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSC
     //         serde_json::to_string(&resp_msg).map_err(|e| e.into())
     //     }
     // };
-    let data = db::get_external_users(&conn)?;
-    let resp_msg = WSMsgOut::resp(req.message_id, req.method, data);
+    let t = db::get_users(&conn)?;
+    let resp_msg = WSMsgOut::resp(req.message_id, req.method, UsersAndCommissioners{users: t.0, commissioners: t.1});
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
-
-// pub async fn sub_competitions(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
-//     let deserialized: ApiSubCompetitions = serde_json::from_value(req.data)?;
-//     // let ws_user = ws_conns.lock().await.get_mut(&user_ws_id).ok_or("Webscoket gone away")?;
-//     // why does this need splitting into two lines?
-//     // ANd is it holding the lock for this whole scope? doesnt need to
-//     let mut hmmmm = ws_conns.lock().await;
-//     let ws_user = hmmmm.get_mut(&user_ws_id).ok_or("Websocket gone away")?;
-//     if let Some(toggle) = deserialized.all{
-//         sub_to_all_competitions(ws_user, toggle).await;
-//     }
-//     else if let Some(competition_ids) = deserialized.competition_ids{
-//         sub_to_competitions(ws_user, competition_ids.iter()).await;
-//     }
-//     else{
-//         return Err(Box::new(InvalidRequestError{description: String::from("sub_competitions must specify either 'all' or 'competition_ids'")}))
-//     }
-//     let all_competitions = db::get_all_competitions(&conn)?;
-//     let subscribed_comps: Vec<&Competition> = subscribed_comps::<Competition>(&ws_user.subscriptions, &all_competitions);
-//     let comp_rows = db::get_full_competitions(
-//         &conn, subscribed_comps.iter().map(|x| x.competition_id).collect()
-//     )?;
-//     let data = ApiCompetition::from_rows(comp_rows);
-//     let resp_msg = WSMsgOut::resp(req.message_id, req.method, data);
-//     serde_json::to_string(&resp_msg).map_err(|e| e.into())
-// }

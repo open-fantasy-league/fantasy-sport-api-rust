@@ -29,6 +29,13 @@ friday 5:
 - switch to diesel-utils
 - investigate futures.join for multi query over two awaits
 
+
+We can have 8 people drafts in groups -> 2 for later periods.
+people set bidding price (check if just single bid, or have auction). single bid is quicker/more flowing to start. max bid? what happens if bids match?
+coin-flip simple.
+if persons team reaches max squad-size, min value drops out.
+first run prob use team == squad.
+
 sat 6:
 - a draft can happen
 

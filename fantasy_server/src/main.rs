@@ -4,6 +4,7 @@ use dotenv::dotenv;
 use std::env;
 use warp::*;
 use warp_ws_server::*;
+use diesel_utils::{pg_pool, PgConn};
 use uuid::Uuid;
 mod handlers;
 use handlers::*;
@@ -11,6 +12,7 @@ mod db;
 mod schema;
 mod models;
 mod subscriptions;
+mod publisher;
 mod types;
 use subscriptions::Subscriptions;
 use async_trait::async_trait;
@@ -42,7 +44,7 @@ impl WSHandler<subscriptions::Subscriptions> for A{
 async fn main() {
     dotenv().ok();
     let db_url = env::var("FANTASY_DB").expect("DATABASE_URL env var must be set");
-    let pool = warp_ws_server::pg_pool(db_url);
+    let pool = pg_pool(db_url);
 
     let ws_conns =  warp_ws_server::ws_conns::<Subscriptions>();
     let ws_conns_filt = warp::any().map(move || ws_conns.clone());

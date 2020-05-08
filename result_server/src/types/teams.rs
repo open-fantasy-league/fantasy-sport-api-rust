@@ -1,7 +1,5 @@
 use serde::{Deserialize, Serialize};
-use warp_ws_server::utils::my_timespan_format::{self, DieselTimespan};
-use warp_ws_server::utils::my_timespan_format_opt;
-use warp_ws_server::PgConn;
+use diesel_utils::{PgConn, my_timespan_format::{self, DieselTimespan}, my_timespan_format_opt};
 use crate::schema::*;
 use uuid::Uuid;
 use serde_json;

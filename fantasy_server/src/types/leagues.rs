@@ -2,7 +2,7 @@ use crate::schema::*;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use uuid::Uuid;
-use crate::subscriptions::Subscribable;
+use crate::publisher::Publishable;
 use diesel_utils::DieselTimespan;
 
 
@@ -72,6 +72,17 @@ pub struct Period {
     pub points_multiplier: f32
 }
 
+#[derive(AsChangeset, Deserialize, Debug)]
+#[table_name = "periods"]
+#[primary_key(period_id)]
+pub struct PeriodUpdate {
+    pub period_id: Uuid,
+    pub name: Option<String>,
+    pub timespan: Option<DieselTimespan>,
+    pub meta: Option<serde_json::Value>,
+    pub points_multiplier: Option<f32>
+}
+
 #[derive(Deserialize, Serialize, Debug)]
 pub struct ApiLeague {
     pub league_id: Uuid,
@@ -99,8 +110,16 @@ impl ApiLeague{
     }
 }
 
+impl Publishable for League {
 
-impl Subscribable for League{
+    fn message_type<'a>() -> &'a str{
+        "league"
+    }
+
+    fn get_hierarchy_id(&self) -> Uuid{
+        self.league_id
+    }
+
     fn subscription_id(&self) -> Uuid{
         self.league_id
     }

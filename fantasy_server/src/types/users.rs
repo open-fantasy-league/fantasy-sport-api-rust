@@ -6,7 +6,7 @@ use uuid::Uuid;
 #[primary_key(external_user_id)]
 pub struct ExternalUser {
     pub external_user_id: Uuid,
-    pub username: String,
+    pub name: String,
     pub meta: serde_json::Value,
 }
 
@@ -16,7 +16,7 @@ pub struct ExternalUser {
 #[primary_key(external_user_id)]
 pub struct ExternalUserUpdate {
     pub external_user_id: Uuid,
-    pub username: Option<String>,
+    pub name: Option<String>,
     pub meta: Option<serde_json::Value>,
 }
 
@@ -36,4 +36,9 @@ pub struct ComissionerUpdate {
     pub commissioner_id: Uuid,
     pub external_user_id: Option<Uuid>,
     pub meta: Option<serde_json::Value>,
+}
+#[derive(Debug, Serialize)]
+pub struct UsersAndCommissioners{
+    pub users: Vec<ExternalUser>,
+    pub commissioners: Vec<Commissioner>
 }

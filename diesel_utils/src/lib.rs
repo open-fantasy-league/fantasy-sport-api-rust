@@ -2,6 +2,12 @@ pub mod db_pool;
 pub mod my_timespan_format;
 pub mod my_timespan_format_opt;
 pub use my_timespan_format::DieselTimespan;
+use diesel::pg::PgConnection;
+use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
+
+pub use db_pool::pg_pool;
+pub type PgPool = Pool<ConnectionManager<PgConnection>>;
+pub type PgConn = PooledConnection<ConnectionManager<PgConnection>>;
 
 #[macro_export]
 macro_rules! insert {
