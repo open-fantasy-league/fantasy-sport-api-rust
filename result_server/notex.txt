@@ -25,7 +25,7 @@ tuesday 4:
 
 friday 5:
 - transactions in result
-- league setup (i.e has periods, has set draft time)...oh add num_draftees per draft
+- league setup (i.e has periods, has set draft time)
 - switch to diesel-utils
 - investigate futures.join for multi query over two awaits
 

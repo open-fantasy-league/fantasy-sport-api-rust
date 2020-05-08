@@ -8,42 +8,15 @@ use diesel::RunQueryDsl;
 use diesel::{sql_query, sql_types};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
+use crate::schema::*;
+use itertools::izip;
 //use warp_ws_server::utils::my_timespan_format::DieselTimespan;
 
-pub fn insert_leagues(
-    conn: &PgConnection,
-    new: Vec<League>,
-) -> Result<Vec<League>, diesel::result::Error> {
-    use crate::schema::leagues::{dsl::*, table};
-    // This "semi-upsert" doesnt work in postgres because it checks the inserts for null-ness, before other things,
-    // so never fails the conflict check and goes into update part.
-    // For now just do full upserts. fuck it.
-    // let upsert_sql = "INSERT INTO competitions(competition_id, meta, name, timespan) VALUES (($1, $2, $3, $4), ($5, $6, $7, $8))
-    //     ON CONFLICT DO UPDATE SET meta = coalesce(excluded.meta, meta), name = coalesce(excluded.name, name), timespan = coalesce(excluded.timespan, timespan)
-    // "
-    diesel::insert_into(table)
-        .values(new)
-        .on_conflict(league_id)
-        .do_update()
-        .set((
-            meta.eq(excluded(meta)),
-            name.eq(excluded(name)),
-            team_size.eq(excluded(team_size)),
-            competition_id.eq(excluded(competition_id)),
-            squad_size.eq(excluded(squad_size)),
-            max_players_per_team.eq(excluded(max_players_per_team)),
-            max_players_per_position.eq(excluded(max_players_per_position)),
-        ))
-        //.set(new) would work for single upsert, but not bulk upsert. As the Vec doesnt impl AsChangeset
-        .get_results(conn)
-}
-
-pub fn update_league(
-    conn: &PgConnection,
-    new: LeagueUpdate,
-) -> Result<League, diesel::result::Error> {
-    use crate::schema::leagues::{dsl::*, table};
-    diesel::update(table).filter(league_id.eq(new.league_id))
-        .set(new)
-        .get_result(conn)
+pub fn get_full_leagues(conn: &PgConnection, league_ids: Vec<Uuid>) -> Result<Vec<ApiLeague>, diesel::result::Error>{
+    let leagues: Vec<League> = leagues::table.filter(leagues::dsl::league_id.eq(any(league_ids))).load::<League>(conn)?;
+    let periods = Period::belonging_to(&leagues).load::<Period>(conn)?;
+    let stats = StatMultiplier::belonging_to(&leagues).load::<StatMultiplier>(conn)?;
+    let grouped_periods = periods.grouped_by(&leagues);
+    let grouped_stats = stats.grouped_by(&leagues);
+    Ok(ApiLeague::from_rows(izip!(leagues, grouped_periods, grouped_stats).collect()))
 }

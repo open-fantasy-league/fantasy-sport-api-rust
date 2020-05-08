@@ -7,7 +7,7 @@ use crate::schema::{self,*};
 use crate::diesel::RunQueryDsl;  // imported here so that can run db macros
 use crate::diesel::ExpressionMethods;
 use crate::types::{leagues::*};
-use crate::subscriptions;
+use crate::subscriptions::*;
 
 pub async fn insert_leagues(req: WSReq<'_>, conn: PgConn, _: &mut WSConnections_) -> Result<String, BoxError>{
     let deserialized: Vec<League> = serde_json::from_value(req.data)?;
@@ -53,12 +53,62 @@ pub async fn sub_leagues(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnecti
     else{
         return Err(Box::new(InvalidRequestError{description: String::from("sub_competitions must specify either 'all' or 'competition_ids'")}))
     }
-    let all = db::get_all_leagues(&conn)?;
-    let subscribed_to: Vec<&League> = subscriptions::subscribed_leagues::<League>(&ws_user.subscriptions, &all);
-    let comp_rows = db::get_full_leagues(
+    let all = schema::leagues::table.load(&conn)?;
+    let subscribed_to: Vec<&League> = subscribed_leagues::<League>(&ws_user.subscriptions, &all);
+    let data = db::get_full_leagues(
         &conn, subscribed_to.iter().map(|x| x.competition_id).collect()
     )?;
-    let data = ApiLeague::from_rows(comp_rows);
+    let resp_msg = WSMsgOut::resp(req.message_id, req.method, data);
+    serde_json::to_string(&resp_msg).map_err(|e| e.into())
+}
+
+pub async fn sub_drafts(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
+    let deserialized: ApiSubLeagues = serde_json::from_value(req.data)?;
+    // let ws_user = ws_conns.lock().await.get_mut(&user_ws_id).ok_or("Webscoket gone away")?;
+    // why does this need splitting into two lines?
+    // ANd is it holding the lock for this whole scope? doesnt need to
+    let mut hmmmm = ws_conns.lock().await;
+    let ws_user = hmmmm.get_mut(&user_ws_id).ok_or("Websocket gone away")?;
+    if let Some(toggle) = deserialized.all{
+        sub_to_all_leagues(ws_user, toggle).await;
+    }
+    else if let Some(ids) = deserialized.league_ids{
+        sub_to_leagues(ws_user, ids.iter()).await;
+    }
+    else{
+        return Err(Box::new(InvalidRequestError{description: String::from("sub_competitions must specify either 'all' or 'competition_ids'")}))
+    }
+    let all = schema::leagues::table.load(&conn)?;
+    let subscribed_to: Vec<&League> = subscribed_leagues::<League>(&ws_user.subscriptions, &all);
+    let data = db::get_full_leagues(
+        &conn, subscribed_to.iter().map(|x| x.competition_id).collect()
+    )?;
+    let resp_msg = WSMsgOut::resp(req.message_id, req.method, data);
+    serde_json::to_string(&resp_msg).map_err(|e| e.into())
+}
+
+pub async fn sub_external_users(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
+    let deserialized: ApiSubExternalUsers = serde_json::from_value(req.data)?;
+    let mut hmmmm = ws_conns.lock().await;
+    let ws_user = hmmmm.get_mut(&user_ws_id).ok_or("Websocket gone away")?;
+    println!("{:?}", &deserialized);
+    sub_to_external_users(ws_user, deserialized.toggle).await;
+    // let resp = match deserialized.toggle{
+    //     true => {
+    //         let team_out = db::get_all_teams(&conn).map(|rows| ApiTeam::from_rows(rows))?;
+    //         let players_out = db::get_all_players(&conn).map(|rows| ApiPlayer::from_rows(rows))?;
+    //         let team_players_out = db::get_all_team_players(&conn)?;
+    //         let data = ApiTeamsAndPlayers{teams: team_out, players: players_out, team_players: team_players_out};
+    //         let resp_msg = WSMsgOut::resp(req.message_id, req.method, data);
+    //         serde_json::to_string(&resp_msg).map_err(|e| e.into())
+    //     },
+    //     false => {
+    //         let data = json!({});
+    //         let resp_msg = WSMsgOut::resp(req.message_id, req.method, data);
+    //         serde_json::to_string(&resp_msg).map_err(|e| e.into())
+    //     }
+    // };
+    let data = db::get_external_users(&conn)?;
     let resp_msg = WSMsgOut::resp(req.message_id, req.method, data);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }

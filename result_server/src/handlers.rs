@@ -13,16 +13,7 @@ use crate::schema;
 use crate::diesel::RunQueryDsl;  // imported here so that can run db macros
 use crate::diesel::ExpressionMethods;
 use crate::types::{competitions::*, series::*, teams::*, matches::*, results::*, players::*};
-
-#[derive(Deserialize, LabelledGeneric, Debug)]
-pub struct ApiSubTeams{
-    pub toggle: bool,
-}
-#[derive(Deserialize, LabelledGeneric, Debug)]
-pub struct ApiSubCompetitions{
-    pub competition_ids: Option<Vec<Uuid>>,
-    pub all: Option<bool>
-}
+use serde_json::json;
 
 // Size for Self cannot be known at compile time.... :L
 // #[async_trait]
@@ -458,13 +449,22 @@ pub async fn sub_teams(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnection
     let ws_user = hmmmm.get_mut(&user_ws_id).ok_or("Websocket gone away")?;
     println!("{:?}", &deserialized);
     sub_to_teams(ws_user, deserialized.toggle).await;
-
-    let team_out = db::get_all_teams(&conn).map(|rows| ApiTeam::from_rows(rows))?;
-    let players_out = db::get_all_players(&conn).map(|rows| ApiPlayer::from_rows(rows))?;
-    let team_players_out = db::get_all_team_players(&conn)?;
-    let data = ApiTeamsAndPlayers{teams: team_out, players: players_out, team_players: team_players_out};
-    let resp_msg = WSMsgOut::resp(req.message_id, req.method, data);
-    serde_json::to_string(&resp_msg).map_err(|e| e.into())
+    let resp = match deserialized.toggle{
+        true => {
+            let team_out = db::get_all_teams(&conn).map(|rows| ApiTeam::from_rows(rows))?;
+            let players_out = db::get_all_players(&conn).map(|rows| ApiPlayer::from_rows(rows))?;
+            let team_players_out = db::get_all_team_players(&conn)?;
+            let data = ApiTeamsAndPlayers{teams: team_out, players: players_out, team_players: team_players_out};
+            let resp_msg = WSMsgOut::resp(req.message_id, req.method, data);
+            serde_json::to_string(&resp_msg).map_err(|e| e.into())
+        },
+        false => {
+            let data = json!({});
+            let resp_msg = WSMsgOut::resp(req.message_id, req.method, data);
+            serde_json::to_string(&resp_msg).map_err(|e| e.into())
+        }
+    };
+    resp
 }
 
 // Nice idea but Deserilize complains about different liftimes

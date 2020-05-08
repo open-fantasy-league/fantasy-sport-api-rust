@@ -17,6 +17,7 @@ use async_trait::async_trait;
 
 
 pub type WSConnections_ = warp_ws_server::WSConnections<subscriptions::Subscriptions>;
+pub type WSConnection_ = warp_ws_server::WSConnection<subscriptions::Subscriptions>;
 
 struct A{
 }

@@ -57,6 +57,7 @@ table! {
         meta -> Jsonb,
         max_players_per_team -> Int4,
         max_players_per_position -> Int4,
+        users_per_draft -> Int4,
     }
 }
 
@@ -64,6 +65,7 @@ table! {
     periods (period_id) {
         period_id -> Uuid,
         league_id -> Uuid,
+        name -> Text,
         timespan -> Tstzrange,
         meta -> Jsonb,
         points_multiplier -> Float4,
@@ -85,6 +87,7 @@ table! {
         league_id -> Uuid,
         name -> Text,
         multiplier -> Float4,
+        meta -> Jsonb,
     }
 }
 

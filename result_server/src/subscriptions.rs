@@ -2,6 +2,7 @@ use crate::WSConnection_;
 use uuid::Uuid;
 use std::collections::HashSet;
 use crate::types::competitions::*;
+use serde::Deserialize;
 
 pub struct Subscriptions{
     pub teams: bool,
@@ -13,6 +14,16 @@ impl warp_ws_server::Subscriptions for Subscriptions{
     fn new() -> Subscriptions {
         Subscriptions{teams: false, competitions: HashSet::new(), all_competitions: false}
     }
+}
+
+#[derive(Deserialize, LabelledGeneric, Debug)]
+pub struct ApiSubTeams{
+    pub toggle: bool,
+}
+#[derive(Deserialize, LabelledGeneric, Debug)]
+pub struct ApiSubCompetitions{
+    pub competition_ids: Option<Vec<Uuid>>,
+    pub all: Option<bool>
 }
 
 pub async fn sub_to_competitions<'a, T: Iterator<Item = &'a Uuid>>(ws_user: &mut WSConnection_, competition_ids: T){
