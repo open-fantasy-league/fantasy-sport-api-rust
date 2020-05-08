@@ -4,12 +4,18 @@ use uuid::Uuid;
 use warp_ws_server::*;
 use serde::Serialize;
 use crate::WSConnections_;
+use diesel_utils::PgConn;
 
 pub trait Publishable {
     fn message_type<'a>() -> &'a str;
+    // hierarchy and subscription-id are kind of messy and semi-duplicating each others behaviour. can better commonise this
+    // maybe the hierarchy map method should live on here?
     fn get_hierarchy_id(&self) -> Uuid;
     fn subscription_id(&self) -> Uuid;
+    fn subscription_id_map(&self) -> HashMap<Uuid, Uuid>;
 }
+
+//let comp_and_series_ids = db::get_competition_ids_for_series(&conn, &series_ids)?;
 
 
 pub async fn publish_for_leagues<T: Publishable + Serialize + std::fmt::Debug>(ws_conns: &mut WSConnections_, publishables: &Vec<T>, id_map: HashMap<Uuid, Uuid>){

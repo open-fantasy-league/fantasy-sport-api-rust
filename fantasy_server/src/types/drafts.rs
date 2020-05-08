@@ -10,7 +10,6 @@ use diesel_utils::DieselTimespan;
 #[primary_key(draft_id)]
 pub struct Draft {
     pub draft_id: Uuid,
-    pub interval_secs: i32,
     pub period_id: Uuid,
     pub meta: serde_json::Value,
 }
@@ -21,8 +20,7 @@ pub struct Draft {
 #[primary_key(draft_id)]
 pub struct DraftUpdate {
     pub draft_id: Uuid,
-    pub interval_secs: Option<i32>,
-    pub period_id: Option<Uuid>,
+    //pub period_id: Option<Uuid>,
     pub meta: Option<serde_json::Value>,
 }
 
@@ -43,7 +41,17 @@ pub struct DraftChoice {
     pub pick_id: Option<Uuid>,
 }
 
-#[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations)]
+#[derive(AsChangeset, Deserialize, Debug)]
+#[primary_key(draft_choice_id)]
+#[table_name = "draft_choices"]
+pub struct DraftChoiceUpdate {
+    pub draft_choice_id: Uuid,
+    // think this timespan wants to be mutable, if draft rescheduled or something
+    pub timespan: Option<DieselTimespan>,
+    pub pick_id: Option<Uuid>,
+}
+
+#[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations, AsChangeset)]
 #[primary_key(fantasy_team_id)]
 pub struct DraftQueue {
     pub fantasy_team_id: Uuid,
@@ -51,15 +59,6 @@ pub struct DraftQueue {
 }
 
 
-#[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations)]
-#[primary_key(pick_id)]
-pub struct Pick {
-    pub pick_id: Uuid,
-    pub fantasy_team_id: Uuid,
-    pub player_id: Uuid,
-    pub timespan: DieselTimespan,
-    pub active: bool,
-}
 
 impl Publishable for Draft{
     fn subscription_id(&self) -> Uuid{
@@ -74,3 +73,15 @@ impl Publishable for Draft{
         self.draft_id
     }
 }
+
+// impl ApiDraft{
+//     pub fn from_rows(rows: Vec<(League, Vec<Period>, Vec<StatMultiplier>)>) -> Vec<Self>{
+//         rows.into_iter().map(|(l, periods, stats)|{
+//             Self{
+//                 league_id: l.league_id, name: l.name, team_size: l.team_size, squad_size: l.squad_size, competition_id: l.competition_id,
+//                 meta: l.meta, teams_per_draft: l.teams_per_draft, max_players_per_team: l.max_players_per_team, max_players_per_position: l.max_players_per_position,
+//                 periods: periods, stat_multipliers: stats
+//             }
+//         }).collect()
+//     }
+// }

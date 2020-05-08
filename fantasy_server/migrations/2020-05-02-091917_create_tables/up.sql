@@ -6,7 +6,6 @@ CREATE TABLE leagues(
     squad_size INT NOT NULL,
     competition_id UUID NOT NULL,
     meta JSONB NOT NULL DEFAULT '{}',
-    teams_per_draft INT NOT NULL,
     max_players_per_team INT NOT NULL DEFAULT 256,
     max_players_per_position INT NOT NULL DEFAULT 256
 );
@@ -17,7 +16,10 @@ CREATE TABLE periods(
     name TEXT NOT NULL,
     timespan TSTZRANGE NOT NULL DEFAULT tstzrange(now(), 'infinity', '[)'),
     meta JSONB NOT NULL DEFAULT '{}',
-    points_multiplier REAL NOT NULL DEFAULT 1.0
+    points_multiplier REAL NOT NULL DEFAULT 1.0,
+    teams_per_draft INT NOT NULL,
+    draft_interval_secs INT NOT NULL,
+    draft_start timestamptz NOT NULL
 );
 
 CREATE TABLE external_users(
@@ -56,8 +58,7 @@ CREATE TABLE picks(
 CREATE TABLE drafts(
     draft_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     --start timestamptz NOT NULL, Can be inferred from the first draft_choices timespan
-    interval_secs INT NOT NULL,
-    period_id UUID REFERENCES periods,
+    period_id UUID NOT NULL REFERENCES periods,
     meta JSONB NOT NULL DEFAULT '{}'
 );
 

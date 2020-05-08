@@ -47,3 +47,14 @@ pub fn get_users(conn: &PgConnection) -> Result<(Vec<ExternalUser>, Vec<Commissi
     let commissioners = commissioners::table.load::<Commissioner>(conn)?;
     Ok((external_users, commissioners))
 }
+
+pub fn get_draft_ids_for_picks(conn: &PgConnection, pick_ids: &Vec<Uuid>,
+) -> Result<Vec<(Uuid, Uuid)>, diesel::result::Error> {
+    //DraftChoice, Draft
+
+    picks::table.select((picks::dsl::pick_id, team_drafts::dsl::draft_id))
+        .filter(picks::dsl::pick_id.eq(any(pick_ids)))
+        .left_join(draft_choices::table)
+        .left_join(team_drafts::table)
+        .load(conn)
+} 

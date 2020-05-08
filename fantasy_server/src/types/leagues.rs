@@ -4,6 +4,7 @@ use serde_json;
 use uuid::Uuid;
 use crate::publisher::Publishable;
 use diesel_utils::DieselTimespan;
+use chrono::{DateTime, Utc};
 
 
 //https://kotiri.com/2018/01/31/postgresql-diesel-rust-types.html
@@ -58,6 +59,16 @@ pub struct StatMultiplier {
     pub meta: serde_json::Value
 }
 
+#[derive(AsChangeset, Deserialize, Debug)]
+#[table_name = "stat_multipliers"]
+#[primary_key(league_id, name)]
+pub struct StatMultiplierUpdate {
+    pub league_id: Uuid,
+    pub name: String,
+    pub multiplier: Option<f32>,
+    pub meta: Option<serde_json::Value>
+}
+
 
 #[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations)]
 #[belongs_to(League)]
@@ -69,7 +80,9 @@ pub struct Period {
     pub name: String,
     pub timespan: DieselTimespan,
     pub meta: serde_json::Value,
-    pub points_multiplier: f32
+    pub points_multiplier: f32,
+    pub draft_interval_secs: i32,
+    pub draft_start: DateTime<Utc>,
 }
 
 #[derive(AsChangeset, Deserialize, Debug)]
@@ -80,7 +93,9 @@ pub struct PeriodUpdate {
     pub name: Option<String>,
     pub timespan: Option<DieselTimespan>,
     pub meta: Option<serde_json::Value>,
-    pub points_multiplier: Option<f32>
+    pub points_multiplier: Option<f32>,
+    pub draft_interval_secs: Option<i32>,
+    pub draft_start: Option<DateTime<Utc>>,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -114,6 +129,36 @@ impl Publishable for League {
 
     fn message_type<'a>() -> &'a str{
         "league"
+    }
+
+    fn get_hierarchy_id(&self) -> Uuid{
+        self.league_id
+    }
+
+    fn subscription_id(&self) -> Uuid{
+        self.league_id
+    }
+}
+
+impl Publishable for Period {
+
+    fn message_type<'a>() -> &'a str{
+        "period"
+    }
+
+    fn get_hierarchy_id(&self) -> Uuid{
+        self.period_id
+    }
+
+    fn subscription_id(&self) -> Uuid{
+        self.league_id
+    }
+}
+
+impl Publishable for StatMultiplier {
+
+    fn message_type<'a>() -> &'a str{
+        "stat_multiplier"
     }
 
     fn get_hierarchy_id(&self) -> Uuid{
