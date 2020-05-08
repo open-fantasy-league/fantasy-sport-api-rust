@@ -1,8 +1,10 @@
 use uuid::Uuid;
-use std::collections::HashSet;
 use crate::WSConnection_;
 use serde::Deserialize;
 use crate::publisher::Publishable;
+use diesel_utils::PgConn;
+use std::collections::{HashSet, HashMap};
+use warp_ws_server::BoxError;
 
 // Maybe split up subscriptions into a hashmap is better for commonising?
 pub struct Subscriptions{
@@ -83,30 +85,32 @@ pub async fn sub_to_external_users(ws_user: &mut WSConnection_, toggle: bool){
 
 
 // TODO make generic with series and matches, T and closure for competition_id? or trait for HasCompetition?
-pub fn subscribed_leagues<'a, T: Publishable>(subscriptions: &Subscriptions, all: &'a Vec<T>) -> Vec<&'a T>{
+pub fn subscribed_leagues<'a, T: Publishable>(conn: &PgConn, subscriptions: &Subscriptions, all: &'a Vec<T>) -> Result<Vec<&'a T>, BoxError>{
     match subscriptions.all_leagues{
         // turn from &Vec<Competition> into Vec<&Competition>
         // Passing in &Vec to func, so that publish and send response can 'share' competition. i.e. publishing doesnt consume it.
         // However is probably simpler to set up so can just clone it, and this func mvoes Vec, rather than ref
-        true => all.iter().collect(),
+        true => {Ok(all.iter().collect())},
         false => {
-            all.iter()
-            .filter(|c| subscriptions.leagues.contains(&c.subscription_id()))
-            .collect()
+            let id_map: HashMap<Uuid, Uuid> = T::subscription_id_map(conn, all)?;
+            Ok(all.iter()
+            .filter(|c| subscriptions.leagues.contains(&id_map.get(&c.subscription_map_key()).unwrap()))
+            .collect())
         }
     }
 }
 
-pub fn subscribed_drafts<'a, T: Publishable>(subscriptions: &Subscriptions, all: &'a Vec<T>) -> Vec<&'a T>{
+pub fn subscribed_drafts<'a, T: Publishable>(conn: &PgConn, subscriptions: &Subscriptions, all: &'a Vec<T>) -> Result<Vec<&'a T>, BoxError>{
     match subscriptions.all_drafts{
         // turn from &Vec<Competition> into Vec<&Competition>
         // Passing in &Vec to func, so that publish and send response can 'share' competition. i.e. publishing doesnt consume it.
         // However is probably simpler to set up so can just clone it, and this func mvoes Vec, rather than ref
-        true => all.iter().collect(),
+        true => Ok(all.iter().collect()),
         false => {
-            all.iter()
-            .filter(|c| subscriptions.drafts.contains(&c.subscription_id()))
-            .collect()
+            let id_map: HashMap<Uuid, Uuid> = T::subscription_id_map(conn, all)?;
+            Ok(all.iter()
+            .filter(|c| subscriptions.drafts.contains(&id_map.get(&c.subscription_map_key()).unwrap()))
+            .collect())
         }
     }
 }

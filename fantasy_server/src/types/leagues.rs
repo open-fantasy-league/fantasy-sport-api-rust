@@ -3,7 +3,10 @@ use serde::{Deserialize, Serialize};
 use serde_json;
 use uuid::Uuid;
 use crate::publisher::Publishable;
-use diesel_utils::DieselTimespan;
+use diesel_utils::{PgConn,DieselTimespan};
+use std::collections::HashMap;
+use crate::db;
+use warp_ws_server::BoxError;
 use chrono::{DateTime, Utc};
 
 
@@ -19,7 +22,6 @@ pub struct League {
     pub meta: serde_json::Value,
     pub max_players_per_team: i32,
     pub max_players_per_position: i32,
-    pub teams_per_draft: i32,
 }
 
 //http://diesel.rs/guides/all-about-updates/
@@ -36,7 +38,6 @@ pub struct LeagueUpdate {
     pub team_size: Option<i32>,
     pub squad_size: Option<i32>,
     pub competition_id: Option<Uuid>,
-    pub teams_per_draft: Option<i32>,
     // Think bug with
     /*
     If you wanted to assign NULL instead, you can either specify #[changeset_options(treat_none_as_null="true")] on the struct, 
@@ -59,7 +60,7 @@ pub struct StatMultiplier {
     pub meta: serde_json::Value
 }
 
-#[derive(AsChangeset, Deserialize, Debug)]
+#[derive(AsChangeset, Deserialize, Debug, Clone)]
 #[table_name = "stat_multipliers"]
 #[primary_key(league_id, name)]
 pub struct StatMultiplierUpdate {
@@ -81,6 +82,7 @@ pub struct Period {
     pub timespan: DieselTimespan,
     pub meta: serde_json::Value,
     pub points_multiplier: f32,
+    pub teams_per_draft: i32,
     pub draft_interval_secs: i32,
     pub draft_start: DateTime<Utc>,
 }
@@ -94,6 +96,7 @@ pub struct PeriodUpdate {
     pub timespan: Option<DieselTimespan>,
     pub meta: Option<serde_json::Value>,
     pub points_multiplier: Option<f32>,
+    pub teams_per_draft: Option<i32>,
     pub draft_interval_secs: Option<i32>,
     pub draft_start: Option<DateTime<Utc>>,
 }
@@ -106,7 +109,6 @@ pub struct ApiLeague {
     pub squad_size: i32,
     pub competition_id: Uuid,
     pub meta: serde_json::Value,
-    pub teams_per_draft: i32,
     pub max_players_per_team: i32,
     pub max_players_per_position: i32,
     pub periods: Vec<Period>,
@@ -118,7 +120,7 @@ impl ApiLeague{
         rows.into_iter().map(|(l, periods, stats)|{
             Self{
                 league_id: l.league_id, name: l.name, team_size: l.team_size, squad_size: l.squad_size, competition_id: l.competition_id,
-                meta: l.meta, teams_per_draft: l.teams_per_draft, max_players_per_team: l.max_players_per_team, max_players_per_position: l.max_players_per_position,
+                meta: l.meta, max_players_per_team: l.max_players_per_team, max_players_per_position: l.max_players_per_position,
                 periods: periods, stat_multipliers: stats
             }
         }).collect()
@@ -131,12 +133,12 @@ impl Publishable for League {
         "league"
     }
 
-    fn get_hierarchy_id(&self) -> Uuid{
+    fn subscription_map_key(&self) -> Uuid{
         self.league_id
     }
 
-    fn subscription_id(&self) -> Uuid{
-        self.league_id
+    fn subscription_id_map(conn: &PgConn, publishables: &Vec<Self>) -> Result<HashMap<Uuid, Uuid>, BoxError>{
+        Ok(publishables.iter().map(|c| (c.league_id, c.league_id)).collect())
     }
 }
 
@@ -146,12 +148,12 @@ impl Publishable for Period {
         "period"
     }
 
-    fn get_hierarchy_id(&self) -> Uuid{
-        self.period_id
+    fn subscription_map_key(&self) -> Uuid{
+        self.league_id
     }
 
-    fn subscription_id(&self) -> Uuid{
-        self.league_id
+    fn subscription_id_map(conn: &PgConn, publishables: &Vec<Self>) -> Result<HashMap<Uuid, Uuid>, BoxError>{
+        Ok(publishables.iter().map(|c| (c.league_id, c.league_id)).collect())
     }
 }
 
@@ -161,11 +163,11 @@ impl Publishable for StatMultiplier {
         "stat_multiplier"
     }
 
-    fn get_hierarchy_id(&self) -> Uuid{
+    fn subscription_map_key(&self) -> Uuid{
         self.league_id
     }
 
-    fn subscription_id(&self) -> Uuid{
-        self.league_id
+    fn subscription_id_map(conn: &PgConn, publishables: &Vec<Self>) -> Result<HashMap<Uuid, Uuid>, BoxError>{
+        Ok(publishables.iter().map(|c| (c.league_id, c.league_id)).collect())
     }
 }

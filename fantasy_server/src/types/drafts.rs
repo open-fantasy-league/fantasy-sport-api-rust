@@ -59,20 +59,21 @@ pub struct DraftQueue {
 }
 
 
+// impl Publishable for Draft {
 
-impl Publishable for Draft{
-    fn subscription_id(&self) -> Uuid{
-        self.draft_id
-    }
+//     fn message_type<'a>() -> &'a str{
+//         "draft"
+//     }
 
-    fn message_type<'a>() -> &'a str{
-        "draft"
-    }
+//     fn subscription_id(&self) -> Uuid{
+//         self.draft_id
+//     }
 
-    fn get_hierarchy_id(&self) -> Uuid{
-        self.draft_id
-    }
-}
+//     fn subscription_id_map(conn: &PgConn, publishables: &Vec<Self>) -> Result<HashMap<Uuid, Uuid>, BoxError>{
+//         let id_map = db::get_draft_ids_for_picks(&conn, &publishables.iter().map(|p| p.pick_id).collect())?;
+//         id_map.into_iter().collect()
+//     }
+// }
 
 // impl ApiDraft{
 //     pub fn from_rows(rows: Vec<(League, Vec<Period>, Vec<StatMultiplier>)>) -> Vec<Self>{

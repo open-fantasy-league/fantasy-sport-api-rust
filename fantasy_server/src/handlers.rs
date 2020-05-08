@@ -19,9 +19,8 @@ pub async fn insert_leagues(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConne
     let leagues: Vec<League> = insert!(&conn, leagues::table, deserialized)?;
     println!("{:?}", &leagues);
     publish_for_leagues::<League>(
-        ws_conns, &leagues,
-        leagues.iter().map(|c| (c.league_id, c.league_id)).collect()
-    ).await;
+        conn, ws_conns, &leagues,
+    ).await?;
     let resp_msg = WSMsgOut::resp(req.message_id, req.method, leagues);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
@@ -34,9 +33,8 @@ pub async fn update_leagues(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConne
         update!(&conn, leagues, league_id, c)
     }).collect()})?;
     publish_for_leagues::<League>(
-        ws_conns, &leagues,
-        leagues.iter().map(|c| (c.league_id, c.league_id)).collect()
-    ).await;
+        conn, ws_conns, &leagues,
+    ).await?;
     println!("{:?}", &leagues);
     let resp_msg = WSMsgOut::resp(req.message_id, req.method, leagues);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
@@ -46,9 +44,8 @@ pub async fn insert_periods(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConne
     let deserialized: Vec<Period> = serde_json::from_value(req.data)?;
     let out: Vec<Period> = insert!(&conn, periods::table, deserialized)?;
     publish_for_leagues::<Period>(
-        ws_conns, &out,
-        out.iter().map(|c| (c.period_id, c.league_id)).collect()
-    ).await;
+        conn, ws_conns, &out,
+    ).await?;
     let resp_msg = WSMsgOut::resp(req.message_id, req.method, out);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
@@ -71,9 +68,8 @@ pub async fn insert_stat_multipliers(req: WSReq<'_>, conn: PgConn, ws_conns: &mu
     let deserialized: Vec<StatMultiplier> = serde_json::from_value(req.data)?;
     let out: Vec<StatMultiplier> = insert!(&conn, stat_multipliers::table, deserialized)?;
     publish_for_leagues::<StatMultiplier>(
-        ws_conns, &out,
-        out.iter().map(|c| (c.league_id, c.league_id)).collect()
-    ).await;
+        conn, ws_conns, &out,
+    ).await?;
     let resp_msg = WSMsgOut::resp(req.message_id, req.method, out);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
@@ -82,13 +78,15 @@ pub async fn update_stat_multipliers(req: WSReq<'_>, conn: PgConn, ws_conns: &mu
     let deserialized: Vec<StatMultiplierUpdate> = serde_json::from_value(req.data)?;
     println!("{:?}", &deserialized);
     let out: Vec<StatMultiplier> = conn.build_transaction().run(|| {
-        deserialized.iter().map(|c| {
-        update!(&conn, stat_multipliers, stat_multiplier_id, c)
+        deserialized.into_iter().map(|c| {
+        // TODO using 2pkey, but is it legit that cannot change name once set?
+        // maybe should have a uuid pkey
+        // this clone a bit hacky, the macro was originally just doing UUIDs which implement copy (string name doesnt)
+        update_2pkey!(&conn, stat_multipliers, league_id, name, c.clone())
     }).collect()})?;
     publish_for_leagues::<StatMultiplier>(
-        ws_conns, &out,
-        out.iter().map(|c| (c.league_id, c.league_id)).collect()
-    ).await;
+        conn, ws_conns, &out,
+    ).await?;
     let resp_msg = WSMsgOut::resp(req.message_id, req.method, out);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
@@ -136,11 +134,7 @@ pub async fn insert_picks(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnect
     let deserialized: Vec<Pick> = serde_json::from_value(req.data)?;
     let out: Vec<Pick> = insert!(&conn, picks::table, deserialized)?;
     // TODO do draft-queues even want publishing to anyone except caller (person's queue should be private)
-    let id_map = db::get_draft_ids_for_picks(&conn, &out.iter().map(|p| p.pick_id).collect())?;
-    publish_for_drafts::<Pick>(
-        ws_conns, &out,
-        id_map.into_iter().collect()
-    ).await;
+    publish_for_drafts::<Pick>(&conn, ws_conns, &out).await;
     let resp_msg = WSMsgOut::resp(req.message_id, req.method, out);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
@@ -160,20 +154,20 @@ pub async fn insert_fantasy_teams(req: WSReq<'_>, conn: PgConn, ws_conns: &mut W
     let deserialized: Vec<FantasyTeam> = serde_json::from_value(req.data)?;
     let out: Vec<FantasyTeam> = insert!(&conn, fantasy_teams::table, deserialized)?;
     publish_for_leagues::<FantasyTeam>(
-        ws_conns, &out,
-        out.iter().map(|c| (c.league_id, c.league_id)).collect()
-    ).await;
+        conn, ws_conns, &out,
+    ).await?;
     let resp_msg = WSMsgOut::resp(req.message_id, req.method, out);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
 pub async fn update_fantasy_teams(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
-    let deserialized: Vec<FantasyTeam> = serde_json::from_value(req.data)?;
+    let deserialized: Vec<FantasyTeamUpdate> = serde_json::from_value(req.data)?;
     println!("{:?}", &deserialized);
     let out: Vec<FantasyTeam> = conn.build_transaction().run(|| {
         deserialized.iter().map(|c| {
         update!(&conn, fantasy_teams, fantasy_team_id, c)
     }).collect()})?;
+    // TODO what's the subscription for this?
     let resp_msg = WSMsgOut::resp(req.message_id, req.method, out);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
@@ -196,7 +190,7 @@ pub async fn sub_leagues(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnecti
         unsub_to_leagues(ws_user, ids.iter()).await;
     }
     let all = schema::leagues::table.load(&conn)?;
-    let subscribed_to: Vec<&League> = subscribed_leagues::<League>(&ws_user.subscriptions, &all);
+    let subscribed_to: Vec<&League> = subscribed_leagues::<League>(&conn, &ws_user.subscriptions, &all)?;
     let data = db::get_full_leagues(
         &conn, subscribed_to.iter().map(|x| x.competition_id).collect()
     )?;
@@ -224,7 +218,7 @@ pub async fn sub_drafts(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnectio
         return Err(Box::new(InvalidRequestError{description: String::from("sub_competitions must specify either 'all' or 'competition_ids'")}))
     }
     let all = schema::leagues::table.load(&conn)?;
-    let subscribed_to: Vec<&League> = subscribed_leagues::<League>(&ws_user.subscriptions, &all);
+    let subscribed_to: Vec<&League> = subscribed_leagues::<League>(&conn, &ws_user.subscriptions, &all)?;
     let data = db::get_full_leagues(
         &conn, subscribed_to.iter().map(|x| x.competition_id).collect()
     )?;

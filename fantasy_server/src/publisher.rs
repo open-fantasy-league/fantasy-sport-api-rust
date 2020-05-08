@@ -8,21 +8,19 @@ use diesel_utils::PgConn;
 
 pub trait Publishable {
     fn message_type<'a>() -> &'a str;
-    // hierarchy and subscription-id are kind of messy and semi-duplicating each others behaviour. can better commonise this
-    // maybe the hierarchy map method should live on here?
-    fn get_hierarchy_id(&self) -> Uuid;
-    fn subscription_id(&self) -> Uuid;
-    fn subscription_id_map(&self) -> HashMap<Uuid, Uuid>;
+    fn subscription_map_key(&self) -> Uuid;
+    fn subscription_id_map(conn: &PgConn, publishables: &Vec<Self>) -> Result<HashMap<Uuid, Uuid>, BoxError> where Self: Sized;
 }
 
 //let comp_and_series_ids = db::get_competition_ids_for_series(&conn, &series_ids)?;
 
 
-pub async fn publish_for_leagues<T: Publishable + Serialize + std::fmt::Debug>(ws_conns: &mut WSConnections_, publishables: &Vec<T>, id_map: HashMap<Uuid, Uuid>){
-    // TODO This doesnt include team-names that were mutated by their name-timestamp being 
+pub async fn publish_for_leagues<T: Publishable + Serialize + std::fmt::Debug>(conn: PgConn, ws_conns: &mut WSConnections_, publishables: &Vec<T>) -> Result<bool, BoxError>{
+    // TODO This doesnt include team-names that were mutated by their name-timestamp being
+    let id_map: HashMap<Uuid, Uuid> = T::subscription_id_map(&conn, publishables)?; 
     for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
         let subscribed_publishables: Vec<&T> = publishables.iter()
-            .filter(|x| wsconn.subscriptions.leagues.contains(&id_map.get(&x.get_hierarchy_id()).unwrap())).collect();
+            .filter(|x| wsconn.subscriptions.leagues.contains(&id_map.get(&x.subscription_map_key()).unwrap())).collect();
         let push_msg = WSMsgOut::push(T::message_type(), subscribed_publishables);
         let subscribed_json_r = serde_json::to_string(&push_msg);
         match subscribed_json_r.as_ref(){
@@ -34,13 +32,15 @@ pub async fn publish_for_leagues<T: Publishable + Serialize + std::fmt::Debug>(w
             Err(_) => println!("Error json serializing publisher update {:?} to {}", &subscribed_json_r, uid)
         };
     };
+    Ok(true)
 }
 
-pub async fn publish_for_drafts<T: Publishable + Serialize + std::fmt::Debug>(ws_conns: &mut WSConnections_, publishables: &Vec<T>, id_map: HashMap<Uuid, Uuid>){
-    // TODO This doesnt include team-names that were mutated by their name-timestamp being 
+pub async fn publish_for_drafts<T: Publishable + Serialize + std::fmt::Debug>(conn: &PgConn, ws_conns: &mut WSConnections_, publishables: &Vec<T>) -> Result<bool, BoxError>{
+    // TODO This doesnt include team-names that were mutated by their name-timestamp being
+    let id_map: HashMap<Uuid, Uuid> = T::subscription_id_map(conn, publishables)?;
     for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
         let subscribed_publishables: Vec<&T> = publishables.iter()
-            .filter(|x| wsconn.subscriptions.drafts.contains(&id_map.get(&x.get_hierarchy_id()).unwrap())).collect();
+            .filter(|x| wsconn.subscriptions.drafts.contains(&id_map.get(&x.subscription_map_key()).unwrap())).collect();
         let push_msg = WSMsgOut::push(T::message_type(), subscribed_publishables);
         let subscribed_json_r = serde_json::to_string(&push_msg);
         match subscribed_json_r.as_ref(){
@@ -52,4 +52,5 @@ pub async fn publish_for_drafts<T: Publishable + Serialize + std::fmt::Debug>(ws
             Err(_) => println!("Error json serializing publisher update {:?} to {}", &subscribed_json_r, uid)
         };
     };
+    Ok(true)
 }

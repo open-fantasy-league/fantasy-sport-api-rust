@@ -6,7 +6,7 @@ use diesel::RunQueryDsl;
 use diesel::{sql_query, sql_types};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
-use crate::schema::*;
+use crate::schema::{self, *};
 use itertools::izip;
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
 // use diesel_utils::PgConn;
@@ -50,11 +50,10 @@ pub fn get_users(conn: &PgConnection) -> Result<(Vec<ExternalUser>, Vec<Commissi
 
 pub fn get_draft_ids_for_picks(conn: &PgConnection, pick_ids: &Vec<Uuid>,
 ) -> Result<Vec<(Uuid, Uuid)>, diesel::result::Error> {
-    //DraftChoice, Draft
-
-    picks::table.select((picks::dsl::pick_id, team_drafts::dsl::draft_id))
+    picks::table
+    // important to inner_join between draft-choices and team-drafts (cant do innerjoin().innerjoin(), as that tries joining picks)
+        .inner_join(draft_choices::table.inner_join(team_drafts::table))
+        .select((picks::pick_id, team_drafts::draft_id))
         .filter(picks::dsl::pick_id.eq(any(pick_ids)))
-        .left_join(draft_choices::table)
-        .left_join(team_drafts::table)
         .load(conn)
 } 

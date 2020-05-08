@@ -25,8 +25,7 @@ table! {
 table! {
     drafts (draft_id) {
         draft_id -> Uuid,
-        interval_secs -> Int4,
-        period_id -> Nullable<Uuid>,
+        period_id -> Uuid,
         meta -> Jsonb,
     }
 }
@@ -64,7 +63,6 @@ table! {
         squad_size -> Int4,
         competition_id -> Uuid,
         meta -> Jsonb,
-        teams_per_draft -> Int4,
         max_players_per_team -> Int4,
         max_players_per_position -> Int4,
     }
@@ -78,6 +76,9 @@ table! {
         timespan -> Tstzrange,
         meta -> Jsonb,
         points_multiplier -> Float4,
+        teams_per_draft -> Int4,
+        draft_interval_secs -> Int4,
+        draft_start -> Timestamptz,
     }
 }
 
