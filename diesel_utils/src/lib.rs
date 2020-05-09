@@ -1,7 +1,7 @@
 pub mod db_pool;
 pub mod my_timespan_format;
 pub mod my_timespan_format_opt;
-pub use my_timespan_format::DieselTimespan;
+pub use my_timespan_format::{new_dieseltimespan, DieselTimespan};
 use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
 

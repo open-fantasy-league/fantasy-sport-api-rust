@@ -8,6 +8,8 @@ use std::pin::Pin;
 use warp::ws;
 use serde::{Deserialize, Serialize};
 use async_trait::async_trait;
+mod subscriptions;
+pub use subscriptions::Subscriptions;
 // There's so many different error handling libraries to choose from
 // https://blog.yoshuawuyts.com/error-handling-survey/
 // Eventually will probably use snafu
@@ -29,9 +31,6 @@ pub type WSMethod<T> = Box<dyn (Fn(WSReq, PgConn, &mut WSConnections<T>, Uuid) -
 //pub type WSMethod<T> = Box<dyn Fn(WSReq, PgConn, &mut WSConnections<T>, Uuid) -> Result<String, BoxError> + Send + Sync>;
 // TODO this prob could be &str, but harder to get lifetimes to work
 pub type WSMethods<T> = Arc<HashMap<String, WSMethod<T>>>;
-pub trait Subscriptions {
-    fn new() -> Self;
-}
 
 pub fn ws_conns<T: Subscriptions>() -> WSConnections<T>{
     Arc::new(Mutex::new(HashMap::new()))

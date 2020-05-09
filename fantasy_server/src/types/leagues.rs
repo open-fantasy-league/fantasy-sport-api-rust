@@ -1,14 +1,14 @@
-use crate::schema::*;
-use serde::{Deserialize, Serialize};
-use serde_json;
-use uuid::Uuid;
-use crate::publisher::Publishable;
-use diesel_utils::{PgConn,DieselTimespan};
-use std::collections::HashMap;
 use crate::db;
-use warp_ws_server::BoxError;
+use crate::publisher::Publishable;
+use crate::schema::*;
 use chrono::{DateTime, Utc};
 
+use diesel_utils::{new_dieseltimespan, DieselTimespan, PgConn};
+use serde::{Deserialize, Serialize};
+use serde_json;
+use std::collections::HashMap;
+use uuid::Uuid;
+use warp_ws_server::BoxError;
 
 //https://kotiri.com/2018/01/31/postgresql-diesel-rust-types.html
 #[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations)]
@@ -40,13 +40,13 @@ pub struct LeagueUpdate {
     pub competition_id: Option<Uuid>,
     // Think bug with
     /*
-    If you wanted to assign NULL instead, you can either specify #[changeset_options(treat_none_as_null="true")] on the struct, 
+    If you wanted to assign NULL instead, you can either specify #[changeset_options(treat_none_as_null="true")] on the struct,
     or you can have the field be of type Option<Option<T>>
     */
     // sending in "arg": null in json doesnt null it in db. It deserializes to None, rather than Some(None)
     // simpler to just make default a big number anyway. Then zero null-handling
     pub max_players_per_team: Option<i32>,
-    pub max_players_per_position: Option<i32>
+    pub max_players_per_position: Option<i32>,
 }
 
 #[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations)]
@@ -57,7 +57,7 @@ pub struct StatMultiplier {
     pub league_id: Uuid,
     pub name: String,
     pub multiplier: f32,
-    pub meta: serde_json::Value
+    pub meta: serde_json::Value,
 }
 
 #[derive(AsChangeset, Deserialize, Debug, Clone)]
@@ -67,9 +67,8 @@ pub struct StatMultiplierUpdate {
     pub league_id: Uuid,
     pub name: String,
     pub multiplier: Option<f32>,
-    pub meta: Option<serde_json::Value>
+    pub meta: Option<serde_json::Value>,
 }
-
 
 #[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations)]
 #[belongs_to(League)]
@@ -85,6 +84,22 @@ pub struct Period {
     pub teams_per_draft: i32,
     pub draft_interval_secs: i32,
     pub draft_start: DateTime<Utc>,
+}
+
+impl Period {
+    pub fn test() -> Self {
+        Self {
+            period_id: Uuid::new_v4(),
+            league_id: Uuid::new_v4(),
+            name: "Test".to_string(),
+            timespan: new_dieseltimespan(Utc::now(), Utc::now()),
+            meta: serde_json::json!({}),
+            points_multiplier: 1.0,
+            teams_per_draft: 5,
+            draft_interval_secs: 10,
+            draft_start: Utc::now(),
+        }
+    }
 }
 
 #[derive(AsChangeset, Deserialize, Debug)]
@@ -115,59 +130,81 @@ pub struct ApiLeague {
     pub stat_multipliers: Vec<StatMultiplier>,
 }
 
-impl ApiLeague{
-    pub fn from_rows(rows: Vec<(League, Vec<Period>, Vec<StatMultiplier>)>) -> Vec<Self>{
-        rows.into_iter().map(|(l, periods, stats)|{
-            Self{
-                league_id: l.league_id, name: l.name, team_size: l.team_size, squad_size: l.squad_size, competition_id: l.competition_id,
-                meta: l.meta, max_players_per_team: l.max_players_per_team, max_players_per_position: l.max_players_per_position,
-                periods: periods, stat_multipliers: stats
-            }
-        }).collect()
+impl ApiLeague {
+    pub fn from_rows(rows: Vec<(League, Vec<Period>, Vec<StatMultiplier>)>) -> Vec<Self> {
+        rows.into_iter()
+            .map(|(l, periods, stats)| Self {
+                league_id: l.league_id,
+                name: l.name,
+                team_size: l.team_size,
+                squad_size: l.squad_size,
+                competition_id: l.competition_id,
+                meta: l.meta,
+                max_players_per_team: l.max_players_per_team,
+                max_players_per_position: l.max_players_per_position,
+                periods: periods,
+                stat_multipliers: stats,
+            })
+            .collect()
     }
 }
 
 impl Publishable for League {
-
-    fn message_type<'a>() -> &'a str{
+    fn message_type<'a>() -> &'a str {
         "league"
     }
 
-    fn subscription_map_key(&self) -> Uuid{
+    fn subscription_map_key(&self) -> Uuid {
         self.league_id
     }
 
-    fn subscription_id_map(conn: &PgConn, publishables: &Vec<Self>) -> Result<HashMap<Uuid, Uuid>, BoxError>{
-        Ok(publishables.iter().map(|c| (c.league_id, c.league_id)).collect())
+    fn subscription_id_map(
+        conn: &PgConn,
+        publishables: &Vec<Self>,
+    ) -> Result<HashMap<Uuid, Uuid>, BoxError> {
+        Ok(publishables
+            .iter()
+            .map(|c| (c.league_id, c.league_id))
+            .collect())
     }
 }
 
 impl Publishable for Period {
-
-    fn message_type<'a>() -> &'a str{
+    fn message_type<'a>() -> &'a str {
         "period"
     }
 
-    fn subscription_map_key(&self) -> Uuid{
+    fn subscription_map_key(&self) -> Uuid {
         self.league_id
     }
 
-    fn subscription_id_map(conn: &PgConn, publishables: &Vec<Self>) -> Result<HashMap<Uuid, Uuid>, BoxError>{
-        Ok(publishables.iter().map(|c| (c.league_id, c.league_id)).collect())
+    fn subscription_id_map(
+        conn: &PgConn,
+        publishables: &Vec<Self>,
+    ) -> Result<HashMap<Uuid, Uuid>, BoxError> {
+        Ok(publishables
+            .iter()
+            .map(|c| (c.league_id, c.league_id))
+            .collect())
     }
 }
 
 impl Publishable for StatMultiplier {
-
-    fn message_type<'a>() -> &'a str{
+    fn message_type<'a>() -> &'a str {
         "stat_multiplier"
     }
 
-    fn subscription_map_key(&self) -> Uuid{
+    fn subscription_map_key(&self) -> Uuid {
         self.league_id
     }
 
-    fn subscription_id_map(conn: &PgConn, publishables: &Vec<Self>) -> Result<HashMap<Uuid, Uuid>, BoxError>{
-        Ok(publishables.iter().map(|c| (c.league_id, c.league_id)).collect())
+    fn subscription_id_map(
+        conn: &PgConn,
+        publishables: &Vec<Self>,
+    ) -> Result<HashMap<Uuid, Uuid>, BoxError> {
+        Ok(publishables
+            .iter()
+            .map(|c| (c.league_id, c.league_id))
+            .collect())
     }
 }

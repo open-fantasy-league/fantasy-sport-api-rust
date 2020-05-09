@@ -6,6 +6,10 @@ use std::collections::Bound::{self, Excluded, Included};
 
 pub type DieselTimespan = (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>);
 
+pub fn new_dieseltimespan(start: DateTime<Utc>, end: DateTime<Utc>) -> DieselTimespan{
+    (Included(start), Excluded(end))
+}
+
 pub fn deserialize<'de, D>(deserializer: D) -> Result<DieselTimespan, D::Error>
 where
     D: Deserializer<'de>,
@@ -23,9 +27,7 @@ where
         // rather than having to map it.....but dont know how
         Err("Must specify start and end of timespan. I.e. \"timespan\": [\"2019-08-15T17:41:18+00:00\", \"2019-08-15T17:41:18+00:00\"]").map_err(de::Error::custom)
     } else {
-        let start = parts[0];
-        let end = parts[1];
-        Ok((Included(start), Excluded(end)))
+        Ok(new_dieseltimespan(parts[0], parts[1]))
     }
 }
 

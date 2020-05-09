@@ -1,9 +1,10 @@
+use crate::publisher::Publishable;
 use crate::schema::*;
+use diesel_utils::DieselTimespan;
+use frunk::LabelledGeneric;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use uuid::Uuid;
-use crate::publisher::Publishable;
-use diesel_utils::DieselTimespan;
 
 //https://kotiri.com/2018/01/31/postgresql-diesel-rust-types.html
 #[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations)]
@@ -12,6 +13,18 @@ pub struct Draft {
     pub draft_id: Uuid,
     pub period_id: Uuid,
     pub meta: serde_json::Value,
+}
+
+impl Draft {
+    pub fn new(period_id: Uuid) -> Self {
+        let meta = serde_json::json!({});
+        let draft_id = Uuid::new_v4();
+        Self {
+            draft_id,
+            period_id,
+            meta,
+        }
+    }
 }
 
 //http://diesel.rs/guides/all-about-updates/
@@ -32,13 +45,57 @@ pub struct TeamDraft {
     pub fantasy_team_id: Uuid,
 }
 
-#[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations)]
+impl TeamDraft {
+    pub fn new(draft_id: Uuid, fantasy_team_id: Uuid) -> Self {
+        let team_draft_id = Uuid::new_v4();
+        Self {
+            team_draft_id,
+            draft_id,
+            fantasy_team_id,
+        }
+    }
+}
+
+#[derive(
+    Insertable,
+    Deserialize,
+    Queryable,
+    Serialize,
+    Debug,
+    Identifiable,
+    Associations,
+    LabelledGeneric,
+)]
 #[primary_key(draft_choice_id)]
 pub struct DraftChoice {
     pub draft_choice_id: Uuid,
     pub team_draft_id: Uuid,
     pub timespan: DieselTimespan,
     pub pick_id: Option<Uuid>,
+}
+
+impl DraftChoice {
+    pub fn new(team_draft_id: Uuid, timespan: DieselTimespan) -> Self {
+        let pick_id = None;
+        let draft_choice_id = Uuid::new_v4();
+        Self {
+            draft_choice_id,
+            team_draft_id,
+            timespan,
+            pick_id,
+        }
+    }
+}
+
+impl From<ApiDraftChoice> for DraftChoice{
+    fn from(other: ApiDraftChoice) -> Self{
+        Self {
+            draft_choice_id: other.draft_choice_id,
+            team_draft_id: other.team_draft_id,
+            timespan: other.timespan,
+            pick_id: other.pick_id,
+        }
+    }
 }
 
 #[derive(AsChangeset, Deserialize, Debug)]
@@ -51,13 +108,63 @@ pub struct DraftChoiceUpdate {
     pub pick_id: Option<Uuid>,
 }
 
-#[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations, AsChangeset)]
+#[derive(
+    Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations, AsChangeset,
+)]
 #[primary_key(fantasy_team_id)]
 pub struct DraftQueue {
     pub fantasy_team_id: Uuid,
     pub player_ids: Vec<Uuid>,
 }
 
+#[derive(Serialize, Debug, LabelledGeneric, Clone)]
+pub struct ApiDraftChoice {
+    pub draft_choice_id: Uuid,
+    pub team_draft_id: Uuid,
+    pub timespan: DieselTimespan,
+    pub pick_id: Option<Uuid>,
+    pub fantasy_team_id: Uuid,
+}
+
+impl ApiDraftChoice {
+    pub fn new(fantasy_team_id: Uuid, team_draft_id: Uuid, timespan: DieselTimespan) -> Self {
+        let pick_id = None;
+        let draft_choice_id = Uuid::new_v4();
+        Self {
+            fantasy_team_id,
+            draft_choice_id,
+            team_draft_id,
+            timespan,
+            pick_id,
+        }
+    }
+
+    // pub fn to_api(&self, fantasy_team_id: Uuid) -> ApiDraftChoice {
+    //     ApiDraftChoice {
+    //         draft_choice_id: self.draft_choice_id,
+    //         team_draft_id: self.team_draft_id,
+    //         timespan: self.timespan,
+    //         pick_id: self.pick_id,
+    //         fantasy_team_id,
+    //     }
+    // }
+}
+
+// #[derive(Serialize, Debug)]
+// pub struct ApiTeamDraft {
+//     pub team_draft_id: Uuid,
+//     pub draft_id: Uuid,
+//     pub fantasy_team_id: Uuid,
+//     pub choices: Vec<DraftChoice>,
+// }
+
+#[derive(Serialize, Debug)]
+pub struct ApiDraft {
+    pub draft_id: Uuid,
+    pub period_id: Uuid,
+    pub meta: serde_json::Value,
+    pub choices: Vec<ApiDraftChoice>, //pub teams: Vec<ApiTeamDraft>,
+}
 
 // impl Publishable for Draft {
 
