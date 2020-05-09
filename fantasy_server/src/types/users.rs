@@ -38,7 +38,7 @@ pub struct ComissionerUpdate {
     pub meta: Option<serde_json::Value>,
 }
 #[derive(Debug, Serialize)]
-pub struct UsersAndCommissioners{
+pub struct UsersAndCommissioners {
     pub users: Vec<ExternalUser>,
-    pub commissioners: Vec<Commissioner>
+    pub commissioners: Vec<Commissioner>,
 }

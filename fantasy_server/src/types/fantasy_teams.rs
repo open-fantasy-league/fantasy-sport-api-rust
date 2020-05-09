@@ -1,7 +1,7 @@
 use crate::db;
 use crate::publisher::Publishable;
 use crate::schema::*;
-use diesel_utils::{DieselTimespan, PgConn};
+use diesel_utils::{DieselTimespan, PgConn, my_timespan_format};
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::collections::HashMap;
@@ -37,6 +37,7 @@ pub struct Pick {
     pub pick_id: Uuid,
     pub fantasy_team_id: Uuid,
     pub player_id: Uuid,
+    #[serde(with = "my_timespan_format")]
     pub timespan: DieselTimespan,
     pub active: bool,
 }

@@ -1,5 +1,5 @@
 use crate::schema::{self, *};
-use crate::types::{leagues::*, users::*, fantasy_teams::*};
+use crate::types::{fantasy_teams::*, leagues::*, users::*};
 use diesel::pg::expression::dsl::any;
 use diesel::prelude::*;
 use diesel::ExpressionMethods;
@@ -69,6 +69,39 @@ pub fn get_draft_ids_for_picks(
         .load(conn)
 }
 
-pub fn get_randomised_teams_for_league(conn: &PgConnection, league_id: Uuid) -> Result<Vec<FantasyTeam>, diesel::result::Error>{
-    fantasy_teams::table.load(conn)
+pub fn get_undrafted_periods(conn: &PgConnection) -> Result<Vec<Period>, diesel::result::Error> {
+    periods::table
+        .select(periods::all_columns)
+        .left_join(drafts::table)
+        .filter(drafts::draft_id.is_null())
+        .order(periods::draft_start)
+        .load::<Period>(conn)
+    //.first::<Period>(conn)
+}
+
+pub fn get_randomised_teams_for_league(
+    conn: &PgConnection,
+    league_id: Uuid,
+) -> Result<Vec<FantasyTeam>, diesel::result::Error> {
+    // Whilst order by random is expensive on huge tables, I think will only have small amount teams per league so should be fine. finger-cross
+    no_arg_sql_function!(
+        random,
+        sql_types::Integer,
+        "Represents the SQL RANDOM() function"
+    );
+    
+    fantasy_teams::table
+        .filter(schema::fantasy_teams::league_id.eq(league_id))
+        .order(random)
+        .load(conn)
+}
+
+pub fn get_league_squad_size(
+    conn: &PgConnection,
+    league_id: Uuid,
+) -> Result<i32, diesel::result::Error> {
+    schema::leagues::table
+        .select(schema::leagues::squad_size)
+        .filter(schema::leagues::league_id.eq(league_id))
+        .get_result(conn)
 }

@@ -41,10 +41,13 @@ pub async fn update_leagues(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConne
 
 pub async fn insert_periods(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
     let deserialized: Vec<Period> = serde_json::from_value(req.data)?;
+    println!("{:#?}", &deserialized);
     let out: Vec<Period> = insert!(&conn, periods::table, deserialized)?;
+    println!("{:#?}", &out);
     publish_for_leagues::<Period>(
         conn, ws_conns, &out,
     ).await?;
+    println!("postpublish");
     let resp_msg = WSMsgOut::resp(req.message_id, req.method, out);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
@@ -90,6 +93,36 @@ pub async fn update_stat_multipliers(req: WSReq<'_>, conn: PgConn, ws_conns: &mu
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
+pub async fn insert_external_users(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
+    let deserialized: Vec<ExternalUser> = serde_json::from_value(req.data)?;
+    println!("{:?}", &deserialized);
+    // TODO reduce the ridiculousness of the Values type
+    //let external_users: Vec<League> = db::insert::<League, external_users::table, diesel::insertable::OwnedBatchInsert<diesel::query_builder::ValuesClause<(_, _, _, _, _, _, _, _, _), schema::external_users::table>, schema::external_users::table>>(req, conn, external_users::table)?;
+    let external_users: Vec<ExternalUser> = insert!(&conn, external_users::table, deserialized)?;
+    println!("{:?}", &external_users);
+    // TODO external user publishing
+    // publish_for_leagues::<League>(
+    //     conn, ws_conns, &leagues,
+    // ).await?;
+    let resp_msg = WSMsgOut::resp(req.message_id, req.method, external_users);
+    serde_json::to_string(&resp_msg).map_err(|e| e.into())
+}
+
+pub async fn update_external_users(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
+    let deserialized: Vec<ExternalUserUpdate> = serde_json::from_value(req.data)?;
+    println!("{:?}", &deserialized);
+    let external_users: Vec<ExternalUser> = conn.build_transaction().run(|| {
+        deserialized.iter().map(|c| {
+        update!(&conn, external_users, external_user_id, c)
+    }).collect()})?;
+    // publish_for_leagues::<League>(
+    //     conn, ws_conns, &leagues,
+    // ).await?;
+    println!("{:?}", &external_users);
+    let resp_msg = WSMsgOut::resp(req.message_id, req.method, external_users);
+    serde_json::to_string(&resp_msg).map_err(|e| e.into())
+}
+
 pub async fn insert_draft_queues(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
     let deserialized: Vec<DraftQueue> = serde_json::from_value(req.data)?;
     let out: Vec<DraftQueue> = insert!(&conn, draft_queues::table, deserialized)?;
@@ -118,7 +151,7 @@ pub async fn update_draft_queues(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WS
 // We just update when pick has been made
 // TODO hmmm shouldnt draft-queue also be system-generated?
 //actually remove this? draft-choice should be updated by pick
-pub async fn update_draft_choice(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
+pub async fn update_draft_choices(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
     let deserialized: Vec<DraftChoiceUpdate> = serde_json::from_value(req.data)?;
     println!("{:?}", &deserialized);
     let out: Vec<DraftChoice> = conn.build_transaction().run(|| {
@@ -133,7 +166,7 @@ pub async fn insert_picks(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnect
     let deserialized: Vec<Pick> = serde_json::from_value(req.data)?;
     let out: Vec<Pick> = insert!(&conn, picks::table, deserialized)?;
     // TODO do draft-queues even want publishing to anyone except caller (person's queue should be private)
-    publish_for_drafts::<Pick>(&conn, ws_conns, &out).await;
+    publish_for_drafts::<Pick>(conn, ws_conns, &out).await?;
     let resp_msg = WSMsgOut::resp(req.message_id, req.method, out);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }

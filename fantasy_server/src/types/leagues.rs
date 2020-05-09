@@ -3,7 +3,9 @@ use crate::publisher::Publishable;
 use crate::schema::*;
 use chrono::{DateTime, Utc};
 
-use diesel_utils::{new_dieseltimespan, DieselTimespan, PgConn};
+use diesel_utils::{
+    my_timespan_format, my_timespan_format_opt, new_dieseltimespan, DieselTimespan, PgConn,
+};
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::collections::HashMap;
@@ -78,6 +80,7 @@ pub struct Period {
     pub period_id: Uuid,
     pub league_id: Uuid,
     pub name: String,
+    #[serde(with = "my_timespan_format")]
     pub timespan: DieselTimespan,
     pub meta: serde_json::Value,
     pub points_multiplier: f32,
@@ -108,6 +111,7 @@ impl Period {
 pub struct PeriodUpdate {
     pub period_id: Uuid,
     pub name: Option<String>,
+    #[serde(with = "my_timespan_format_opt")]
     pub timespan: Option<DieselTimespan>,
     pub meta: Option<serde_json::Value>,
     pub points_multiplier: Option<f32>,

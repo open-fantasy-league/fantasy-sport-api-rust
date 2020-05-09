@@ -27,7 +27,7 @@ friday 5:
 - transactions in result
 - league setup (i.e has periods, has set draft time)
 - switch to diesel-utils
-- investigate futures.join for multi query over two awaits
+- investigate futures.join for multi query over two awaits (wouldnt work as do need one query to finsih before do 2nd one)
 
 
 We can have 8 people drafts in groups -> 2 for later periods.
@@ -45,6 +45,8 @@ sat 6:
 
 sun 7: 
 - thread to process draft/advance it if no-one picks
+- commissioner seems a bit fucked
+- debug/print serde errors so can see if can grab field info https://docs.serde.rs/serde_json/struct.Error.html
 
 mon:
 - start leaderboard db/server

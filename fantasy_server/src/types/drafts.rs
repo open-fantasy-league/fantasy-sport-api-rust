@@ -1,6 +1,6 @@
 use crate::publisher::Publishable;
 use crate::schema::*;
-use diesel_utils::DieselTimespan;
+use diesel_utils::{my_timespan_format, my_timespan_format_opt, DieselTimespan};
 use frunk::LabelledGeneric;
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -70,6 +70,7 @@ impl TeamDraft {
 pub struct DraftChoice {
     pub draft_choice_id: Uuid,
     pub team_draft_id: Uuid,
+    #[serde(with = "my_timespan_format")]
     pub timespan: DieselTimespan,
     pub pick_id: Option<Uuid>,
 }
@@ -87,8 +88,8 @@ impl DraftChoice {
     }
 }
 
-impl From<ApiDraftChoice> for DraftChoice{
-    fn from(other: ApiDraftChoice) -> Self{
+impl From<ApiDraftChoice> for DraftChoice {
+    fn from(other: ApiDraftChoice) -> Self {
         Self {
             draft_choice_id: other.draft_choice_id,
             team_draft_id: other.team_draft_id,
@@ -104,6 +105,7 @@ impl From<ApiDraftChoice> for DraftChoice{
 pub struct DraftChoiceUpdate {
     pub draft_choice_id: Uuid,
     // think this timespan wants to be mutable, if draft rescheduled or something
+    #[serde(with = "my_timespan_format_opt")]
     pub timespan: Option<DieselTimespan>,
     pub pick_id: Option<Uuid>,
 }
@@ -121,6 +123,7 @@ pub struct DraftQueue {
 pub struct ApiDraftChoice {
     pub draft_choice_id: Uuid,
     pub team_draft_id: Uuid,
+    #[serde(with = "my_timespan_format")]
     pub timespan: DieselTimespan,
     pub pick_id: Option<Uuid>,
     pub fantasy_team_id: Uuid,
