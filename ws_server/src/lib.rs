@@ -156,11 +156,16 @@ pub async fn handle_ws_conn<T: Subscriptions, U: WSHandler<T>>(ws: ws::WebSocket
 async fn handle_ws_msg<T: Subscriptions, U: WSHandler<T>>(
     msg: ws::Message, conn: PgConn, ws_conns: &mut WSConnections<T>, user_ws_id: Uuid
 ) -> ws::Message{
+    dbg!(&msg);
     match msg.to_str(){
         // Can't get await inside `and_then`/`map` function chains to work properly
         Ok(msg_str) => match U::ws_req_resp(msg_str.to_string(), conn, ws_conns, user_ws_id).await{
             Ok(text) => ws::Message::text(text),
-            Err(e) => ws_error_resp(e.to_string())
+            Err(e) => {
+                dbg!(&e);
+                println!("{:?}", e.source());
+                ws_error_resp(e.to_string())
+            }
         },
         Err(_) => ws_error_resp(String::from("wtf. How does msg.to_str fail?"))
     }

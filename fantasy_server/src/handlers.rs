@@ -204,8 +204,17 @@ pub async fn update_fantasy_teams(req: WSReq<'_>, conn: PgConn, ws_conns: &mut W
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
+// impl From<serde_json::error::Error> for std::error::Error {
+//     fn from(item: serde_json::error::Error) -> Self {
+//         std::error::Error
+//     }
+// }
+
 // Could prob commonise the sub-methods into ws-server
 pub async fn sub_leagues(req: WSReq<'_>, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
+    // let deserialized: ApiSubLeagues = serde_json::from_value(req.data).map_err(|e: serde_json::error::Error|
+    //      serde::ser::Error::custom(format!("{}. line: {}, column: {}", e.to_string(), e.line(), e.column())
+    //     ))?;
     let deserialized: ApiSubLeagues = serde_json::from_value(req.data)?;
     // let ws_user = ws_conns.lock().await.get_mut(&user_ws_id).ok_or("Webscoket gone away")?;
     // why does this need splitting into two lines?
