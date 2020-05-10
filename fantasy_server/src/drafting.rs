@@ -10,6 +10,8 @@ use chrono::{DateTime, Utc, self};
 use uuid::Uuid;
 use tokio::sync::Notify;
 use tokio::time::delay_for;
+use crate::types::thisisshit::*;
+use tokio::sync::{MutexGuard, Mutex};
 use std::sync::Arc;
 use futures::join;
 use std::ops::Bound::*;
@@ -186,7 +188,7 @@ pub fn generate_drafts(
 }
 
 
-pub async fn draft_handler(pg_pool: PgPool) {
+pub async fn draft_handler(pg_pool: PgPool, teams_and_players_mut: Arc<Mutex<Option<ApiTeamsAndPlayers>>>) {
     println!("In draft builder");
     let notify = Arc::new(Notify::new());
     let notify2 = notify.clone();
@@ -207,6 +209,9 @@ pub async fn draft_handler(pg_pool: PgPool) {
             Ok(all_unchosen) => {
                 'inner: for unchosen in all_unchosen.into_iter(){
                     let (draft_choice, period, team_draft) = unchosen;
+                    //let (draft_choice) = unchosen;
+                    //let period = Period::test();
+                    //let team_draft = TeamDraft::test();
                     let raw_time = match draft_choice.timespan.1{
                         Included(x) => x,
                         Excluded(x) => x,
@@ -214,7 +219,23 @@ pub async fn draft_handler(pg_pool: PgPool) {
                     };
                     let time_to_unchosen = raw_time - Utc::now();
                     if (time_to_unchosen) < chrono::Duration::zero(){
-                        match conn.build_transaction().run(||{pick_from_queue_or_random(&conn, team_draft.fantasy_team_id, draft_choice, period.timespan)}){
+                        // match conn.build_transaction().run(||{
+                        //     pick_from_queue_or_random(
+                        //         &conn, team_draft.fantasy_team_id, draft_choice, period.timespan, period.period_id, teams_and_players_mut
+                        //     )
+                        // }){
+                        //     Ok(drafts) => {println!("TODO publish them....or could publish in the func")},
+                        //     Err(e) => println!("{:?}", e)
+                        // };
+                        //let teams_and_players: MutexGuard<Option<ApiTeamsAndPlayers>> = teams_and_players_mut.lock().await;
+                        let out = pick_from_queue_or_random(
+                            &conn, team_draft.fantasy_team_id, draft_choice, period.timespan, period.period_id,
+                            // TODO unhardcode
+                            &10u16, &5u16,
+                            &teams_and_players_mut
+                        ).await;
+                        match out
+                        {
                             Ok(drafts) => {println!("TODO publish them....or could publish in the func")},
                             Err(e) => println!("{:?}", e)
                         };
@@ -257,42 +278,105 @@ pub async fn draft_handler(pg_pool: PgPool) {
     
 }
 
-pub fn pick_from_queue_or_random(
+fn build_team_and_position_maps(teams_and_players: &ApiTeamsAndPlayers) -> (HashMap<Uuid, &String>, HashMap<Uuid, Uuid>){
+    //TODO handle different timespans
+    //TODO could probably do fancy and build as iterate. no inserts
+    let mut positions: HashMap<Uuid, &String> = HashMap::new();
+    let mut teams: HashMap<Uuid, Uuid> = HashMap::new();
+    teams_and_players.team_players.iter().for_each(|tp|{
+        teams.insert(tp.player_id, tp.team_id);
+    });
+    teams_and_players.players.iter().for_each(|player| {
+        player.positions.iter().for_each(|p|{
+            positions.insert(player.player_id, &p.position);
+        })
+    });
+    (positions, teams)
+}
+
+pub async fn pick_from_queue_or_random(
     conn: &PgConn,
     fantasy_team_id: Uuid,
     unchosen: DraftChoice,
-    belongs_to_team_for: DieselTimespan
+    belongs_to_team_for: DieselTimespan,
+    period_id: Uuid,
+    max_picks_per_team: &u16,
+    max_picks_per_position: &u16,
+    teams_and_players_mut: &Arc<Mutex<Option<ApiTeamsAndPlayers>>>
+    //teams_and_players: MutexGuard<ApiTeamsAndPlayers>
 ) -> Result<Pick, BoxError>{
+    // TODO deal with squads not just teams
     let draft_choice_id = unchosen.draft_choice_id;
     let draft_queue = db::get_draft_queue_for_choice(conn, unchosen)?;
     // If its a hashmap rather than set, can include player-info grabbed from other api.
     // use vec and set, because want fast-lookup when looping through draft queue,
     // but also need access random element if !picked
-    let valid_remaining_picks: Vec<Uuid> = vec![];
-    let valid_remaining_picks_hash: HashSet<&Uuid> = valid_remaining_picks.iter().collect();
-    // TODO do dumb then tidy
-    let mut picked = false;
-    let mut new_pick: Option<Pick> = None;
-    for pick_id in draft_queue{
-        if let Some(valid_pick_id) = valid_remaining_picks_hash.get(&pick_id){
-            let new_pick = Some(Pick{
-                pick_id: Uuid::new_v4(), fantasy_team_id: fantasy_team_id, draft_choice_id,
-                player_id: pick_id, timespan: belongs_to_team_for, active: false
+    //teams_and_players_mut
+    let valid_remaining_picks: Vec<Uuid> = db::get_valid_picks(conn, period_id)?;
+    let teams_and_players_opt: MutexGuard<Option<ApiTeamsAndPlayers>> = teams_and_players_mut.lock().await; // TODO await this
+    match *teams_and_players_opt{
+        Some(ref teams_and_players) => {
+            let (positions, teams) = build_team_and_position_maps(teams_and_players);
+            let current_team = db::get_current_picks(conn, fantasy_team_id, period_id)?;
+            let (mut position_counts, mut team_counts): (HashMap<&String, u16>, HashMap<Uuid, u16>) = (HashMap::new(), HashMap::new());
+            // TODO rust defaultdict?
+            current_team.iter().for_each(|pick_id|{
+                let (position, team) = (positions.get(&pick_id).unwrap(), teams.get(&pick_id).unwrap());
+                match position_counts.get_mut(position) {
+                    Some(v) => {
+                        *v = *v + 1;
+                    }
+                    None => {
+                        position_counts.insert(position, 1);
+                    }
+                };
+                match team_counts.get_mut(team) {
+                    Some(v) => {
+                        *v = *v + 1;
+                    }
+                    None => {
+                        team_counts.insert(*team, 1);
+                    }
+                };
             });
-            let a = vec![new_pick.unwrap()];
-            let out: Vec<Pick> = insert!(conn, schema::picks::table, a)?;
-            break
-        }
+            let banned_teams: HashSet<Uuid> = team_counts.into_iter().filter(|(_, count)| count > max_picks_per_team).map(|(team, _)| team).collect();
+            let banned_positions: HashSet<&String> = position_counts.into_iter().filter(|(_, count)| count > max_picks_per_position).map(|(pos, _)| pos).collect();
+            let valid_remaining_picks_hash: HashSet<&Uuid> = valid_remaining_picks.iter().collect();
+            // TODO do dumb then tidy
+            let mut new_pick: Option<Pick> = None;
+            for pick_id in draft_queue{
+                if let Some(valid_pick_id) = valid_remaining_picks_hash.get(&pick_id) 
+                {
+                    if (banned_positions.get(positions.get(&pick_id).unwrap()).is_none())
+                    && (banned_teams.get(teams.get(&pick_id).unwrap()).is_none())
+                    {
+                        let new_pick = Some(Pick{
+                            pick_id: Uuid::new_v4(), fantasy_team_id: fantasy_team_id, draft_choice_id,
+                            player_id: pick_id, timespan: belongs_to_team_for, active: false
+                        });
+                        let a = vec![new_pick.unwrap()];
+                        let out: Vec<Pick> = insert!(conn, schema::picks::table, a)?;
+                        break
+                    }
+                    
+                }
+            }
+            if new_pick.is_none(){
+                if let Some(random_choice) = valid_remaining_picks.choose(&mut rand::thread_rng()){
+                    new_pick = Some(Pick{
+                        pick_id: Uuid::new_v4(), fantasy_team_id: fantasy_team_id, draft_choice_id,
+                        player_id: *random_choice, timespan: belongs_to_team_for, active: false
+                    });
+                };
+            }
+            new_pick.ok_or(Box::new(NoValidPicksError{}))
+            // we dont mutate the draft-queue. because maybe they want the same queue for future drafts
+        },
+        // will this fuck up? aka not retry the choice?
+        // I think it will retry the choice as will still be classes as unchosen, 
+        // only minor problem might be that whilst iterating the unchosen, this gets populated, and so a later pick gets priority, before we outer-loop again,
+        // and come back to this....thats a good point actually, it just queries once for unchosen and then goes through, 
+        // its not like this is getting thrown back on rear of queue, it will wait until the next round of processing (could be long time), prob needs a rethink.
+        None => {println!("teams_and_players still empty"); Err(Box::new(NoValidPicksError{}))}
     }
-    if new_pick.is_none(){
-        if let Some(random_choice) = valid_remaining_picks.choose(&mut rand::thread_rng()){
-            new_pick = Some(Pick{
-                pick_id: Uuid::new_v4(), fantasy_team_id: fantasy_team_id, draft_choice_id,
-                player_id: *random_choice, timespan: belongs_to_team_for, active: false
-            });
-        };
-    }
-    new_pick.ok_or(Box::new(NoValidPicksError{}))
-    // we dont mutate the draft-queue. because maybe they want the same queue for future drafts
-
 }

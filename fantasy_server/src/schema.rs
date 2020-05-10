@@ -112,7 +112,7 @@ table! {
 }
 
 table! {
-    valid_pick_ids (period_id, player_id) {
+    valid_players (period_id, player_id) {
         period_id -> Uuid,
         player_id -> Uuid,
     }
@@ -131,7 +131,7 @@ joinable!(picks -> fantasy_teams (fantasy_team_id));
 joinable!(stat_multipliers -> leagues (league_id));
 joinable!(team_drafts -> drafts (draft_id));
 joinable!(team_drafts -> fantasy_teams (fantasy_team_id));
-joinable!(valid_pick_ids -> periods (period_id));
+joinable!(valid_players -> periods (period_id));
 
 allow_tables_to_appear_in_same_query!(
     commissioners,
@@ -146,5 +146,5 @@ allow_tables_to_appear_in_same_query!(
     picks,
     stat_multipliers,
     team_drafts,
-    valid_pick_ids,
+    valid_players,
 );

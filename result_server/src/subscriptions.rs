@@ -2,7 +2,6 @@ use crate::WSConnection_;
 use uuid::Uuid;
 use std::collections::HashSet;
 use crate::types::competitions::*;
-use serde::Deserialize;
 
 pub struct Subscriptions{
     pub teams: bool,

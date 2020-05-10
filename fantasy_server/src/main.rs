@@ -8,6 +8,7 @@ mod publisher;
 mod types;
 mod drafting;
 mod messages;
+mod result_client;
 use dotenv::dotenv;
 use std::env;
 use warp::*;
@@ -17,10 +18,13 @@ use uuid::Uuid;
 mod handlers;
 use handlers::*;
 use messages::WSReq;
-use types::{leagues::*, users::*, drafts::*, fantasy_teams::*};
+use types::{leagues::*, users::*, drafts::*, fantasy_teams::*, valid_players::*, thisisshit::ApiTeamsAndPlayers};
 use subscriptions::Subscriptions;
 use async_trait::async_trait;
 use futures::join;
+use result_client::listen_pick_results;
+use tokio::sync::Mutex;
+use std::sync::Arc;
 
 
 pub type WSConnections_ = warp_ws_server::WSConnections<subscriptions::Subscriptions>;
@@ -75,12 +79,21 @@ impl WSHandler<subscriptions::Subscriptions> for A{
 async fn main() {
     dotenv().ok();
     let db_url = env::var("FANTASY_DB").expect("DATABASE_URL env var must be set");
-    let port = env::var("FANTASY_PORT").expect("RESULT_PORT env var must be set").parse().expect("Port must be a number you lemming.");
+    let port: u16 = env::var("FANTASY_PORT").expect("FANTASY_PORT env var must be set").parse().expect("Port must be a number you lemming.");
+    let result_port: u16 = env::var("Result_PORT").expect("RESULT_PORT env var must be set").parse().expect("Port must be a number you lemming.");
+
+    let teams_and_players_mut: Arc<Mutex<Option<ApiTeamsAndPlayers>>> = Arc::new(Mutex::new(None));
     let pool = pg_pool(db_url);
+    // Is PgPool thread-safe? its not behind an arc...does it need to be?
+    // maybe the clone is just make 3 seaprate pg-pool which is kind of fine.
     let draft_pgpool = pool.clone();
-    let draft_handler = tokio::task::spawn(async move {
+    let draft_handler_pool = pool.clone();
+    let draft_builder = tokio::task::spawn(async move {
         drafting::draft_builder(draft_pgpool).await
     });
+    // let draft_handler = tokio::task::spawn(async move {
+    //     drafting::draft_builder(draft_pgpool).await
+    // });
 
     let ws_conns =  warp_ws_server::ws_conns::<Subscriptions>();
     let ws_conns_filt = warp::any().map(move || ws_conns.clone());
@@ -92,5 +105,9 @@ async fn main() {
         });
     //let server = warp::serve(ws_router).run(([127, 0, 0, 1], 3030));
     //draft_handler.await.map_err(|e|println!("{}", e.to_string()));
-    join!(draft_handler, warp::serve(ws_router).run(([127, 0, 0, 1], port)));
+    join!(
+        listen_pick_results(result_port, teams_and_players_mut.clone()),
+        drafting::draft_handler(draft_handler_pool, teams_and_players_mut.clone()),
+        draft_builder,
+        warp::serve(ws_router).run(([127, 0, 0, 1], port)));
 }

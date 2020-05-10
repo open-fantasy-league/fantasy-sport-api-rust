@@ -54,6 +54,14 @@ impl TeamDraft {
             fantasy_team_id,
         }
     }
+
+    pub fn test() -> Self {
+        Self {
+            team_draft_id: Uuid::new_v4(),
+            fantasy_team_id: Uuid::new_v4(),
+            draft_id: Uuid::new_v4(),
+        }
+    }
 }
 
 #[derive(

@@ -1,5 +1,5 @@
 use crate::schema::{self, *};
-use crate::types::{fantasy_teams::*, leagues::*, users::*, drafts::*};
+use crate::types::{fantasy_teams::*, leagues::*, users::*, drafts::*, valid_players::*};
 use diesel::pg::expression::dsl::any;
 use diesel::prelude::*;
 use diesel::ExpressionMethods;
@@ -79,8 +79,19 @@ pub fn get_undrafted_periods(conn: &PgConnection) -> Result<Vec<Period>, diesel:
     //.first::<Period>(conn)
 }
 
+pub fn get_valid_picks(conn: &PgConnection, period_id: Uuid) -> Result<Vec<Uuid>, diesel::result::Error> {
+    valid_players::table.select(valid_players::player_id).filter(valid_players::period_id.eq(period_id)).load(conn)
+} 
+
 pub fn get_unchosen_draft_choices(conn: &PgConnection) -> Result<Vec<(DraftChoice, Period, TeamDraft)>, diesel::result::Error> {
-    Ok(vec![])
+    // So this would join every row, including old rows, then filter most of them out.
+    // Should check postgresql optimises nicely.
+
+    draft_choices::table
+    .left_join(picks::table).filter(picks::pick_id.is_null())
+    .inner_join(team_drafts::table.inner_join(drafts::table.inner_join(periods::table)))
+    .select((draft_choices::all_columns, periods::all_columns, team_drafts::all_columns))
+    .load(conn)
 } 
 
 pub fn get_randomised_teams_for_league(
@@ -118,4 +129,11 @@ pub fn get_draft_queue_for_choice(conn: &PgConnection, unchosen: DraftChoice) ->
     .filter(schema::team_drafts::team_draft_id.eq(unchosen.team_draft_id))
     .select(schema::draft_queues::player_ids).get_result(conn)
 
+}
+
+pub fn get_current_picks(conn: &PgConnection, fantasy_team_id: Uuid, period_id: Uuid) -> Result<Vec<Uuid>, diesel::result::Error>{
+    picks::table.select(picks::pick_id).filter(picks::fantasy_team_id.eq(fantasy_team_id))
+    .inner_join(draft_choices::table.inner_join(team_drafts::table.inner_join(drafts::table)))
+    .filter(drafts::period_id.eq(period_id))
+    .load(conn)
 }

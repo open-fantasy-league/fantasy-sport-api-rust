@@ -24,7 +24,7 @@ CREATE TABLE periods(
     draft_start timestamptz NOT NULL
 );
 
-CREATE TABLE valid_pick_ids(
+CREATE TABLE valid_players(
     period_id UUID NOT NULL REFERENCES periods,
     player_id UUID NOT NULL,
     PRIMARY KEY(period_id, player_id)
