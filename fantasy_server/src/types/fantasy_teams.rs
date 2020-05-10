@@ -35,7 +35,11 @@ pub struct FantasyTeamUpdate {
 #[primary_key(pick_id)]
 pub struct Pick {
     pub pick_id: Uuid,
+    // having fantasy_team_id on pick is kind of duplicating data, it can be accessed through the draft_choice_id,
+    // but you have to jump a couple of joins for that. THink its worth having fantasy-team-id here as well.
+    // I think so long as the fields are immutable then duplication is ok
     pub fantasy_team_id: Uuid,
+    pub draft_choice_id: Uuid,
     pub player_id: Uuid,
     #[serde(with = "my_timespan_format")]
     pub timespan: DieselTimespan,

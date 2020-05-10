@@ -1,5 +1,13 @@
 #[macro_use]
 extern crate diesel;
+mod db;
+mod schema;
+mod models;
+mod subscriptions;
+mod publisher;
+mod types;
+mod drafting;
+mod messages;
 use dotenv::dotenv;
 use std::env;
 use warp::*;
@@ -8,14 +16,8 @@ use diesel_utils::{pg_pool, PgConn};
 use uuid::Uuid;
 mod handlers;
 use handlers::*;
-mod db;
-mod schema;
-mod models;
-mod subscriptions;
-mod publisher;
-mod types;
-mod drafting;
-use drafting::generate_drafts;
+use messages::WSReq;
+use types::{leagues::*, users::*, drafts::*, fantasy_teams::*};
 use subscriptions::Subscriptions;
 use async_trait::async_trait;
 use futures::join;
@@ -23,6 +25,17 @@ use futures::join;
 
 pub type WSConnections_ = warp_ws_server::WSConnections<subscriptions::Subscriptions>;
 pub type WSConnection_ = warp_ws_server::WSConnection<subscriptions::Subscriptions>;
+
+// #[derive(Deserialize)]
+// #[serde(tag = "method")]
+// pub struct WSReq<'a> {
+//     pub message_id: Uuid,
+//     pub method: &'a str,
+//     // This is left as string, rather than an arbitrary serde_json::Value.
+//     // because if you says it's a Value, then do serde_json::from_value on it, and it fails, the error message is really bad
+//     // SO want to do a second from_string on the data
+//     pub data: serde_json::Value
+// }
 
 struct A{
 }
@@ -34,27 +47,26 @@ impl WSHandler<subscriptions::Subscriptions> for A{
         msg: String, conn: PgConn, ws_conns: &mut WSConnections<subscriptions::Subscriptions>, user_ws_id: Uuid
     ) -> Result<String, BoxError>{
         let req: WSReq = serde_json::from_str(&msg)?;
-        println!("{}", &req.data);
-        match req.method{
-            "sub_leagues" => sub_leagues(req, conn, ws_conns, user_ws_id).await,
-            "sub_drafts" => sub_drafts(req, conn, ws_conns, user_ws_id).await,
-            "sub_users" => sub_external_users(req, conn, ws_conns, user_ws_id).await,
-            "insert_leagues" => insert_leagues(req, conn, ws_conns).await,
-            "update_leagues" => update_leagues(req, conn, ws_conns).await,
-            "insert_periods" => insert_periods(req, conn, ws_conns).await,
-            "update_periods" => update_periods(req, conn, ws_conns).await,
-            "insert_stat_multipliers" => insert_stat_multipliers(req, conn, ws_conns).await,
-            "update_stat_multipliers" => update_stat_multipliers(req, conn, ws_conns).await,
-            "insert_external_users" => insert_external_users(req, conn, ws_conns).await,
-            "update_external_users" => update_external_users(req, conn, ws_conns).await,
-            "insert_fantasy_teams" => insert_fantasy_teams(req, conn, ws_conns).await,
-            "update_fantasy_teams" => update_fantasy_teams(req, conn, ws_conns).await,
-            "insert_draft_queues" => insert_draft_queues(req, conn, ws_conns).await,
-            "update_draft_queues" => update_draft_queues(req, conn, ws_conns).await,
-            "insert_picks" => insert_picks(req, conn, ws_conns).await,
-            "update_picks" => update_picks(req, conn, ws_conns).await,
-            "update_draft_choices" => update_draft_choices(req, conn, ws_conns).await,
-            uwotm8 => Err(Box::new(InvalidRequestError{description: uwotm8.to_string()}))
+        match req{
+            // For hardcoding method str, reflection in rust difficult
+            WSReq::SubLeague{message_id, data} => sub_leagues("SubLeagues", message_id, data, conn, ws_conns, user_ws_id).await,
+            WSReq::SubDraft{message_id, data} => sub_drafts("SubDrafts", message_id, data, conn, ws_conns, user_ws_id).await,
+            WSReq::SubUser{message_id, data} => sub_external_users("SubUsers", message_id, data, conn, ws_conns, user_ws_id).await,
+            WSReq::League{message_id, data} => insert_leagues("League", message_id, data, conn, ws_conns).await,
+            WSReq::LeagueUpdate{message_id, data} => update_leagues("LeagueUpdate", message_id, data, conn, ws_conns).await,
+            WSReq::Period{message_id, data} => insert_periods("Period", message_id, data, conn, ws_conns).await,
+            WSReq::PeriodUpdate{message_id, data} => update_periods("PeriodUpdate", message_id, data, conn, ws_conns).await,
+            WSReq::StatMultiplier{message_id, data} => insert_stat_multipliers("StatMultiplier", message_id, data, conn, ws_conns).await,
+            WSReq::StatMultiplierUpdate{message_id, data} => update_stat_multipliers("StatMultiplierUpdate", message_id, data, conn, ws_conns).await,
+            WSReq::ExternalUser{message_id, data} => insert_external_users("ExternalUser", message_id, data, conn, ws_conns).await,
+            WSReq::ExternalUserUpdate{message_id, data} => update_external_users("ExternalUserUpdate", message_id, data, conn, ws_conns).await,
+            WSReq::FantasyTeam{message_id, data} => insert_fantasy_teams("FantasyTeam", message_id, data, conn, ws_conns).await,
+            WSReq::FantasyTeamUpdate{message_id, data} => update_fantasy_teams("FantasyTeam", message_id, data, conn, ws_conns).await,
+            WSReq::DraftQueue{message_id, data} => insert_draft_queues("DraftQueue", message_id, data, conn, ws_conns).await,
+            //WSReq::DraftQueueUpdate{message_id, data} => update_draft_queues("DraftQueueUpdate", message_id, data, conn, ws_conns).await,
+            WSReq::Pick{message_id, data} => insert_picks("Pick", message_id, data, conn, ws_conns).await,
+            WSReq::PickUpdate{message_id, data} => update_picks("PickUpdate", message_id, data, conn, ws_conns).await,
+            WSReq::DraftChoiceUpdate{message_id, data} => update_draft_choices("DraftChoiceUpdate", message_id, data, conn, ws_conns).await,
         }
     }
 }

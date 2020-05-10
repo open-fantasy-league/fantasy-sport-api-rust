@@ -20,24 +20,6 @@ impl warp_ws_server::Subscriptions for Subscriptions{
         Subscriptions{external_users: false, leagues: HashSet::new(), drafts: HashSet::new(), all_leagues: false, all_drafts: false}
     }
 }
-#[derive(Deserialize, Debug)]
-pub struct ApiSubExternalUsers{
-    pub toggle: bool,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct ApiSubDrafts{
-    pub sub_draft_ids: Option<Vec<Uuid>>,
-    pub unsub_draft_ids: Option<Vec<Uuid>>,
-    pub all: Option<bool>
-}
-
-#[derive(Deserialize, Debug)]
-pub struct ApiSubLeagues{
-    pub sub_league_ids: Option<Vec<Uuid>>,
-    pub unsub_league_ids: Option<Vec<Uuid>>,
-    pub all: Option<bool>
-}
 
 
 pub async fn sub_to_leagues<'a, T: Iterator<Item = &'a Uuid>>(ws_user: &mut WSConnection_, ids: T){

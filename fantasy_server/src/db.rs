@@ -1,5 +1,5 @@
 use crate::schema::{self, *};
-use crate::types::{fantasy_teams::*, leagues::*, users::*};
+use crate::types::{fantasy_teams::*, leagues::*, users::*, drafts::*};
 use diesel::pg::expression::dsl::any;
 use diesel::prelude::*;
 use diesel::ExpressionMethods;
@@ -79,6 +79,10 @@ pub fn get_undrafted_periods(conn: &PgConnection) -> Result<Vec<Period>, diesel:
     //.first::<Period>(conn)
 }
 
+pub fn get_unchosen_draft_choices(conn: &PgConnection) -> Result<Vec<(DraftChoice, Period, TeamDraft)>, diesel::result::Error> {
+    Ok(vec![])
+} 
+
 pub fn get_randomised_teams_for_league(
     conn: &PgConnection,
     league_id: Uuid,
@@ -104,4 +108,14 @@ pub fn get_league_squad_size(
         .select(schema::leagues::squad_size)
         .filter(schema::leagues::league_id.eq(league_id))
         .get_result(conn)
+}
+
+pub fn get_draft_queue_for_choice(conn: &PgConnection, unchosen: DraftChoice) -> Result<Vec<Uuid>, diesel::result::Error>{
+    // maybe no queue been upserted. could be empty, could be missing?
+    schema::team_drafts::table
+    .inner_join(schema::fantasy_teams::table.inner_join(schema::draft_queues::table))
+    .inner_join(schema::draft_choices::table)
+    .filter(schema::team_drafts::team_draft_id.eq(unchosen.team_draft_id))
+    .select(schema::draft_queues::player_ids).get_result(conn)
+
 }

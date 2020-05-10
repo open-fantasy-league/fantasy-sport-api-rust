@@ -27,10 +27,6 @@ use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
 
 type PgPool = Pool<ConnectionManager<PgConnection>>;
 type PgConn = PooledConnection<ConnectionManager<PgConnection>>;
-pub type WSMethod<T> = Box<dyn (Fn(WSReq, PgConn, &mut WSConnections<T>, Uuid) -> Pin<Box<dyn Future<Output=Result<String, BoxError>> + Send + Sync >>) + Send + Sync>;
-//pub type WSMethod<T> = Box<dyn Fn(WSReq, PgConn, &mut WSConnections<T>, Uuid) -> Result<String, BoxError> + Send + Sync>;
-// TODO this prob could be &str, but harder to get lifetimes to work
-pub type WSMethods<T> = Arc<HashMap<String, WSMethod<T>>>;
 
 pub fn ws_conns<T: Subscriptions>() -> WSConnections<T>{
     Arc::new(Mutex::new(HashMap::new()))
@@ -71,12 +67,16 @@ impl<'a, T: Serialize> WSMsgOut<'a, T>{
 }
 
 
-#[derive(Deserialize)]
-pub struct WSReq<'a> {
-    pub message_id: Uuid,
-    pub method: &'a str,
-    pub data: serde_json::Value
-}
+// #[derive(Deserialize)]
+// #[serde(tag = "method")]
+// pub struct WSReq<'a> {
+//     pub message_id: Uuid,
+//     pub method: &'a str,
+//     // This is left as string, rather than an arbitrary serde_json::Value.
+//     // because if you says it's a Value, then do serde_json::from_value on it, and it fails, the error message is really bad
+//     // SO want to do a second from_string on the data
+//     pub data: serde_json::Value
+// }
 
 #[derive(Debug, Clone)]
 pub struct InvalidRequestError{pub description: String}

@@ -47,6 +47,13 @@ sun 7:
 - thread to process draft/advance it if no-one picks
 - commissioner seems a bit fucked
 - debug/print serde errors so can see if can grab field info https://docs.serde.rs/serde_json/struct.Error.html
+"message_id":"21d4a054-3db8-404b-a314-a58e4d96b2fd","mode":"error","message_type":"unknown","data":"premature end of input"
+- maybe need to refudge picks/draft-choice. need unique pick for draft. with nullable pick-id cnat index
+(can just have draft_choice_id on pick and check for join existance)
+- should fantasy hold a "valid pick-ids for this draft", would enable random choice from them for non-pickers?
+think its fine to hold array on period table. because will just load into mem when drafting and then lookup.
+prob shouldnt array actually
+- need max positions
 
 mon:
 - start leaderboard db/server
