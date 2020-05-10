@@ -16,17 +16,6 @@ impl warp_ws_server::Subscriptions for Subscriptions{
     }
 }
 
-#[derive(Deserialize, LabelledGeneric, Debug)]
-pub struct ApiSubTeams{
-    pub toggle: bool,
-}
-#[derive(Deserialize, LabelledGeneric, Debug)]
-pub struct ApiSubCompetitions{
-    pub sub_competition_ids: Option<Vec<Uuid>>,
-    pub unsub_competition_ids: Option<Vec<Uuid>>,
-    pub all: Option<bool>
-}
-
 pub async fn sub_to_competitions<'a, T: Iterator<Item = &'a Uuid>>(ws_user: &mut WSConnection_, competition_ids: T){
     competition_ids.for_each(|cid| {
         println!("Adding subscription {}", cid); ws_user.subscriptions.competitions.insert(*cid);

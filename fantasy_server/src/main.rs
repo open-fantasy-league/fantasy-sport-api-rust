@@ -75,6 +75,7 @@ impl WSHandler<subscriptions::Subscriptions> for A{
 async fn main() {
     dotenv().ok();
     let db_url = env::var("FANTASY_DB").expect("DATABASE_URL env var must be set");
+    let port = env::var("FANTASY_PORT").expect("RESULT_PORT env var must be set").parse().expect("Port must be a number you lemming.");
     let pool = pg_pool(db_url);
     let draft_pgpool = pool.clone();
     let draft_handler = tokio::task::spawn(async move {
@@ -91,5 +92,5 @@ async fn main() {
         });
     //let server = warp::serve(ws_router).run(([127, 0, 0, 1], 3030));
     //draft_handler.await.map_err(|e|println!("{}", e.to_string()));
-    join!(draft_handler, warp::serve(ws_router).run(([127, 0, 0, 1], 3030)));
+    join!(draft_handler, warp::serve(ws_router).run(([127, 0, 0, 1], port)));
 }

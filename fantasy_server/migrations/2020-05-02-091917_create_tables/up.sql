@@ -6,8 +6,10 @@ CREATE TABLE leagues(
     squad_size INT NOT NULL,
     competition_id UUID NOT NULL,
     meta JSONB NOT NULL DEFAULT '{}',
-    max_players_per_team INT NOT NULL DEFAULT 256,
-    max_players_per_position INT NOT NULL DEFAULT 256
+    max_squad_players_same_team INT NOT NULL DEFAULT 256,
+    max_squad_players_same_position INT NOT NULL DEFAULT 256,
+    max_team_players_same_team INT NOT NULL DEFAULT 256,
+    max_team_players_same_position INT NOT NULL DEFAULT 256
 );
 
 CREATE TABLE periods(
@@ -20,6 +22,12 @@ CREATE TABLE periods(
     teams_per_draft INT NOT NULL,
     draft_interval_secs INT NOT NULL,
     draft_start timestamptz NOT NULL
+);
+
+CREATE TABLE valid_pick_ids(
+    period_id UUID NOT NULL REFERENCES periods,
+    player_id UUID NOT NULL,
+    PRIMARY KEY(period_id, player_id)
 );
 
 CREATE TABLE external_users(
@@ -47,14 +55,6 @@ CREATE TABLE commissioners(
     meta JSONB NOT NULL DEFAULT '{}'
 );
 
-CREATE TABLE picks(
-    pick_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    fantasy_team_id UUID NOT NULL REFERENCES fantasy_teams,
-    player_id UUID NOT NULL,
-    timespan TSTZRANGE NOT NULL DEFAULT tstzrange(now(), 'infinity', '[)'),
-    active BOOL NOT NULL
-);
-
 CREATE TABLE drafts(
     draft_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     --start timestamptz NOT NULL, Can be inferred from the first draft_choices timespan
@@ -72,8 +72,16 @@ CREATE TABLE team_drafts(
 CREATE TABLE draft_choices(
     draft_choice_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     team_draft_id UUID NOT NULL REFERENCES team_drafts,
+    timespan TSTZRANGE NOT NULL DEFAULT tstzrange(now(), 'infinity', '[)')
+);
+
+CREATE TABLE picks(
+    pick_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    fantasy_team_id UUID NOT NULL REFERENCES fantasy_teams,
+    draft_choice_id UUID NOT NULL REFERENCES draft_choices,
+    player_id UUID NOT NULL,
     timespan TSTZRANGE NOT NULL DEFAULT tstzrange(now(), 'infinity', '[)'),
-    pick_id UUID REFERENCES picks
+    active BOOL NOT NULL
 );
 
 CREATE TABLE draft_queues(
@@ -99,6 +107,7 @@ CREATE INDEX picks_player_idx on picks(player_id);
 CREATE INDEX team_drafts_user_idx on team_drafts(fantasy_team_id);
 CREATE INDEX team_draft_draft_idx on team_drafts(draft_id);
 CREATE INDEX draft_choices_team_draft_id_idx on draft_choices(team_draft_id);
+CREATE INDEX picks_draft_choices_idx on picks(draft_choice_id);
 
 CREATE INDEX periods_timespan_idx on periods USING gist (timespan);
 CREATE INDEX picks_timespan_idx on picks USING gist (timespan);

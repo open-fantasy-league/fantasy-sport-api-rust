@@ -31,7 +31,7 @@ pub struct Match {
 #[derive(Deserialize, LabelledGeneric, Debug, AsChangeset)]
 #[primary_key(match_id)]
 #[table_name = "matches"]
-pub struct UpdateMatch {
+pub struct MatchUpdate {
     pub match_id: Uuid,
     pub series_id: Option<Uuid>,
     pub name: Option<String>,

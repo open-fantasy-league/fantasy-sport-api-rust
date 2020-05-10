@@ -22,8 +22,10 @@ pub struct League {
     pub squad_size: i32,
     pub competition_id: Uuid,
     pub meta: serde_json::Value,
-    pub max_players_per_team: i32,
-    pub max_players_per_position: i32,
+    pub max_squad_players_same_team: i32,
+    pub max_squad_players_same_position: i32,
+    pub max_team_players_same_team: i32,
+    pub max_team_players_same_position: i32,
 }
 
 //http://diesel.rs/guides/all-about-updates/
@@ -47,8 +49,10 @@ pub struct LeagueUpdate {
     */
     // sending in "arg": null in json doesnt null it in db. It deserializes to None, rather than Some(None)
     // simpler to just make default a big number anyway. Then zero null-handling
-    pub max_players_per_team: Option<i32>,
-    pub max_players_per_position: Option<i32>,
+    pub max_squad_players_same_team: Option<i32>,
+    pub max_squad_players_same_position: Option<i32>,
+    pub max_team_players_same_team: Option<i32>,
+    pub max_team_players_same_position: Option<i32>,
 }
 
 #[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations)]
@@ -128,8 +132,10 @@ pub struct ApiLeague {
     pub squad_size: i32,
     pub competition_id: Uuid,
     pub meta: serde_json::Value,
-    pub max_players_per_team: i32,
-    pub max_players_per_position: i32,
+    pub max_squad_players_same_team: i32,
+    pub max_squad_players_same_position: i32,
+    pub max_team_players_same_team: i32,
+    pub max_team_players_same_position: i32,
     pub periods: Vec<Period>,
     pub stat_multipliers: Vec<StatMultiplier>,
 }
@@ -138,16 +144,18 @@ impl ApiLeague {
     pub fn from_rows(rows: Vec<(League, Vec<Period>, Vec<StatMultiplier>)>) -> Vec<Self> {
         rows.into_iter()
             .map(|(l, periods, stats)| Self {
+                periods: periods,
+                stat_multipliers: stats,
                 league_id: l.league_id,
                 name: l.name,
                 team_size: l.team_size,
                 squad_size: l.squad_size,
                 competition_id: l.competition_id,
                 meta: l.meta,
-                max_players_per_team: l.max_players_per_team,
-                max_players_per_position: l.max_players_per_position,
-                periods: periods,
-                stat_multipliers: stats,
+                max_squad_players_same_team: l.max_squad_players_same_team,
+                max_squad_players_same_position: l.max_squad_players_same_position,
+                max_team_players_same_team: l.max_team_players_same_team,
+                max_team_players_same_position: l.max_team_players_same_position,
             })
             .collect()
     }

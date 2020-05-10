@@ -35,7 +35,7 @@ pub struct Competition {
 #[derive(Deserialize, LabelledGeneric, Debug, AsChangeset)]
 #[primary_key(competition_id)]
 #[table_name = "competitions"]
-pub struct UpdateCompetition {
+pub struct CompetitionUpdate {
     pub competition_id: Uuid,
     pub name: Option<String>,
     pub meta: Option<serde_json::Value>,

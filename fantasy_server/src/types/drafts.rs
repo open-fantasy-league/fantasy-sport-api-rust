@@ -72,18 +72,15 @@ pub struct DraftChoice {
     pub team_draft_id: Uuid,
     #[serde(with = "my_timespan_format")]
     pub timespan: DieselTimespan,
-    pub pick_id: Option<Uuid>,
 }
 
 impl DraftChoice {
     pub fn new(team_draft_id: Uuid, timespan: DieselTimespan) -> Self {
-        let pick_id = None;
         let draft_choice_id = Uuid::new_v4();
         Self {
             draft_choice_id,
             team_draft_id,
             timespan,
-            pick_id,
         }
     }
 }
@@ -91,10 +88,7 @@ impl DraftChoice {
 impl From<ApiDraftChoice> for DraftChoice {
     fn from(other: ApiDraftChoice) -> Self {
         Self {
-            draft_choice_id: other.draft_choice_id,
-            team_draft_id: other.team_draft_id,
-            timespan: other.timespan,
-            pick_id: other.pick_id,
+            draft_choice_id: other.draft_choice_id, team_draft_id: other.team_draft_id, timespan: other.timespan
         }
     }
 }
@@ -107,7 +101,6 @@ pub struct DraftChoiceUpdate {
     // think this timespan wants to be mutable, if draft rescheduled or something
     #[serde(with = "my_timespan_format_opt")]
     pub timespan: Option<DieselTimespan>,
-    pub pick_id: Option<Uuid>,
 }
 
 #[derive(
@@ -125,20 +118,17 @@ pub struct ApiDraftChoice {
     pub team_draft_id: Uuid,
     #[serde(with = "my_timespan_format")]
     pub timespan: DieselTimespan,
-    pub pick_id: Option<Uuid>,
     pub fantasy_team_id: Uuid,
 }
 
 impl ApiDraftChoice {
     pub fn new(fantasy_team_id: Uuid, team_draft_id: Uuid, timespan: DieselTimespan) -> Self {
-        let pick_id = None;
         let draft_choice_id = Uuid::new_v4();
         Self {
             fantasy_team_id,
             draft_choice_id,
             team_draft_id,
             timespan,
-            pick_id,
         }
     }
 
