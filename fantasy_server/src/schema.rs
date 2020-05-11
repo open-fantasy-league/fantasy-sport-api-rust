@@ -1,4 +1,12 @@
 table! {
+    active_picks (active_pick_id) {
+        active_pick_id -> Uuid,
+        pick_id -> Uuid,
+        timespan -> Tstzrange,
+    }
+}
+
+table! {
     commissioners (commissioner_id) {
         commissioner_id -> Uuid,
         external_user_id -> Uuid,
@@ -80,6 +88,7 @@ table! {
         teams_per_draft -> Int4,
         draft_interval_secs -> Int4,
         draft_start -> Timestamptz,
+        draft_lockdown -> Timestamptz,
     }
 }
 
@@ -90,7 +99,6 @@ table! {
         draft_choice_id -> Uuid,
         player_id -> Uuid,
         timespan -> Tstzrange,
-        active -> Bool,
     }
 }
 
@@ -118,6 +126,7 @@ table! {
     }
 }
 
+joinable!(active_picks -> picks (pick_id));
 joinable!(commissioners -> external_users (external_user_id));
 joinable!(draft_choices -> team_drafts (team_draft_id));
 joinable!(draft_queues -> fantasy_teams (fantasy_team_id));
@@ -134,6 +143,7 @@ joinable!(team_drafts -> fantasy_teams (fantasy_team_id));
 joinable!(valid_players -> periods (period_id));
 
 allow_tables_to_appear_in_same_query!(
+    active_picks,
     commissioners,
     draft_choices,
     draft_queues,

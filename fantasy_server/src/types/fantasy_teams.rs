@@ -44,7 +44,6 @@ pub struct Pick {
     pub player_id: Uuid,
     #[serde(with = "my_timespan_format")]
     pub timespan: DieselTimespan,
-    pub active: bool,
 }
 
 #[derive(AsChangeset, Deserialize, Debug)]
@@ -55,8 +54,24 @@ pub struct PickUpdate {
     // These shouldnt be mutable
     // pub fantasy_team_id: Uuid,
     // pub player_id: Uuid,
-    // pub timespan: DieselTimespan,
-    pub active: Option<bool>,
+    pub timespan: DieselTimespan,
+}
+
+#[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations)]
+#[primary_key(active_pick_id)]
+pub struct ActivePick {
+    pub active_pick_id: Uuid,
+    pub pick_id: Uuid,
+    #[serde(with = "my_timespan_format")]
+    pub timespan: DieselTimespan,
+}
+
+#[derive(AsChangeset, Deserialize, Debug)]
+#[primary_key(active_pick_id)]
+#[table_name = "active_picks"]
+pub struct ActivePickUpdate {
+    pub active_pick_id: Uuid,
+    pub timespan: DieselTimespan,
 }
 
 impl Publishable for FantasyTeam {
@@ -69,7 +84,7 @@ impl Publishable for FantasyTeam {
     }
 
     fn subscription_id_map(
-        conn: &PgConn,
+        conn: Option<&PgConn>,
         publishables: &Vec<Self>,
     ) -> Result<HashMap<Uuid, Uuid>, BoxError> {
         Ok(publishables
@@ -89,11 +104,11 @@ impl Publishable for Pick {
     }
 
     fn subscription_id_map(
-        conn: &PgConn,
+        conn: Option<&PgConn>,
         publishables: &Vec<Self>,
     ) -> Result<HashMap<Uuid, Uuid>, BoxError> {
         let id_map =
-            db::get_draft_ids_for_picks(&conn, &publishables.iter().map(|p| p.pick_id).collect())?;
+            db::get_draft_ids_for_picks(        conn.unwrap(), &publishables.iter().map(|p| p.pick_id).collect())?;
         Ok(id_map.into_iter().collect())
     }
 }

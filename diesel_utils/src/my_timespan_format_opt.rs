@@ -1,7 +1,7 @@
 // TODO commonise
 // https://github.com/serde-rs/serde/issues/1444 kind of sucks
 use serde::{self, Deserialize, Deserializer};
-use crate::my_timespan_format::{DieselTimespan, deserialize as des};
+use crate::{DieselTimespan, my_timespan_format::deserialize as des};
 
 // Only need a deserializer as cant have options out. Only options in in changesets
 pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<DieselTimespan>, D::Error>

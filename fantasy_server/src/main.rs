@@ -84,18 +84,21 @@ async fn main() {
 
     let teams_and_players_mut: Arc<Mutex<Option<ApiTeamsAndPlayers>>> = Arc::new(Mutex::new(None));
     let pool = pg_pool(db_url);
+    let ws_conns =  warp_ws_server::ws_conns::<Subscriptions>();
     // Is PgPool thread-safe? its not behind an arc...does it need to be?
     // maybe the clone is just make 3 seaprate pg-pool which is kind of fine.
     let draft_pgpool = pool.clone();
     let draft_handler_pool = pool.clone();
+
+    let draft_builder_ws_conns = ws_conns.clone();
+    let draft_handler_ws_conns = ws_conns.clone();
     let draft_builder = tokio::task::spawn(async move {
-        drafting::draft_builder(draft_pgpool).await
+        drafting::draft_builder(draft_pgpool, draft_builder_ws_conns).await
     });
     // let draft_handler = tokio::task::spawn(async move {
     //     drafting::draft_builder(draft_pgpool).await
     // });
 
-    let ws_conns =  warp_ws_server::ws_conns::<Subscriptions>();
     let ws_conns_filt = warp::any().map(move || ws_conns.clone());
 
     let ws_router = warp::any().and(warp::ws()).and(ws_conns_filt)
@@ -107,7 +110,7 @@ async fn main() {
     //draft_handler.await.map_err(|e|println!("{}", e.to_string()));
     join!(
         listen_pick_results(result_port, teams_and_players_mut.clone()),
-        drafting::draft_handler(draft_handler_pool, teams_and_players_mut.clone()),
+        drafting::draft_handler(draft_handler_pool, teams_and_players_mut.clone(), draft_handler_ws_conns),
         draft_builder,
         warp::serve(ws_router).run(([127, 0, 0, 1], port)));
 }

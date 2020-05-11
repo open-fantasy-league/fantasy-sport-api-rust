@@ -9,6 +9,7 @@ use itertools::izip;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
+use diesel_utils::PgConn;
 // use diesel_utils::PgConn;
 // use warp_ws_server::WSReq;
 // use warp_ws_server::BoxError;
@@ -69,13 +70,13 @@ pub fn get_draft_ids_for_picks(
         .load(conn)
 }
 
-pub fn get_undrafted_periods(conn: &PgConnection) -> Result<Vec<Period>, diesel::result::Error> {
+pub fn get_undrafted_periods(conn: PgConn) -> Result<Vec<Period>, diesel::result::Error> {
     periods::table
         .select(periods::all_columns)
         .left_join(drafts::table)
         .filter(drafts::draft_id.is_null())
-        .order(periods::draft_start)
-        .load::<Period>(conn)
+        .order(periods::draft_lockdown)
+        .load::<Period>(&conn)
     //.first::<Period>(conn)
 }
 
@@ -83,15 +84,19 @@ pub fn get_valid_picks(conn: &PgConnection, period_id: Uuid) -> Result<Vec<Uuid>
     valid_players::table.select(valid_players::player_id).filter(valid_players::period_id.eq(period_id)).load(conn)
 } 
 
-pub fn get_unchosen_draft_choices(conn: &PgConnection) -> Result<Vec<(DraftChoice, Period, TeamDraft)>, diesel::result::Error> {
+pub fn get_unchosen_draft_choices(conn: PgConn) -> Result<Vec<(DraftChoice, Period, TeamDraft, League)>, diesel::result::Error> {
     // So this would join every row, including old rows, then filter most of them out.
     // Should check postgresql optimises nicely.
 
+    // TODO this is way too heavyweight for being called every draft-choice
+    // really once draft is fixed, the max_per_blah settings shouldnt be changing. Same for period timespan.
+    // When fantasy-teams/users are locked in for draft, then settings should lock as well, and be pulled into memory
+
     draft_choices::table
     .left_join(picks::table).filter(picks::pick_id.is_null())
-    .inner_join(team_drafts::table.inner_join(drafts::table.inner_join(periods::table)))
-    .select((draft_choices::all_columns, periods::all_columns, team_drafts::all_columns))
-    .load(conn)
+    .inner_join(team_drafts::table.inner_join(drafts::table.inner_join(periods::table.inner_join(leagues::table))))
+    .select((draft_choices::all_columns, periods::all_columns, team_drafts::all_columns, leagues::all_columns))
+    .load(&conn)
 } 
 
 pub fn get_randomised_teams_for_league(

@@ -2,13 +2,8 @@
 use chrono::{DateTime, Utc};
 use serde::ser::SerializeSeq;
 use serde::{self, de, Deserialize, Deserializer, Serializer};
+use crate::{new_dieseltimespan, DieselTimespan};
 use std::collections::Bound::{self, Excluded, Included};
-
-pub type DieselTimespan = (Bound<DateTime<Utc>>, Bound<DateTime<Utc>>);
-
-pub fn new_dieseltimespan(start: DateTime<Utc>, end: DateTime<Utc>) -> DieselTimespan{
-    (Included(start), Excluded(end))
-}
 
 pub fn deserialize<'de, D>(deserializer: D) -> Result<DieselTimespan, D::Error>
 where

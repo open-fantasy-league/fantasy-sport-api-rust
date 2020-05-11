@@ -21,7 +21,8 @@ CREATE TABLE periods(
     points_multiplier REAL NOT NULL DEFAULT 1.0,
     teams_per_draft INT NOT NULL,
     draft_interval_secs INT NOT NULL,
-    draft_start timestamptz NOT NULL
+    draft_start timestamptz NOT NULL,
+    draft_lockdown timestamptz NOT NULL -- locks in users who will participate, plus settings like max_players_same_team/position
 );
 
 CREATE TABLE valid_players(
@@ -80,9 +81,16 @@ CREATE TABLE picks(
     fantasy_team_id UUID NOT NULL REFERENCES fantasy_teams,
     draft_choice_id UUID NOT NULL REFERENCES draft_choices,
     player_id UUID NOT NULL,
-    timespan TSTZRANGE NOT NULL DEFAULT tstzrange(now(), 'infinity', '[)'),
-    active BOOL NOT NULL
+    timespan TSTZRANGE NOT NULL DEFAULT tstzrange(now(), 'infinity', '[)')
 );
+
+-- i.e. in team as opposed to just in squad/substitute
+CREATE TABLE active_picks(
+    active_pick_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    pick_id UUID NOT NULL REFERENCES picks,
+    timespan TSTZRANGE NOT NULL DEFAULT tstzrange(now(), 'infinity', '[)')
+);
+
 
 CREATE TABLE draft_queues(
     fantasy_team_id UUID PRIMARY KEY REFERENCES fantasy_teams,
@@ -108,8 +116,10 @@ CREATE INDEX team_drafts_user_idx on team_drafts(fantasy_team_id);
 CREATE INDEX team_draft_draft_idx on team_drafts(draft_id);
 CREATE INDEX draft_choices_team_draft_id_idx on draft_choices(team_draft_id);
 CREATE INDEX picks_draft_choices_idx on picks(draft_choice_id);
+CREATE INDEX active_picks_picks_idx on active_picks(pick_id);
 
 CREATE INDEX periods_timespan_idx on periods USING gist (timespan);
 CREATE INDEX picks_timespan_idx on picks USING gist (timespan);
 CREATE INDEX draft_choices_timespan_idx on draft_choices USING gist (timespan);
+CREATE INDEX active_picks_timespan_idx on active_picks USING gist (timespan);
 ALTER TABLE periods ADD CONSTRAINT non_overlap_period_timespan EXCLUDE USING gist (league_id WITH =, timespan WITH &&);

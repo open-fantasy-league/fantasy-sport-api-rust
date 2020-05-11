@@ -5,6 +5,9 @@ use frunk::LabelledGeneric;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use uuid::Uuid;
+use std::collections::HashMap;
+use warp_ws_server::BoxError;
+use diesel_utils::PgConn;
 
 //https://kotiri.com/2018/01/31/postgresql-diesel-rust-types.html
 #[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations)]
@@ -167,30 +170,22 @@ pub struct ApiDraft {
     pub choices: Vec<ApiDraftChoice>, //pub teams: Vec<ApiTeamDraft>,
 }
 
-// impl Publishable for Draft {
+impl Publishable for ApiDraft {
+    fn message_type<'a>() -> &'a str {
+        "draft"
+    }
 
-//     fn message_type<'a>() -> &'a str{
-//         "draft"
-//     }
+    fn subscription_map_key(&self) -> Uuid {
+        self.draft_id
+    }
 
-//     fn subscription_id(&self) -> Uuid{
-//         self.draft_id
-//     }
-
-//     fn subscription_id_map(conn: &PgConn, publishables: &Vec<Self>) -> Result<HashMap<Uuid, Uuid>, BoxError>{
-//         let id_map = db::get_draft_ids_for_picks(&conn, &publishables.iter().map(|p| p.pick_id).collect())?;
-//         id_map.into_iter().collect()
-//     }
-// }
-
-// impl ApiDraft{
-//     pub fn from_rows(rows: Vec<(League, Vec<Period>, Vec<StatMultiplier>)>) -> Vec<Self>{
-//         rows.into_iter().map(|(l, periods, stats)|{
-//             Self{
-//                 league_id: l.league_id, name: l.name, team_size: l.team_size, squad_size: l.squad_size, competition_id: l.competition_id,
-//                 meta: l.meta, teams_per_draft: l.teams_per_draft, max_players_per_team: l.max_players_per_team, max_players_per_position: l.max_players_per_position,
-//                 periods: periods, stat_multipliers: stats
-//             }
-//         }).collect()
-//     }
-// }
+    fn subscription_id_map(
+        conn: Option<&PgConn>,
+        publishables: &Vec<Self>,
+    ) -> Result<HashMap<Uuid, Uuid>, BoxError> {
+        Ok(publishables
+            .iter()
+            .map(|c| (c.draft_id, c.draft_id))
+            .collect())
+    }
+}

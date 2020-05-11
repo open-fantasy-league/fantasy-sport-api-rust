@@ -18,7 +18,7 @@ pub async fn insert_leagues(method: &str, message_id: Uuid, data: Vec<League>, c
     let leagues: Vec<League> = insert!(&conn, leagues::table, data)?;
     println!("{:?}", &leagues);
     publish_for_leagues::<League>(
-        conn, ws_conns, &leagues,
+        None, ws_conns, &leagues,
     ).await?;
     let resp_msg = WSMsgOut::resp(message_id, method, leagues);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
@@ -31,7 +31,7 @@ pub async fn update_leagues(method: &str, message_id: Uuid, data: Vec<LeagueUpda
         update!(&conn, leagues, league_id, c)
     }).collect()})?;
     publish_for_leagues::<League>(
-        conn, ws_conns, &leagues,
+        None, ws_conns, &leagues,
     ).await?;
     println!("{:?}", &leagues);
     let resp_msg = WSMsgOut::resp(message_id, method, leagues);
@@ -43,7 +43,7 @@ pub async fn insert_periods(method: &str, message_id: Uuid, data: Vec<Period>, c
     let out: Vec<Period> = insert!(&conn, periods::table, data)?;
     println!("{:#?}", &out);
     publish_for_leagues::<Period>(
-        conn, ws_conns, &out,
+        None, ws_conns, &out,
     ).await?;
     println!("postpublish");
     let resp_msg = WSMsgOut::resp(message_id, method, out);
@@ -66,7 +66,7 @@ pub async fn update_periods(method: &str, message_id: Uuid, data: Vec<PeriodUpda
 pub async fn insert_stat_multipliers(method: &str, message_id: Uuid, data: Vec<StatMultiplier>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
     let out: Vec<StatMultiplier> = insert!(&conn, stat_multipliers::table, data)?;
     publish_for_leagues::<StatMultiplier>(
-        conn, ws_conns, &out,
+        None, ws_conns, &out,
     ).await?;
     let resp_msg = WSMsgOut::resp(message_id, method, out);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
@@ -82,7 +82,7 @@ pub async fn update_stat_multipliers(method: &str, message_id: Uuid, data: Vec<S
         update_2pkey!(&conn, stat_multipliers, league_id, name, c.clone())
     }).collect()})?;
     publish_for_leagues::<StatMultiplier>(
-        conn, ws_conns, &out,
+        None, ws_conns, &out,
     ).await?;
     let resp_msg = WSMsgOut::resp(message_id, method, out);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
@@ -156,7 +156,7 @@ pub async fn update_draft_choices(method: &str, message_id: Uuid, data: Vec<Draf
 pub async fn insert_picks(method: &str, message_id: Uuid, data: Vec<Pick>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
     let out: Vec<Pick> = insert!(&conn, picks::table, data)?;
     // TODO do draft-queues even want publishing to anyone except caller (person's queue should be private)
-    publish_for_drafts::<Pick>(conn, ws_conns, &out).await?;
+    publish_for_drafts::<Pick>(Some(conn), ws_conns, &out).await?;
     let resp_msg = WSMsgOut::resp(message_id, method, out);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
@@ -174,7 +174,7 @@ pub async fn update_picks(method: &str, message_id: Uuid, data: Vec<PickUpdate>,
 pub async fn insert_fantasy_teams(method: &str, message_id: Uuid, data: Vec<FantasyTeam>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
     let out: Vec<FantasyTeam> = insert!(&conn, fantasy_teams::table, data)?;
     publish_for_leagues::<FantasyTeam>(
-        conn, ws_conns, &out,
+        None, ws_conns, &out,
     ).await?;
     let resp_msg = WSMsgOut::resp(message_id, method, out);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())

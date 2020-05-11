@@ -69,7 +69,7 @@ pub fn subscribed_leagues<'a, T: Publishable>(conn: &PgConn, subscriptions: &Sub
         // However is probably simpler to set up so can just clone it, and this func mvoes Vec, rather than ref
         true => {Ok(all.iter().collect())},
         false => {
-            let id_map: HashMap<Uuid, Uuid> = T::subscription_id_map(conn, all)?;
+            let id_map: HashMap<Uuid, Uuid> = T::subscription_id_map(Some(conn), all)?;
             Ok(all.iter()
             .filter(|c| subscriptions.leagues.contains(&id_map.get(&c.subscription_map_key()).unwrap()))
             .collect())
@@ -84,7 +84,7 @@ pub fn subscribed_drafts<'a, T: Publishable>(conn: &PgConn, subscriptions: &Subs
         // However is probably simpler to set up so can just clone it, and this func mvoes Vec, rather than ref
         true => Ok(all.iter().collect()),
         false => {
-            let id_map: HashMap<Uuid, Uuid> = T::subscription_id_map(conn, all)?;
+            let id_map: HashMap<Uuid, Uuid> = T::subscription_id_map(Some(conn), all)?;
             Ok(all.iter()
             .filter(|c| subscriptions.drafts.contains(&id_map.get(&c.subscription_map_key()).unwrap()))
             .collect())

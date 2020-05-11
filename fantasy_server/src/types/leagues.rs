@@ -91,6 +91,7 @@ pub struct Period {
     pub teams_per_draft: i32,
     pub draft_interval_secs: i32,
     pub draft_start: DateTime<Utc>,
+    pub draft_lockdown: DateTime<Utc>,
 }
 
 impl Period {
@@ -105,6 +106,7 @@ impl Period {
             teams_per_draft: 5,
             draft_interval_secs: 10,
             draft_start: Utc::now(),
+            draft_lockdown: Utc::now()
         }
     }
 }
@@ -122,6 +124,7 @@ pub struct PeriodUpdate {
     pub teams_per_draft: Option<i32>,
     pub draft_interval_secs: Option<i32>,
     pub draft_start: Option<DateTime<Utc>>,
+    pub draft_lockdown: Option<DateTime<Utc>>,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -171,7 +174,7 @@ impl Publishable for League {
     }
 
     fn subscription_id_map(
-        conn: &PgConn,
+        conn: Option<&PgConn>,
         publishables: &Vec<Self>,
     ) -> Result<HashMap<Uuid, Uuid>, BoxError> {
         Ok(publishables
@@ -191,7 +194,7 @@ impl Publishable for Period {
     }
 
     fn subscription_id_map(
-        conn: &PgConn,
+        conn: Option<&PgConn>,
         publishables: &Vec<Self>,
     ) -> Result<HashMap<Uuid, Uuid>, BoxError> {
         Ok(publishables
@@ -211,7 +214,7 @@ impl Publishable for StatMultiplier {
     }
 
     fn subscription_id_map(
-        conn: &PgConn,
+        conn: Option<&PgConn>,
         publishables: &Vec<Self>,
     ) -> Result<HashMap<Uuid, Uuid>, BoxError> {
         Ok(publishables
