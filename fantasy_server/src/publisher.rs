@@ -12,9 +12,8 @@ pub trait Publishable {
     fn subscription_id_map(conn: Option<&PgConn>, publishables: &Vec<Self>) -> Result<HashMap<Uuid, Uuid>, BoxError> where Self: Sized;
 }
 
-//let comp_and_series_ids = db::get_competition_ids_for_series(&conn, &series_ids)?;
-
-
+//TODO really should just take an id_map, rather than inefficiently lookup subscription_id_map() in every call.
+// Note that the id-maps are things that arent gonna be mutable/updateable, so should be able to cache them
 pub async fn publish_for_leagues<T: Publishable + Serialize + std::fmt::Debug>(conn_opt: Option<PgConn>, ws_conns: &mut WSConnections_, publishables: &Vec<T>) -> Result<bool, BoxError>{
     // TODO This doesnt include team-names that were mutated by their name-timestamp being
     let id_map: HashMap<Uuid, Uuid> = T::subscription_id_map(conn_opt.as_ref(), publishables)?; 

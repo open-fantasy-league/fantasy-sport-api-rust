@@ -113,6 +113,25 @@ impl Publishable for Pick {
     }
 }
 
+impl Publishable for ActivePick {
+    fn message_type<'a>() -> &'a str {
+        "active_pick"
+    }
+
+    fn subscription_map_key(&self) -> Uuid {
+        self.pick_id
+    }
+
+    fn subscription_id_map(
+        conn: Option<&PgConn>,
+        publishables: &Vec<Self>,
+    ) -> Result<HashMap<Uuid, Uuid>, BoxError> {
+        let id_map =
+            db::get_draft_ids_for_picks(conn.unwrap(), &publishables.iter().map(|p| p.pick_id).collect())?;
+        Ok(id_map.into_iter().collect())
+    }
+}
+
 // impl Publishable for Pick {
 
 //     fn message_type<'a>() -> &'a str{

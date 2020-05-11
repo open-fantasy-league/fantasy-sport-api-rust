@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use crate::db;
 use std::collections::HashMap;
 use warp_ws_server::*;
-use diesel_utils::{PgConn, my_timespan_format::{self, DieselTimespan}};
+use diesel_utils::{PgConn, DieselTimespan, my_timespan_format};
 use frunk::labelled::transform_from;
 use crate::WSConnections_;
 use uuid::Uuid;

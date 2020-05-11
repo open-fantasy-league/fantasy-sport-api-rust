@@ -1,4 +1,3 @@
-use crate::db;
 use crate::publisher::Publishable;
 use crate::schema::*;
 use chrono::{DateTime, Utc};

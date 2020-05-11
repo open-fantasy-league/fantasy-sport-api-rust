@@ -7,12 +7,9 @@ use frunk::labelled::transform_from;
 use super::series::Series;
 use super::results::{TeamMatchResult, PlayerResult};
 use crate::publisher::Publishable;
-use diesel_utils::{PgConn, my_timespan_format::{self, DieselTimespan}, my_timespan_format_opt};
+use diesel_utils::{PgConn, DieselTimespan, my_timespan_format, my_timespan_format_opt};
 use itertools::Itertools;
 use crate::diesel::RunQueryDsl;  // imported here so that can run db macros
-use crate::diesel::ExpressionMethods;
-use async_trait::async_trait;
-use crate::db;
 
 
 #[derive(Insertable, Deserialize, LabelledGeneric, Queryable, Serialize, Debug, Identifiable, Associations)]

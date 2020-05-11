@@ -1,17 +1,14 @@
 #![macro_use]
 use diesel::pg::expression::dsl::any;
-use diesel::pg::upsert::excluded;
 use diesel::pg::PgConnection;
 use diesel::prelude::*;
 use diesel::ExpressionMethods;
 use diesel::RunQueryDsl;
 use diesel::{sql_query, sql_types};
 use uuid::Uuid;
-use frunk::labelled::transform_from;
 use itertools::{izip, Itertools};
-use diesel_utils::{PgConn, my_timespan_format::DieselTimespan};
+use diesel_utils::{PgConn};
 use crate::types::{competitions::*, series::*, matches::*, teams::*, results::*, players::*};
-use crate::schema;
 
 //sql_function! {fn coalesce<T: sql_types::NotNull>(a: sql_types::Nullable<T>, b: T) -> T;}
 //sql_function!(fn trim_team_name_timespans(new_team_id sql_types::Uuid, new_timespan sql_types::Range<sql_types::Timestamptz>) -> ());

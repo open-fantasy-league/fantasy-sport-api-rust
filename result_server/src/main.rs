@@ -66,7 +66,7 @@ impl WSHandler<subscriptions::Subscriptions> for A{
 #[tokio::main]
 async fn main() {
     dotenv().ok();
-    let db_url = env::var("RESULT_DB").expect("DATABASE_URL env var must be set");
+    let db_url = env::var("RESULT_DB").expect("RESULT_DB env var must be set");
     let port = env::var("RESULT_PORT").expect("RESULT_PORT env var must be set").parse().expect("Port must be a number you lemming.");
     let pool = pg_pool(db_url);
 

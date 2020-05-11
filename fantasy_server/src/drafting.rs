@@ -223,7 +223,7 @@ pub async fn draft_handler(pg_pool: PgPool, teams_and_players_mut: Arc<Mutex<Opt
                         let teams_and_players_opt: MutexGuard<Option<ApiTeamsAndPlayers>> = teams_and_players_mut.lock().await;
                         match *teams_and_players_opt{
                             Some(ref teams_and_players) => {
-                                let out: Result<Pick, BoxError> = pick_from_queue_or_random(
+                                let out: Result<(Pick, Option<ActivePick>), BoxError> = pick_from_queue_or_random(
                                     pg_pool.get().unwrap(), team_draft.fantasy_team_id, draft_choice, period.timespan, period.period_id,
                                     &league.max_squad_players_same_team, &league.max_squad_players_same_position,
                                     pick_straight_into_team,
@@ -231,8 +231,18 @@ pub async fn draft_handler(pg_pool: PgPool, teams_and_players_mut: Arc<Mutex<Opt
                                 );
                                 match out
                                 {
-                                    Ok(pick) => {
+                                    Ok((pick, None)) => {
                                         match publish_for_drafts(Some(pg_pool.get().unwrap()), &mut ws_conns, &vec![pick]).await{
+                                            Err(e) => println!("Error publishing draft picks: {:?}", e),
+                                            _ => {}
+                                        }
+                                    },
+                                    Ok((pick, Some(active_pick))) => {
+                                        match publish_for_drafts(Some(pg_pool.get().unwrap()), &mut ws_conns, &vec![pick]).await{
+                                            Err(e) => println!("Error publishing draft picks: {:?}", e),
+                                            _ => {}
+                                        };
+                                        match publish_for_drafts(Some(pg_pool.get().unwrap()), &mut ws_conns, &vec![active_pick]).await{
                                             Err(e) => println!("Error publishing draft picks: {:?}", e),
                                             _ => {}
                                         }
@@ -318,7 +328,7 @@ pub fn pick_from_queue_or_random(
     pick_straight_into_team: bool,
     teams_and_players: &ApiTeamsAndPlayers
     //teams_and_players: MutexGuard<ApiTeamsAndPlayers>
-) -> Result<Pick, BoxError>{
+) -> Result<(Pick, Option<ActivePick>), BoxError>{
     conn.build_transaction().run(||{
         // TODO deal with squads not just teams
         let draft_choice_id = unchosen.draft_choice_id;
@@ -383,12 +393,14 @@ pub fn pick_from_queue_or_random(
         //pick_straight_into_team
         match new_pick{
             Some(np) =>{
-                let out: Vec<Pick> = insert!(&conn, schema::picks::table, vec![&np])?;
+                let _: Vec<Pick> = insert!(&conn, schema::picks::table, vec![&np])?;
                 if pick_straight_into_team{
                     let active_pick = ActivePick{active_pick_id: Uuid::new_v4(), pick_id: np.pick_id, timespan: belongs_to_team_for};
-                    let _: Vec<ActivePick> = insert!(&conn, schema::active_picks::table, vec![active_pick])?;
+                    let _: Vec<ActivePick> = insert!(&conn, schema::active_picks::table, vec![&active_pick])?;
+                    Ok((np, Some(active_pick)))
+                } else{
+                    Ok((np, None))
                 }
-                Ok(np)
             },
             None => Err(Box::new(NoValidPicksError{}) as BoxError)
         }

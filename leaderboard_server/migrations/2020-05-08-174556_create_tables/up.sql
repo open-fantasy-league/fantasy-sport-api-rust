@@ -3,19 +3,26 @@
 -- https://computingforgeeks.com/how-to-install-timescaledb-on-ubuntu-18-04-lts/
 
 -- other stats for tiebreakers?
-CREATE TABLE points(
-    leaderboard_id UUID NOT NULL REFERENCES leaderboard,
-    timestamp timestamptz NOT NULL DEFAULT now(),
-    points REAL NOT NULL
+-- think its more flexible to just have timestamps, rather than trying to have "daily/weekly/etc"
+-- with timestamp people have flexibility to choose when they want to update. Also easier to show historic rankings
+
+-- also for trying to rank by other stats (i.e. rank by wins n stuff...just have two separate tables. EZ)
+CREATE TABLE leaderboards(
+    leaderboard_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    league_id UUID NOT NULL,
+    name TEXT NOT NULL,
+    meta JSONB NOT NULL DEFAULT '{}'
 );
 
-CREATE TABLE leaderboard(
-    leaderboard_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    league_id UUID,
-    competition_id UUID,
-    name TEXT NOT NULL,
+CREATE TABLE stats(
+    player_id UUID NOT NULL,
+    leaderboard_id UUID NOT NULL REFERENCES leaderboards,
+    timestamp timestamptz NOT NULL DEFAULT now(),
+    points REAL NOT NULL,
     meta JSONB NOT NULL DEFAULT '{}',
+    PRIMARY KEY (player_id, leaderboard_id, timestamp)
 );
-SELECT create_hypertable('points', 'timestamp', 'leaderboard_id', 2, create_default_indexes=>FALSE);
-CREATE INDEX points_league_id_idx on points(league_id);
-CREATE INDEX points_competition_id_idx on points(competition_id);
+-- 1 for hashing thingy num-parititioons cos internet man said 1-to-1 with number of logical hard-drives
+SELECT create_hypertable('stats', 'timestamp', 'leaderboard_id', 1);
+CREATE INDEX leaderboard_league_id_idx on leaderboards(league_id);
+CREATE INDEX stats_player_id_idx on stats(player_id);

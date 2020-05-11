@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use diesel_utils::{PgConn, my_timespan_format::{self, DieselTimespan}, my_timespan_format_opt};
+use diesel_utils::{DieselTimespan, PgConn, my_timespan_format, my_timespan_format_opt};
 use crate::schema::{self, *};
 use uuid::Uuid;
 use serde_json;
