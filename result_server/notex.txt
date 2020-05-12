@@ -26,8 +26,6 @@ tuesday 4:
 friday 5:
 - transactions in result
 - league setup (i.e has periods, has set draft time)
-- switch to diesel-utils
-- investigate futures.join for multi query over two awaits (wouldnt work as do need one query to finsih before do 2nd one)
 
 
 We can have 8 people drafts in groups -> 2 for later periods.
@@ -39,20 +37,19 @@ first run prob use team == squad.
 sun 7: 
 - thread to process draft/advance it if no-one picks
 - commissioner seems a bit fucked
-- maybe need to refudge picks/draft-choice. need unique pick for draft. with nullable pick-id cnat index
-(can just have draft_choice_id on pick and check for join existance)
-- should fantasy hold a "valid pick-ids for this draft", would enable random choice from them for non-pickers?
-think its fine to hold array on period table. because will just load into mem when drafting and then lookup.
-prob shouldnt array actually
-- need max positions
 
 mon:
 - start leaderboard db/server
+tues:
+- handles subscriptions well 
+- need to asdd timepsan to Leaderboard DONE
+Wed:
+- add inactive pick to team/remove active
 
-tue:
+thurs:
 - docker container to boot/run things
+frid- 
 - add draft_prebid (better name?) as well as draft_queue
-- how leftover players handled? free-for-all?
 
 Idea of simultaneous pick == ban prob sucks for many-drafters, and also would need stop collaboration. So offer chance for users run own with friends,
 but not public one

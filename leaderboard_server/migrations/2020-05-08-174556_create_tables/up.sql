@@ -11,7 +11,8 @@ CREATE TABLE leaderboards(
     leaderboard_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     league_id UUID NOT NULL,
     name TEXT NOT NULL,
-    meta JSONB NOT NULL DEFAULT '{}'
+    meta JSONB NOT NULL DEFAULT '{}',
+    timespan TSTZRANGE NOT NULL DEFAULT tstzrange(now(), 'infinity', '[)')
 );
 
 CREATE TABLE stats(

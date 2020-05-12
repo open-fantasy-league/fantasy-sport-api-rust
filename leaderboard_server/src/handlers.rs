@@ -23,13 +23,13 @@ pub async fn sub_leagues(method: &str, message_id: Uuid, data: SubLeague, conn: 
     if let Some(ids) = data.unsub_league_ids{
         unsub_to_leagues(ws_user, ids.iter()).await;
     }
-    let subscriptions = &ws_user.subscriptions;
-    let data = match subscriptions.all_leagues{
+    let subscription = ws_user.subscriptions.get(&SubType::League);
+    let data = match subscription.all{
         true => {
             db::get_full_leagues(&conn, None, None)
         },
         false => {
-            db::get_full_leagues(&conn, Some(subscriptions.leagues.iter().collect()), None)
+            db::get_full_leagues(&conn, Some(subscription.ids.iter().collect()), None)
         }
     }?;
     let resp_msg = WSMsgOut::resp(message_id, method, data);
@@ -51,13 +51,13 @@ pub async fn sub_leaderboards(method: &str, message_id: Uuid, data: SubLeaderboa
     if let Some(ids) = data.unsub_leaderboard_ids{
         unsub_to_leaderboards(ws_user, ids.iter()).await;
     }
-    let subscriptions = &ws_user.subscriptions;
-    let data = match subscriptions.all_leaderboards{
+    let subscription = ws_user.subscriptions.get(&SubType::Leaderboard);
+    let data = match subscription.all{
         true => {
             db::get_full_leagues(&conn, None, None)
         },
         false => {
-            db::get_full_leagues(&conn, None, Some(subscriptions.leaderboards.iter().collect()))
+            db::get_full_leagues(&conn, None, Some(subscription.ids.iter().collect()))
         }
     }?;
     let resp_msg = WSMsgOut::resp(message_id, method, data);
@@ -69,8 +69,8 @@ pub async fn insert_leaderboards(method: &str, message_id: Uuid, data: Vec<Leade
     // publish_for_leagues::<Leaderboard>(
     //     None, ws_conns, &out,
     // ).await?;
-    publish_for_leaderboards::<Leaderboard>(
-        None, ws_conns, &out,
+    publish::<Leaderboard>(
+        None, ws_conns, &out, SubType::Leaderboard
     ).await?;
     let resp_msg = WSMsgOut::resp(message_id, method, out);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
@@ -84,8 +84,8 @@ pub async fn update_leaderboards(method: &str, message_id: Uuid, data: Vec<Leade
     // publish_for_leagues::<Leaderboard>(
     //     None, ws_conns, &out,
     // ).await?;
-    publish_for_leaderboards::<Leaderboard>(
-        None, ws_conns, &out,
+    publish::<Leaderboard>(
+        None, ws_conns, &out, SubType::Leaderboard
     ).await?;
     let resp_msg = WSMsgOut::resp(message_id, method, out);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
@@ -97,8 +97,8 @@ pub async fn insert_stats(method: &str, message_id: Uuid, data: Vec<Stat>, conn:
     // publish_for_leagues::<Player>(
     //     Some(&conn), ws_conns, &out,
     // ).await?;
-    publish_for_leaderboards::<Stat>(
-        None, ws_conns, &out,
+    publish::<Stat>(
+        None, ws_conns, &out, SubType::Leaderboard
     ).await?;
     let resp_msg = WSMsgOut::resp(message_id, method, out);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())

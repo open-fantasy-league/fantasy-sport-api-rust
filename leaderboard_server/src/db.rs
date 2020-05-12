@@ -26,3 +26,9 @@ pub fn get_full_leagues(conn: &PgConn, league_id_filter: Option<Vec<&Uuid>>, lea
     let all: Vec<(Leaderboard, Vec<Stat>)> = leaderboards.into_iter().zip(grouped_players).collect();
     Ok(all.into_iter().map(|rows| ApiLeaderboard::from(rows)).collect())
 }
+
+pub fn get_league_ids_to_leaderboard_ids(conn: &PgConn, leaderboard_ids: Vec<Uuid>) -> Result<Vec<(Uuid, Uuid)>, diesel::result::Error>{
+    schema::leaderboards::table.select((schema::leaderboards::leaderboard_id, schema::leaderboards::league_id))
+        .filter(schema::leaderboards::leaderboard_id.eq(any(leaderboard_ids)))
+        .load(conn)
+}

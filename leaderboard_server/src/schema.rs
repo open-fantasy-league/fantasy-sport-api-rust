@@ -4,6 +4,7 @@ table! {
         league_id -> Uuid,
         name -> Text,
         meta -> Jsonb,
+        timespan -> Tstzrange,
     }
 }
 

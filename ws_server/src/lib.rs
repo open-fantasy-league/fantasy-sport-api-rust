@@ -9,7 +9,8 @@ use warp::ws;
 use serde::{Deserialize, Serialize};
 use async_trait::async_trait;
 mod subscriptions;
-pub use subscriptions::Subscriptions;
+pub use subscriptions::*;
+use std::marker::PhantomData;
 // There's so many different error handling libraries to choose from
 // https://blog.yoshuawuyts.com/error-handling-survey/
 // Eventually will probably use snafu
@@ -17,7 +18,7 @@ pub type BoxError = Box<dyn std::error::Error + Sync + Send + 'static>;
 // Arcs because warp needs to share WsConnections and WsMethods between all websocket connections (different threads)
 // Maybe this lib should be agnostic to that, as it just focuses on a single connection
 // However not sure how to "pull stuff out of Arcs", maybe by design that wouldnt work. And wouldnt be threadsafe.
-pub type WSConnections<T> = Arc<Mutex<HashMap<Uuid, WSConnection<T>>>>;
+pub type WSConnections<CustomSubType, T> = Arc<Mutex<HashMap<Uuid, WSConnection<CustomSubType, T>>>>;
 
 
 // TODO make PgConn and Pgpool generic
@@ -28,19 +29,20 @@ use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
 type PgPool = Pool<ConnectionManager<PgConnection>>;
 type PgConn = PooledConnection<ConnectionManager<PgConnection>>;
 
-pub fn ws_conns<T: Subscriptions>() -> WSConnections<T>{
+pub fn ws_conns<CustomSubType: std::cmp::Eq + std::hash::Hash, T: SubscriptionHandler<CustomSubType>>() -> WSConnections<CustomSubType, T>{
     Arc::new(Mutex::new(HashMap::new()))
 }
 
-pub struct WSConnection<T: Subscriptions>{
+pub struct WSConnection<CustomSubType: std::cmp::Eq + std::hash::Hash, T: SubscriptionHandler<CustomSubType>>{
     pub id: Uuid,
     pub subscriptions: T,
-    pub tx: mpsc::UnboundedSender<Result<ws::Message, warp::Error>>
+    pub tx: mpsc::UnboundedSender<Result<ws::Message, warp::Error>>,
+    resource_type: PhantomData<CustomSubType>
 }
 
-impl<T: Subscriptions> WSConnection<T>{
-    fn new(tx: mpsc::UnboundedSender<Result<ws::Message, warp::Error>>) -> WSConnection<T> {
-        WSConnection{id: Uuid::new_v4(), subscriptions: T::new(), tx: tx}
+impl<CustomSubType: std::cmp::Eq + std::hash::Hash, T: SubscriptionHandler<CustomSubType>> WSConnection<CustomSubType, T>{
+    fn new(tx: mpsc::UnboundedSender<Result<ws::Message, warp::Error>>) -> WSConnection<CustomSubType, T> {
+        WSConnection{id: Uuid::new_v4(), subscriptions: T::new(), tx: tx, resource_type: PhantomData}
     }
 }
 
@@ -102,7 +104,7 @@ pub fn ws_error_resp(error_msg: String) -> ws::Message{
     )
 }
 
-pub async fn handle_ws_conn<T: Subscriptions, U: WSHandler<T>>(ws: ws::WebSocket, pg_pool: PgPool, mut ws_conns: WSConnections<T>) {
+pub async fn handle_ws_conn<CustomSubType: std::cmp::Eq + std::hash::Hash, T: SubscriptionHandler<CustomSubType>, U: WSHandler<CustomSubType, T>>(ws: ws::WebSocket, pg_pool: PgPool, mut ws_conns: WSConnections<CustomSubType, T>) {
     // https://github.com/seanmonstar/warp/blob/master/examples/websockets_chat.rs
     let (ws_send, mut ws_recv) = ws.split();
     let (tx, rx) = mpsc::unbounded_channel();
@@ -126,7 +128,7 @@ pub async fn handle_ws_conn<T: Subscriptions, U: WSHandler<T>>(ws: ws::WebSocket
             // pgpool get should probably be deferred until after we unwrap/get websocket message
             // but trying like this as worried about ownership of pool, moving it into funcs
             Ok(msg) => match pg_pool.get(){
-                Ok(conn) => handle_ws_msg::<T, U>(msg, conn, &mut ws_conns, ws_id).await,
+                Ok(conn) => handle_ws_msg::<CustomSubType, T, U>(msg, conn, &mut ws_conns, ws_id).await,
                 Err(e) => ws_error_resp(e.to_string())
             },
             Err(e) => {
@@ -153,8 +155,8 @@ pub async fn handle_ws_conn<T: Subscriptions, U: WSHandler<T>>(ws: ws::WebSocket
     }
 }
 
-async fn handle_ws_msg<T: Subscriptions, U: WSHandler<T>>(
-    msg: ws::Message, conn: PgConn, ws_conns: &mut WSConnections<T>, user_ws_id: Uuid
+async fn handle_ws_msg<CustomSubType: std::cmp::Eq + std::hash::Hash, T: SubscriptionHandler<CustomSubType>, U: WSHandler<CustomSubType, T>>(
+    msg: ws::Message, conn: PgConn, ws_conns: &mut WSConnections<CustomSubType, T>, user_ws_id: Uuid
 ) -> ws::Message{
     dbg!(&msg);
     match msg.to_str(){
@@ -172,9 +174,9 @@ async fn handle_ws_msg<T: Subscriptions, U: WSHandler<T>>(
 }
 
 #[async_trait]
-pub trait WSHandler<T: Subscriptions>{
+pub trait WSHandler<CustomSubType: std::cmp::Eq + std::hash::Hash, T: SubscriptionHandler<CustomSubType>>{
     async fn ws_req_resp(
-        msg: String, conn: PgConn, ws_conns: &mut WSConnections<T>, user_ws_id: Uuid
+        msg: String, conn: PgConn, ws_conns: &mut WSConnections<CustomSubType, T>, user_ws_id: Uuid
     ) -> Result<String, BoxError>;
 }
 

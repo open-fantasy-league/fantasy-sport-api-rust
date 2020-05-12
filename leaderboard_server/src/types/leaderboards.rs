@@ -3,10 +3,7 @@ use serde_json;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use crate::publisher::Publishable;
-use diesel_utils::PgConn;
-use warp_ws_server::BoxError;
+use diesel_utils::{DieselTimespan, my_timespan_format, my_timespan_format_opt, PgConn};
 
 #[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations)]
 #[primary_key(leaderboard_id)]
@@ -15,6 +12,8 @@ pub struct Leaderboard {
     pub league_id: Uuid,
     pub name: String,
     pub meta: serde_json::Value,
+    #[serde(with = "my_timespan_format")]
+    pub timespan: DieselTimespan
 }
 
 #[derive(Deserialize, Debug, AsChangeset)]
@@ -25,6 +24,8 @@ pub struct LeaderboardUpdate {
     pub league_id: Uuid,
     pub name: Option<String>,
     pub meta: Option<serde_json::Value>,
+    #[serde(with = "my_timespan_format_opt")]
+    pub timespan: Option<DieselTimespan>
 }
 
 #[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations)]
@@ -58,75 +59,5 @@ impl ApiLeaderboard{
             meta: leaderboard.meta,
             stats: stats
         }
-    }
-}
-
-// // This is shit and a consequence of not splitting up subscriptions
-// #[derive(Serialize, Debug, LabelledGeneric)]
-// pub struct ApiLeaderboard2ElectricBoogaloo{
-//     pub leaderboard_id: Uuid,
-//     pub league_id: Uuid,
-//     pub name: String,
-//     pub meta: serde_json::Value,
-//     pub points: Vec<Points>
-// }
-
-impl Publishable for Leaderboard {
-    fn message_type<'a>() -> &'a str {
-        "leaderboard"
-    }
-
-    fn subscription_map_key(&self) -> Uuid {
-        self.league_id
-    }
-
-    fn subscription_id_map(
-        conn: Option<&PgConn>,
-        publishables: &Vec<Self>,
-    ) -> Result<HashMap<Uuid, Uuid>, BoxError> {
-        Ok(publishables
-            .iter()
-            .map(|c| (c.league_id, c.league_id))
-            .collect())
-    }
-}
-
-impl Publishable for ApiLeaderboard {
-    fn message_type<'a>() -> &'a str {
-        "leaderboard_detailed"
-    }
-
-    fn subscription_map_key(&self) -> Uuid {
-        self.league_id
-    }
-
-    fn subscription_id_map(
-        conn: Option<&PgConn>,
-        publishables: &Vec<Self>,
-    ) -> Result<HashMap<Uuid, Uuid>, BoxError> {
-        Ok(publishables
-            .iter()
-            .map(|c| (c.league_id, c.league_id))
-            .collect())
-    }
-}
-
-impl Publishable for Stat {
-    fn message_type<'a>() -> &'a str {
-        "stat"
-    }
-
-    fn subscription_map_key(&self) -> Uuid {
-        self.leaderboard_id
-    }
-
-    fn subscription_id_map(
-        conn: Option<&PgConn>,
-        publishables: &Vec<Self>,
-    ) -> Result<HashMap<Uuid, Uuid>, BoxError> {
-        Ok(publishables
-            .iter()
-            .map(|c| (c.leaderboard_id, c.leaderboard_id))
-            .collect())
     }
 }
