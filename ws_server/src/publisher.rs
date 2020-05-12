@@ -5,14 +5,24 @@ use warp::ws;
 
 pub trait Publishable<CustomSubType> {
     fn message_type<'a>() -> &'a str;
+
     fn subscribed_publishables<'b>(
-        publishables: &'b Vec<Self>,
-        sub: &mut Subscription,
-        sub_type: &CustomSubType,
-        conn: Option<&PgConn>,
-    ) -> Result<Vec<&'b Self>, BoxError>
-    where
-        Self: Sized;
+        publishables: &'b Vec<Self>, sub: &mut Subscription, sub_type: &CustomSubType, conn_opt: Option<&PgConn>
+    ) -> Result<Vec<&'b Self>, BoxError> where Self: Sized{
+        Ok(
+            match sub.all{
+                // TODO anything nicer than iter->colelct?
+                true => publishables.iter().collect(),
+                false => {
+                    Self::partial_subscribed_publishables(publishables, sub, sub_type, conn_opt)?
+                }
+            }
+        )
+    }
+
+    fn partial_subscribed_publishables<'b>(
+        publishables: &'b Vec<Self>, sub: &mut Subscription, sub_type: &CustomSubType, conn: Option<&PgConn>
+    ) -> Result<Vec<&'b Self>, BoxError> where Self: Sized;
 }
 
 
