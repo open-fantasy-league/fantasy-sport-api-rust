@@ -59,9 +59,10 @@ impl Publishable<SubType> for Stat {
                 )?.into_iter().collect();
                 publishables.iter()
                 .filter(|x| sub.ids.contains(&id_map.get(&x.leaderboard_id).unwrap())).collect()
-        },
-        SubType::Leaderboard => publishables.iter()
+            },
+            SubType::Leaderboard => publishables.iter()
                 .filter(|x| sub.ids.contains(&x.leaderboard_id)).collect()
-        })
+        }
+    )
     }
 }
