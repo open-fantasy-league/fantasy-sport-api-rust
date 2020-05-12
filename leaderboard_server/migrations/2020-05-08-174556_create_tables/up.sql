@@ -7,6 +7,10 @@
 -- with timestamp people have flexibility to choose when they want to update. Also easier to show historic rankings
 
 -- also for trying to rank by other stats (i.e. rank by wins n stuff...just have two separate tables. EZ)
+
+-- https://wiki.postgresql.org/images/1/1b/Ranges%2C_Partitioning_and_Limitations.pdf
+--useful for future reference maybe
+
 CREATE TABLE leaderboards(
     leaderboard_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     league_id UUID NOT NULL,

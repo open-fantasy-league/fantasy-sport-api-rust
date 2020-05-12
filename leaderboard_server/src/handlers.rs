@@ -7,7 +7,6 @@ use crate::subscriptions::*;
 use crate::db;
 use crate::messages::*;
 use diesel_utils::*;
-use crate::publisher::*;
 use crate::diesel::RunQueryDsl;  // imported here so that can run db macros
 use crate::diesel::ExpressionMethods;
 use warp_ws_server::{GetEz, sub, unsub, sub_all, publish};
@@ -69,9 +68,9 @@ pub async fn sub_leaderboards(method: &str, message_id: Uuid, data: SubLeaderboa
 
 pub async fn insert_leaderboards(method: &str, message_id: Uuid, data: Vec<Leaderboard>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
     let out: Vec<Leaderboard> = insert!(&conn, leaderboards::table, data)?;
-    // publish_for_leagues::<Leaderboard>(
-    //     None, ws_conns, &out,
-    // ).await?;
+    publish::<SubType, Leaderboard>(
+        None, ws_conns, &out, SubType::League
+    ).await?;
     publish::<SubType, Leaderboard>(
         None, ws_conns, &out, SubType::Leaderboard
     ).await?;
@@ -84,9 +83,9 @@ pub async fn update_leaderboards(method: &str, message_id: Uuid, data: Vec<Leade
         data.iter().map(|c| {
         update!(&conn, leaderboards, leaderboard_id, c)
     }).collect()})?;
-    // publish_for_leagues::<Leaderboard>(
-    //     None, ws_conns, &out,
-    // ).await?;
+    publish::<SubType, Leaderboard>(
+        None, ws_conns, &out, SubType::League
+    ).await?;
     publish::<SubType, Leaderboard>(
         None, ws_conns, &out, SubType::Leaderboard
     ).await?;
@@ -97,9 +96,9 @@ pub async fn update_leaderboards(method: &str, message_id: Uuid, data: Vec<Leade
 pub async fn insert_stats(method: &str, message_id: Uuid, data: Vec<Stat>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
     // TODO reduce the ridiculousness of the Values type
     let out: Vec<Stat> = insert!(&conn, stats::table, data)?;
-    // publish_for_leagues::<Player>(
-    //     Some(&conn), ws_conns, &out,
-    // ).await?;
+    publish::<SubType, Stat>(
+        None, ws_conns, &out, SubType::League
+    ).await?;
     publish::<SubType, Stat>(
         None, ws_conns, &out, SubType::Leaderboard
     ).await?;
