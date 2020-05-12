@@ -10,20 +10,22 @@ use diesel_utils::*;
 use crate::publisher::*;
 use crate::diesel::RunQueryDsl;  // imported here so that can run db macros
 use crate::diesel::ExpressionMethods;
+use warp_ws_server::{GetEz, sub, unsub, sub_all, publish};
 
 pub async fn sub_leagues(method: &str, message_id: Uuid, data: SubLeague, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
     let mut hmmmm = ws_conns.lock().await;
     let ws_user = hmmmm.get_mut(&user_ws_id).ok_or("Websocket gone away")?;
+    let sub_type = SubType::League;
     if let Some(toggle) = data.all{
-        sub_to_all_leagues(ws_user, toggle).await;
+        sub_all(&sub_type, ws_user, toggle).await;
     }
     if let Some(ids) = data.sub_league_ids{
-        sub_to_leagues(ws_user, ids.iter()).await;
+        sub(&sub_type, ws_user, ids.iter()).await;
     }
     if let Some(ids) = data.unsub_league_ids{
-        unsub_to_leagues(ws_user, ids.iter()).await;
+        unsub(&sub_type, ws_user, ids.iter()).await;
     }
-    let subscription = ws_user.subscriptions.get(&SubType::League);
+    let subscription = ws_user.subscriptions.get_ez(&SubType::League);
     let data = match subscription.all{
         true => {
             db::get_full_leagues(&conn, None, None)
@@ -42,16 +44,17 @@ pub async fn sub_leaderboards(method: &str, message_id: Uuid, data: SubLeaderboa
     // ANd is it holding the lock for this whole scope? doesnt need to
     let mut hmmmm = ws_conns.lock().await;
     let ws_user = hmmmm.get_mut(&user_ws_id).ok_or("Websocket gone away")?;
+    let sub_type = SubType::Leaderboard;
     if let Some(toggle) = data.all{
-        sub_to_all_leaderboards(ws_user, toggle).await;
+        sub_all(&sub_type, ws_user, toggle).await;
     }
     if let Some(ids) = data.sub_leaderboard_ids{
-        sub_to_leaderboards(ws_user, ids.iter()).await;
+        sub(&sub_type, ws_user, ids.iter()).await;
     }
     if let Some(ids) = data.unsub_leaderboard_ids{
-        unsub_to_leaderboards(ws_user, ids.iter()).await;
+        unsub(&sub_type, ws_user, ids.iter()).await;
     }
-    let subscription = ws_user.subscriptions.get(&SubType::Leaderboard);
+    let subscription = ws_user.subscriptions.get_ez(&SubType::Leaderboard);
     let data = match subscription.all{
         true => {
             db::get_full_leagues(&conn, None, None)
@@ -69,7 +72,7 @@ pub async fn insert_leaderboards(method: &str, message_id: Uuid, data: Vec<Leade
     // publish_for_leagues::<Leaderboard>(
     //     None, ws_conns, &out,
     // ).await?;
-    publish::<Leaderboard>(
+    publish::<SubType, Leaderboard>(
         None, ws_conns, &out, SubType::Leaderboard
     ).await?;
     let resp_msg = WSMsgOut::resp(message_id, method, out);
@@ -84,7 +87,7 @@ pub async fn update_leaderboards(method: &str, message_id: Uuid, data: Vec<Leade
     // publish_for_leagues::<Leaderboard>(
     //     None, ws_conns, &out,
     // ).await?;
-    publish::<Leaderboard>(
+    publish::<SubType, Leaderboard>(
         None, ws_conns, &out, SubType::Leaderboard
     ).await?;
     let resp_msg = WSMsgOut::resp(message_id, method, out);
@@ -97,7 +100,7 @@ pub async fn insert_stats(method: &str, message_id: Uuid, data: Vec<Stat>, conn:
     // publish_for_leagues::<Player>(
     //     Some(&conn), ws_conns, &out,
     // ).await?;
-    publish::<Stat>(
+    publish::<SubType, Stat>(
         None, ws_conns, &out, SubType::Leaderboard
     ).await?;
     let resp_msg = WSMsgOut::resp(message_id, method, out);

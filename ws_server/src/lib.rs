@@ -1,16 +1,18 @@
 use uuid::Uuid;
 use tokio::sync::{mpsc, Mutex};
-use futures::{FutureExt, StreamExt, Future};
+use futures::{FutureExt, StreamExt};
 use std::sync::Arc;
 use std::collections::{HashMap};
-use std::fmt;
-use std::pin::Pin;
 use warp::ws;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use async_trait::async_trait;
 mod subscriptions;
 pub use subscriptions::*;
-use std::marker::PhantomData;
+mod publisher;
+pub use publisher::*;
+
+
+
 // There's so many different error handling libraries to choose from
 // https://blog.yoshuawuyts.com/error-handling-survey/
 // Eventually will probably use snafu
@@ -18,31 +20,30 @@ pub type BoxError = Box<dyn std::error::Error + Sync + Send + 'static>;
 // Arcs because warp needs to share WsConnections and WsMethods between all websocket connections (different threads)
 // Maybe this lib should be agnostic to that, as it just focuses on a single connection
 // However not sure how to "pull stuff out of Arcs", maybe by design that wouldnt work. And wouldnt be threadsafe.
-pub type WSConnections<CustomSubType, T> = Arc<Mutex<HashMap<Uuid, WSConnection<CustomSubType, T>>>>;
+pub type WSConnections<CustomSubType> = Arc<Mutex<HashMap<Uuid, WSConnection<CustomSubType>>>>;
 
 
 // TODO make PgConn and Pgpool generic
+// Really this library shouldnt give a shit about databases,
+// Prob need to follow https://hoverbear.org/blog/optional-arguments/, rather than passing in an Option<PgConn> to some stuff
 use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
-
-
 type PgPool = Pool<ConnectionManager<PgConnection>>;
 type PgConn = PooledConnection<ConnectionManager<PgConnection>>;
 
-pub fn ws_conns<CustomSubType: std::cmp::Eq + std::hash::Hash, T: SubscriptionHandler<CustomSubType>>() -> WSConnections<CustomSubType, T>{
+pub fn ws_conns<CustomSubType: std::cmp::Eq + std::hash::Hash>() -> WSConnections<CustomSubType>{
     Arc::new(Mutex::new(HashMap::new()))
 }
 
-pub struct WSConnection<CustomSubType: std::cmp::Eq + std::hash::Hash, T: SubscriptionHandler<CustomSubType>>{
+pub struct WSConnection<CustomSubType: std::cmp::Eq + std::hash::Hash>{
     pub id: Uuid,
-    pub subscriptions: T,
+    pub subscriptions: Subscriptions<CustomSubType>,
     pub tx: mpsc::UnboundedSender<Result<ws::Message, warp::Error>>,
-    resource_type: PhantomData<CustomSubType>
 }
 
-impl<CustomSubType: std::cmp::Eq + std::hash::Hash, T: SubscriptionHandler<CustomSubType>> WSConnection<CustomSubType, T>{
-    fn new(tx: mpsc::UnboundedSender<Result<ws::Message, warp::Error>>) -> WSConnection<CustomSubType, T> {
-        WSConnection{id: Uuid::new_v4(), subscriptions: T::new(), tx: tx, resource_type: PhantomData}
+impl<CustomSubType: std::cmp::Eq + std::hash::Hash> WSConnection<CustomSubType>{
+    fn new<T: SubscriptionHandler<CustomSubType>>(tx: mpsc::UnboundedSender<Result<ws::Message, warp::Error>>) -> WSConnection<CustomSubType> {
+        WSConnection{id: Uuid::new_v4(), subscriptions: T::new(), tx: tx}
     }
 }
 
@@ -68,33 +69,24 @@ impl<'a, T: Serialize> WSMsgOut<'a, T>{
     }
 }
 
+// Now Im using Enums properly, there's no leftover "default" in the pattern match to have to throw a custom error on
+// (It will get a deserializing error if the "method" is invalid)
 
-// #[derive(Deserialize)]
-// #[serde(tag = "method")]
-// pub struct WSReq<'a> {
-//     pub message_id: Uuid,
-//     pub method: &'a str,
-//     // This is left as string, rather than an arbitrary serde_json::Value.
-//     // because if you says it's a Value, then do serde_json::from_value on it, and it fails, the error message is really bad
-//     // SO want to do a second from_string on the data
-//     pub data: serde_json::Value
+// #[derive(Debug, Clone)]
+// pub struct InvalidRequestError{pub description: String}
+
+// impl fmt::Display for InvalidRequestError{
+//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//         write!(f, "Invalid request: {}", self.description)
+//     }
 // }
 
-#[derive(Debug, Clone)]
-pub struct InvalidRequestError{pub description: String}
-
-impl fmt::Display for InvalidRequestError{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Invalid request: {}", self.description)
-    }
-}
-
-impl std::error::Error for InvalidRequestError{
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        // Generic error, underlying cause isn't tracked.
-        None
-    }
-}
+// impl std::error::Error for InvalidRequestError{
+//     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+//         // Generic error, underlying cause isn't tracked.
+//         None
+//     }
+// }
 
 pub fn ws_error_resp(error_msg: String) -> ws::Message{
     ws::Message::text(
@@ -104,11 +96,13 @@ pub fn ws_error_resp(error_msg: String) -> ws::Message{
     )
 }
 
-pub async fn handle_ws_conn<CustomSubType: std::cmp::Eq + std::hash::Hash, T: SubscriptionHandler<CustomSubType>, U: WSHandler<CustomSubType, T>>(ws: ws::WebSocket, pg_pool: PgPool, mut ws_conns: WSConnections<CustomSubType, T>) {
+pub async fn handle_ws_conn<CustomSubType: std::cmp::Eq + std::hash::Hash, T: SubscriptionHandler<CustomSubType>, U: WSHandler<CustomSubType>>(
+    ws: ws::WebSocket, pg_pool: PgPool, mut ws_conns: WSConnections<CustomSubType>
+) {
     // https://github.com/seanmonstar/warp/blob/master/examples/websockets_chat.rs
     let (ws_send, mut ws_recv) = ws.split();
     let (tx, rx) = mpsc::unbounded_channel();
-    let ws_conn = WSConnection::new(tx);
+    let ws_conn = WSConnection::new::<T>(tx);
     let ws_id = ws_conn.id;
     ws_conns.lock().await.insert(ws_conn.id, ws_conn);
     tokio::task::spawn(rx.forward(ws_send).map(|result| {
@@ -126,9 +120,9 @@ pub async fn handle_ws_conn<CustomSubType: std::cmp::Eq + std::hash::Hash, T: Su
             // Err handling looks a bit clunky, but want to only break on websocket error
             // (i.e. not pgpool error)
             // pgpool get should probably be deferred until after we unwrap/get websocket message
-            // but trying like this as worried about ownership of pool, moving it into funcs
+            // but trying like this as worried about ownership of pool, so moving it into funcs
             Ok(msg) => match pg_pool.get(){
-                Ok(conn) => handle_ws_msg::<CustomSubType, T, U>(msg, conn, &mut ws_conns, ws_id).await,
+                Ok(conn) => handle_ws_msg::<CustomSubType, U>(msg, conn, &mut ws_conns, ws_id).await,
                 Err(e) => ws_error_resp(e.to_string())
             },
             Err(e) => {
@@ -155,8 +149,8 @@ pub async fn handle_ws_conn<CustomSubType: std::cmp::Eq + std::hash::Hash, T: Su
     }
 }
 
-async fn handle_ws_msg<CustomSubType: std::cmp::Eq + std::hash::Hash, T: SubscriptionHandler<CustomSubType>, U: WSHandler<CustomSubType, T>>(
-    msg: ws::Message, conn: PgConn, ws_conns: &mut WSConnections<CustomSubType, T>, user_ws_id: Uuid
+async fn handle_ws_msg<CustomSubType: std::cmp::Eq + std::hash::Hash, U: WSHandler<CustomSubType>>(
+    msg: ws::Message, conn: PgConn, ws_conns: &mut WSConnections<CustomSubType>, user_ws_id: Uuid
 ) -> ws::Message{
     dbg!(&msg);
     match msg.to_str(){
@@ -174,21 +168,12 @@ async fn handle_ws_msg<CustomSubType: std::cmp::Eq + std::hash::Hash, T: Subscri
 }
 
 #[async_trait]
-pub trait WSHandler<CustomSubType: std::cmp::Eq + std::hash::Hash, T: SubscriptionHandler<CustomSubType>>{
+pub trait WSHandler<CustomSubType: std::cmp::Eq + std::hash::Hash>{
     async fn ws_req_resp(
-        msg: String, conn: PgConn, ws_conns: &mut WSConnections<CustomSubType, T>, user_ws_id: Uuid
+        msg: String, conn: PgConn, ws_conns: &mut WSConnections<CustomSubType>, user_ws_id: Uuid
     ) -> Result<String, BoxError>;
 }
 
-// async fn ws_req_resp<T: Subscriptions>(
-//     msg: String, conn: PgConn, ws_conns: &mut WSConnections<T>, user_ws_id: Uuid, methods: &WSMethods<T>
-// ) -> Result<String, BoxError>{
-//     let req: WSReq = serde_json::from_str(&msg)?;
-//     println!("{}", &req.data);
-//     let method = methods.get(&req.method.to_string())
-//         .ok_or(Box::new(InvalidRequestError{description: req.method.to_string()}))?;
-//     method(req, conn, ws_conns, user_ws_id).await
-// }
 
 #[cfg(test)]
 mod tests {

@@ -22,18 +22,18 @@ use warp_ws_server::*;
 use async_trait::async_trait;
 
 
-pub type WSConnections_ = warp_ws_server::WSConnections<subscriptions::Subscriptions>;
-pub type WSConnection_ = warp_ws_server::WSConnection<subscriptions::Subscriptions>;
+pub type WSConnections_ = warp_ws_server::WSConnections<subscriptions::SubType>;
+pub type WSConnection_ = warp_ws_server::WSConnection<subscriptions::SubType>;
 
 
-struct A{
+struct MyWsHandler{
 }
 
 #[async_trait]
-impl WSHandler<subscriptions::Subscriptions> for A{
+impl WSHandler<subscriptions::SubType> for MyWsHandler{
 
     async fn ws_req_resp(
-        msg: String, conn: PgConn, ws_conns: &mut WSConnections<subscriptions::Subscriptions>, user_ws_id: Uuid
+        msg: String, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid
     ) -> Result<String, BoxError>{
         let req: WSReq = serde_json::from_str(&msg)?;
         match req{
@@ -53,13 +53,16 @@ async fn main() {
     let port = env::var("LEADERBOARD_PORT").expect("LEADERBOARD_PORT env var must be set").parse().expect("Port must be a number you lemming.");
     let pool = pg_pool(db_url);
 
-    let ws_conns = warp_ws_server::ws_conns::<subscriptions::Subscriptions>();
+    let ws_conns = warp_ws_server::ws_conns::<subscriptions::SubType>();
     let ws_conns_filt = warp::any().map(move || ws_conns.clone());
 
     let ws_router = warp::any().and(warp::ws()).and(ws_conns_filt)
         .map(move |ws: warp::ws::Ws, ws_conns|{
             let pool = pool.clone();
-            ws.on_upgrade(move |socket| warp_ws_server::handle_ws_conn::<subscriptions::Subscriptions, A>(socket, pool, ws_conns))
+            ws.on_upgrade(move |socket| 
+                warp_ws_server::handle_ws_conn::<subscriptions::SubType, subscriptions::MySubHandler, MyWsHandler>(
+                    socket, pool, ws_conns
+                ))
         });
     warp::serve(ws_router).run(([127, 0, 0, 1], port)).await;
 }

@@ -1,20 +1,12 @@
-use warp::ws;
 use std::collections::HashMap;
 use uuid::Uuid;
 use warp_ws_server::*;
-use serde::Serialize;
-use crate::WSConnections_;
 use diesel_utils::PgConn;
 use crate::types::leaderboards::*;
-use crate::subscriptions::{Subscription, SubType};
+use crate::subscriptions::SubType;
 use crate::db;
 
-pub trait Publishable {
-    fn message_type<'a>() -> &'a str;
-    fn subscribed_publishables<'b>(publishables: &'b Vec<Self>, sub: &mut Subscription, sub_type: &SubType, conn: Option<&PgConn>) -> Result<Vec<&'b Self>, BoxError>  where Self: Sized;
-}
-
-impl Publishable for Leaderboard {
+impl Publishable<SubType> for Leaderboard {
     fn message_type<'a>() -> &'a str {
         "leaderboard"
     }
@@ -41,7 +33,7 @@ impl Publishable for Leaderboard {
     }
 }
 
-impl Publishable for ApiLeaderboard {
+impl Publishable<SubType> for ApiLeaderboard {
     fn message_type<'a>() -> &'a str {
         "leaderboard_detailed"
     }
@@ -70,7 +62,7 @@ impl Publishable for ApiLeaderboard {
     }
 }
 
-impl Publishable for Stat {
+impl Publishable<SubType> for Stat {
     fn message_type<'a>() -> &'a str {
         "stat"
     }
@@ -96,24 +88,4 @@ impl Publishable for Stat {
             }
         )
     }
-}
-
-pub async fn publish<T: Publishable + Serialize + std::fmt::Debug>(
-    conn_opt: Option<PgConn>, ws_conns: &mut WSConnections_, publishables: &Vec<T>, sub_type: SubType
-) -> Result<bool, BoxError>{
-    // TODO This doesnt include team-names that were mutated by their name-timestamp being
-    for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
-        let subscribed_publishables: Vec<&T> = T::subscribed_publishables(publishables, wsconn.subscriptions.get(&sub_type), &sub_type, conn_opt.as_ref())?;
-        let push_msg = WSMsgOut::push(T::message_type(), subscribed_publishables);
-        let subscribed_json_r = serde_json::to_string(&push_msg);
-        match subscribed_json_r.as_ref(){
-            Ok(subscribed_json) => {
-                if let Err(publish) = wsconn.tx.send(Ok(ws::Message::text(subscribed_json))){
-                    println!("Error publishing update {:?} to {} : {}", &subscribed_json, uid, &publish)
-                };
-            },
-            Err(_) => println!("Error json serializing publisher update {:?} to {}", &subscribed_json_r, uid)
-        };
-    };
-    Ok(true)
 }

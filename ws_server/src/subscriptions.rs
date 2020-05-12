@@ -1,11 +1,6 @@
-use crate::{BoxError, PgConn};
+use crate::{WSConnection};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
-// Not commonised yet
-//Plans:
-//subscriptions -> singular-subscription
-// worth holding a reverse map?
-// i.e. subscriptions -> users rather than users -> subscription
 
 pub struct Subscription {
     pub ids: HashSet<Uuid>,
@@ -13,7 +8,7 @@ pub struct Subscription {
 }
 
 impl Subscription {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             ids: HashSet::new(),
             all: false,
@@ -21,26 +16,42 @@ impl Subscription {
     }
 }
 
-pub struct Subscriptions<CustomSubType> {
-    pub inner: HashMap<CustomSubType, Subscription>,
-}
+pub type Subscriptions<CustomSubType> = HashMap<CustomSubType, Subscription>;
 
 pub trait SubscriptionHandler<CustomSubType: std::cmp::Eq + std::hash::Hash> {
-    fn new() -> Self;
-    fn hmmm(&mut self) -> Subscriptions<CustomSubType>;
-    fn get(&mut self, sub_type: &'static CustomSubType) -> &mut Subscription {
-        self.hmmm().inner.get_mut(sub_type).unwrap()
+    fn new() -> Subscriptions<CustomSubType>;
+}
+
+//Just to avoid having to add .unwrap(), when in this scenario its 100% safe
+pub trait GetEz<CustomSubType> {
+    fn get_ez(&mut self, sub_type: &CustomSubType) -> &mut Subscription;
+}
+
+impl<CustomSubType: std::cmp::Eq + std::hash::Hash> GetEz<CustomSubType>
+    for Subscriptions<CustomSubType>
+{
+    fn get_ez(&mut self, sub_type: &CustomSubType) -> &mut Subscription {
+        self.get_mut(sub_type).unwrap()
     }
 }
 
-pub trait Publishable<CustomSubType> {
-    fn message_type<'a>() -> &'a str;
-    fn subscribed_publishables<'b>(
-        publishables: &'b Vec<Self>,
-        sub: &mut Subscription,
-        sub_type: &CustomSubType,
-        conn: Option<&PgConn>,
-    ) -> Result<Vec<&'b Self>, BoxError>
-    where
-        Self: Sized;
+pub async fn sub<'a, T: Iterator<Item = &'a Uuid>, CustomSubType: std::cmp::Eq + std::hash::Hash>(
+    sub_type: &CustomSubType, ws_user: &mut WSConnection<CustomSubType>, ids: T
+){
+    ids.for_each(|id| {
+        println!("Adding subscription {}", id); ws_user.subscriptions.get_mut(sub_type).unwrap().ids.insert(*id);
+    });
+}
+
+pub async fn unsub<'a, T: Iterator<Item = &'a Uuid>, CustomSubType: std::cmp::Eq + std::hash::Hash>(
+    sub_type: &CustomSubType, ws_user: &mut WSConnection<CustomSubType>, ids: T
+){
+    // TODO failure handling, does it panic?
+    ids.for_each(|id| {
+        println!("Adding subscription {}", id); ws_user.subscriptions.get_mut(&sub_type).unwrap().ids.remove(id);
+    });
+}
+
+pub async fn sub_all<CustomSubType: std::cmp::Eq + std::hash::Hash>(sub_type: &CustomSubType, ws_user: &mut WSConnection<CustomSubType>, toggle: bool){
+    ws_user.subscriptions.get_mut(&sub_type).unwrap().all = toggle;
 }
