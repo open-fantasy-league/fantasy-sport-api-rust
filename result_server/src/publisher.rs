@@ -5,7 +5,6 @@ use diesel_utils::PgConn;
 use std::collections::HashMap;
 use uuid::Uuid;
 use warp_ws_server::*;
-use crate::utils;
 
 impl Publishable<SubType> for Competition {
     fn message_type<'a>() -> &'a str {
@@ -23,7 +22,7 @@ impl Publishable<SubType> for Competition {
                 .iter()
                 .filter(|x| sub.ids.contains(&x.competition_id))
                 .collect(),
-            SubType::Team => utils::this_should_never_happen(publishables, "Comp published for Team")
+            SubType::Team => warp_ws_server::this_should_never_happen(publishables, "Comp published for Team")
         }
     }
 }
@@ -44,7 +43,7 @@ impl Publishable<SubType> for ApiCompetition {
                 .iter()
                 .filter(|x| sub.ids.contains(&x.competition_id))
                 .collect(),
-            SubType::Team => utils::this_should_never_happen(publishables, "Comp published for Team")
+            SubType::Team => warp_ws_server::this_should_never_happen(publishables, "Comp published for Team")
         }
     }
 }
@@ -67,7 +66,7 @@ impl Publishable<SubType> for ApiSeriesNew {
                     .filter(|x| sub.ids.contains(&x.competition_id))
                     .collect()
             }
-            SubType::Team => utils::this_should_never_happen(publishables, "Comp published for Team")
+            SubType::Team => warp_ws_server::this_should_never_happen(publishables, "Comp published for Team")
         }
     }
 }
@@ -90,7 +89,7 @@ impl Publishable<SubType> for Series {
                     .filter(|x| sub.ids.contains(&id_map_opt.as_ref().unwrap().get(&x.series_id).unwrap()))
                     .collect()
             }
-            SubType::Team => utils::this_should_never_happen(publishables, "Comp published for Team")
+            SubType::Team => warp_ws_server::this_should_never_happen(publishables, "Comp published for Team")
         }
     }
 }
@@ -119,7 +118,7 @@ impl Publishable<SubType> for Match {
                     .filter(|x| sub.ids.contains(&id_map_opt.as_ref().unwrap().get(&x.series_id).unwrap()))
                     .collect()
             }
-            SubType::Team => utils::this_should_never_happen(publishables, "Comp published for Team")
+            SubType::Team => warp_ws_server::this_should_never_happen(publishables, "Comp published for Team")
         }
     }
 }
@@ -142,7 +141,7 @@ impl Publishable<SubType> for ApiMatchNew {
                     .filter(|x| sub.ids.contains(&id_map_opt.as_ref().unwrap().get(&x.series_id).unwrap()))
                     .collect()
             }
-            SubType::Team => utils::this_should_never_happen(publishables, "Comp published for Team")
+            SubType::Team => warp_ws_server::this_should_never_happen(publishables, "Comp published for Team")
         }
     }
 }
@@ -165,7 +164,7 @@ impl Publishable<SubType> for TeamMatchResult {
                     .filter(|x| sub.ids.contains(&id_map_opt.as_ref().unwrap().get(&x.match_id).unwrap()))
                     .collect()
             }
-            SubType::Team => utils::this_should_never_happen(publishables, "Comp published for Team")
+            SubType::Team => warp_ws_server::this_should_never_happen(publishables, "Comp published for Team")
         }
     }
 }
@@ -189,7 +188,7 @@ impl Publishable<SubType> for PlayerResult {
                     .filter(|x| sub.ids.contains(&id_map_opt.as_ref().unwrap().get(&x.match_id).unwrap()))
                     .collect()
             }
-            SubType::Team => utils::this_should_never_happen(publishables, "Comp published for Team")
+            SubType::Team => warp_ws_server::this_should_never_happen(publishables, "Comp published for Team")
         }
     }
 }
@@ -212,7 +211,7 @@ impl Publishable<SubType> for TeamSeriesResult {
                     .filter(|x| sub.ids.contains(&id_map_opt.as_ref().unwrap().get(&x.series_id).unwrap()))
                     .collect()
             }
-            SubType::Team => utils::this_should_never_happen(publishables, "Comp published for Team")
+            SubType::Team => warp_ws_server::this_should_never_happen(publishables, "Comp published for Team")
         }
     }
 }
@@ -235,7 +234,7 @@ impl Publishable<SubType> for ApiTeam {
                     .filter(|x| sub.ids.contains(&x.team_id))
                     .collect()
             }
-            SubType::Competition => utils::this_should_never_happen(publishables, "Team published for Comp")
+            SubType::Competition => warp_ws_server::this_should_never_happen(publishables, "Team published for Comp")
         }
     }
 }
@@ -258,7 +257,7 @@ impl Publishable<SubType> for TeamPlayer {
                     .filter(|x| sub.ids.contains(&x.team_id))
                     .collect()
             }
-            SubType::Competition => utils::this_should_never_happen(publishables, "Team published for Comp")
+            SubType::Competition => warp_ws_server::this_should_never_happen(publishables, "Team published for Comp")
         }
     }
 }
@@ -281,7 +280,7 @@ impl Publishable<SubType> for TeamUpdate {
                     .filter(|x| sub.ids.contains(&x.team_id))
                     .collect()
             }
-            SubType::Competition => utils::this_should_never_happen(publishables, "Team published for Comp")
+            SubType::Competition => warp_ws_server::this_should_never_happen(publishables, "Team published for Comp")
         }
     }
 }
@@ -305,7 +304,7 @@ impl Publishable<SubType> for TeamName {
                     .filter(|x| sub.ids.contains(&x.team_id))
                     .collect()
             }
-            SubType::Competition => utils::this_should_never_happen(publishables, "Team published for Comp")
+            SubType::Competition => warp_ws_server::this_should_never_happen(publishables, "Team published for Comp")
         }
     }
 }
@@ -329,7 +328,7 @@ impl Publishable<SubType> for Team {
                     .filter(|x| sub.ids.contains(&x.team_id))
                     .collect()
             }
-            SubType::Competition => utils::this_should_never_happen(publishables, "Team published for Comp")
+            SubType::Competition => warp_ws_server::this_should_never_happen(publishables, "Team published for Comp")
         }
     }
 }
@@ -352,7 +351,7 @@ impl Publishable<SubType> for ApiPlayer {
                     .filter(|x| sub.ids.contains(&id_map_opt.as_ref().unwrap().get(&x.player_id).unwrap()))
                     .collect()
             }
-            SubType::Competition => utils::this_should_never_happen(publishables, "Team published for Comp")
+            SubType::Competition => warp_ws_server::this_should_never_happen(publishables, "Team published for Comp")
         }
     }
 }
@@ -375,7 +374,7 @@ impl Publishable<SubType> for Player {
                     .filter(|x| sub.ids.contains(&id_map_opt.as_ref().as_ref().unwrap().get(&x.player_id).unwrap()))
                     .collect()
             }
-            SubType::Competition => utils::this_should_never_happen(publishables, "Team published for Comp")
+            SubType::Competition => warp_ws_server::this_should_never_happen(publishables, "Team published for Comp")
         }
     }
 }
@@ -398,7 +397,7 @@ impl Publishable<SubType> for PlayerUpdate {
                     .filter(|x| sub.ids.contains(&id_map_opt.as_ref().unwrap().get(&x.player_id).unwrap()))
                     .collect()
             }
-            SubType::Competition => utils::this_should_never_happen(publishables, "Team published for Comp")
+            SubType::Competition => warp_ws_server::this_should_never_happen(publishables, "Team published for Comp")
         }
     }
 }
@@ -421,7 +420,7 @@ impl Publishable<SubType> for PlayerName {
                     .filter(|x| sub.ids.contains(&id_map_opt.as_ref().unwrap().get(&x.player_id).unwrap()))
                     .collect()
             }
-            SubType::Competition => utils::this_should_never_happen(publishables, "Team published for Comp")
+            SubType::Competition => warp_ws_server::this_should_never_happen(publishables, "Team published for Comp")
         }
     }
 }
@@ -444,7 +443,7 @@ impl Publishable<SubType> for PlayerPosition {
                     .filter(|x| sub.ids.contains(&id_map_opt.as_ref().unwrap().get(&x.player_id).unwrap()))
                     .collect()
             }
-            SubType::Competition => utils::this_should_never_happen(publishables, "Team published for Comp")
+            SubType::Competition => warp_ws_server::this_should_never_happen(publishables, "Team published for Comp")
         }
     }
 }

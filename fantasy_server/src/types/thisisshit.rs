@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use diesel_utils::{my_timespan_format, DieselTimespan};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 //TODO how to "import" these from other crates?
@@ -8,14 +8,18 @@ use uuid::Uuid;
 #[derive(Deserialize)]
 #[serde(tag = "method")]
 pub enum ResultMsgs {
-    SubTeam { message_id: Uuid, data: ApiTeamsAndPlayers, mode: String},
+    SubTeam {
+        message_id: Uuid,
+        data: ApiTeamsAndPlayers,
+        mode: String,
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct ApiTeamsAndPlayers{
+pub struct ApiTeamsAndPlayers {
     pub teams: Vec<ApiTeam>,
     pub players: Vec<ApiPlayer>,
-    pub team_players: Vec<TeamPlayer>
+    pub team_players: Vec<TeamPlayer>,
 }
 #[derive(Deserialize, Serialize, Debug)]
 pub struct TeamPlayer {
@@ -36,18 +40,18 @@ pub struct ApiTeamPlayer {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ApiTeam{
+pub struct ApiTeam {
     pub team_id: Uuid,
     pub meta: serde_json::Value,
     pub names: Vec<ApiTeamName>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ApiPlayer{
+pub struct ApiPlayer {
     pub player_id: Uuid,
     pub meta: serde_json::Value,
     pub names: Vec<ApiPlayerName>,
-    pub positions: Vec<ApiPlayerPosition>
+    pub positions: Vec<ApiPlayerPosition>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]

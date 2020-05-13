@@ -1,15 +1,12 @@
-use crate::publisher::Publishable;
 use crate::schema::*;
 use chrono::{DateTime, Utc};
 
 use diesel_utils::{
-    my_timespan_format, my_timespan_format_opt, new_dieseltimespan, DieselTimespan, PgConn,
+    my_timespan_format, my_timespan_format_opt, new_dieseltimespan, DieselTimespan,
 };
 use serde::{Deserialize, Serialize};
 use serde_json;
-use std::collections::HashMap;
 use uuid::Uuid;
-use warp_ws_server::BoxError;
 
 //https://kotiri.com/2018/01/31/postgresql-diesel-rust-types.html
 #[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations)]
@@ -105,7 +102,7 @@ impl Period {
             teams_per_draft: 5,
             draft_interval_secs: 10,
             draft_start: Utc::now(),
-            draft_lockdown: Utc::now()
+            draft_lockdown: Utc::now(),
         }
     }
 }
@@ -160,65 +157,5 @@ impl ApiLeague {
                 max_team_players_same_position: l.max_team_players_same_position,
             })
             .collect()
-    }
-}
-
-impl Publishable for League {
-    fn message_type<'a>() -> &'a str {
-        "league"
-    }
-
-    fn subscription_map_key(&self) -> Uuid {
-        self.league_id
-    }
-
-    fn subscription_id_map(
-        conn: Option<&PgConn>,
-        publishables: &Vec<Self>,
-    ) -> Result<HashMap<Uuid, Uuid>, BoxError> {
-        Ok(publishables
-            .iter()
-            .map(|c| (c.league_id, c.league_id))
-            .collect())
-    }
-}
-
-impl Publishable for Period {
-    fn message_type<'a>() -> &'a str {
-        "period"
-    }
-
-    fn subscription_map_key(&self) -> Uuid {
-        self.league_id
-    }
-
-    fn subscription_id_map(
-        conn: Option<&PgConn>,
-        publishables: &Vec<Self>,
-    ) -> Result<HashMap<Uuid, Uuid>, BoxError> {
-        Ok(publishables
-            .iter()
-            .map(|c| (c.league_id, c.league_id))
-            .collect())
-    }
-}
-
-impl Publishable for StatMultiplier {
-    fn message_type<'a>() -> &'a str {
-        "stat_multiplier"
-    }
-
-    fn subscription_map_key(&self) -> Uuid {
-        self.league_id
-    }
-
-    fn subscription_id_map(
-        conn: Option<&PgConn>,
-        publishables: &Vec<Self>,
-    ) -> Result<HashMap<Uuid, Uuid>, BoxError> {
-        Ok(publishables
-            .iter()
-            .map(|c| (c.league_id, c.league_id))
-            .collect())
     }
 }

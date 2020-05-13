@@ -1,13 +1,9 @@
-use crate::publisher::Publishable;
 use crate::schema::*;
 use diesel_utils::{my_timespan_format, my_timespan_format_opt, DieselTimespan};
 use frunk::LabelledGeneric;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use uuid::Uuid;
-use std::collections::HashMap;
-use warp_ws_server::BoxError;
-use diesel_utils::PgConn;
 
 //https://kotiri.com/2018/01/31/postgresql-diesel-rust-types.html
 #[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations)]
@@ -99,7 +95,9 @@ impl DraftChoice {
 impl From<ApiDraftChoice> for DraftChoice {
     fn from(other: ApiDraftChoice) -> Self {
         Self {
-            draft_choice_id: other.draft_choice_id, team_draft_id: other.team_draft_id, timespan: other.timespan
+            draft_choice_id: other.draft_choice_id,
+            team_draft_id: other.team_draft_id,
+            timespan: other.timespan,
         }
     }
 }
@@ -164,28 +162,9 @@ impl ApiDraftChoice {
 
 #[derive(Serialize, Debug)]
 pub struct ApiDraft {
+    pub league_id: Uuid,
     pub draft_id: Uuid,
     pub period_id: Uuid,
     pub meta: serde_json::Value,
     pub choices: Vec<ApiDraftChoice>, //pub teams: Vec<ApiTeamDraft>,
-}
-
-impl Publishable for ApiDraft {
-    fn message_type<'a>() -> &'a str {
-        "draft"
-    }
-
-    fn subscription_map_key(&self) -> Uuid {
-        self.draft_id
-    }
-
-    fn subscription_id_map(
-        conn: Option<&PgConn>,
-        publishables: &Vec<Self>,
-    ) -> Result<HashMap<Uuid, Uuid>, BoxError> {
-        Ok(publishables
-            .iter()
-            .map(|c| (c.draft_id, c.draft_id))
-            .collect())
-    }
 }

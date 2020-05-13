@@ -19,7 +19,6 @@ mod handlers;
 use handlers::*;
 use messages::WSReq;
 use types::{leagues::*, users::*, drafts::*, fantasy_teams::*, valid_players::*, thisisshit::ApiTeamsAndPlayers};
-use subscriptions::Subscriptions;
 use async_trait::async_trait;
 use futures::join;
 use result_client::listen_pick_results;
@@ -27,8 +26,8 @@ use tokio::sync::Mutex;
 use std::sync::Arc;
 
 
-pub type WSConnections_ = warp_ws_server::WSConnections<subscriptions::Subscriptions>;
-pub type WSConnection_ = warp_ws_server::WSConnection<subscriptions::Subscriptions>;
+pub type WSConnections_ = warp_ws_server::WSConnections<subscriptions::SubType>;
+pub type WSConnection_ = warp_ws_server::WSConnection<subscriptions::SubType>;
 
 // #[derive(Deserialize)]
 // #[serde(tag = "method")]
@@ -41,14 +40,14 @@ pub type WSConnection_ = warp_ws_server::WSConnection<subscriptions::Subscriptio
 //     pub data: serde_json::Value
 // }
 
-struct A{
+struct MyWsHandler{
 }
 
 #[async_trait]
-impl WSHandler<subscriptions::Subscriptions> for A{
+impl WSHandler<subscriptions::SubType> for MyWsHandler{
 
     async fn ws_req_resp(
-        msg: String, conn: PgConn, ws_conns: &mut WSConnections<subscriptions::Subscriptions>, user_ws_id: Uuid
+        msg: String, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid
     ) -> Result<String, BoxError>{
         let req: WSReq = serde_json::from_str(&msg)?;
         match req{
@@ -84,7 +83,7 @@ async fn main() {
 
     let teams_and_players_mut: Arc<Mutex<Option<ApiTeamsAndPlayers>>> = Arc::new(Mutex::new(None));
     let pool = pg_pool(db_url);
-    let ws_conns =  warp_ws_server::ws_conns::<Subscriptions>();
+    let ws_conns =  warp_ws_server::ws_conns::<subscriptions::SubType>();
     // Is PgPool thread-safe? its not behind an arc...does it need to be?
     // maybe the clone is just make 3 seaprate pg-pool which is kind of fine.
     let draft_pgpool = pool.clone();
@@ -104,7 +103,9 @@ async fn main() {
     let ws_router = warp::any().and(warp::ws()).and(ws_conns_filt)
         .map(move |ws: warp::ws::Ws, ws_conns|{
             let pool = pool.clone();
-            ws.on_upgrade(move |socket| warp_ws_server::handle_ws_conn::<subscriptions::Subscriptions, A>(socket, pool, ws_conns))
+            ws.on_upgrade(move |socket| warp_ws_server::handle_ws_conn::<subscriptions::SubType, subscriptions::MySubHandler, MyWsHandler>(
+                socket, pool, ws_conns
+            ))
         });
     //let server = warp::serve(ws_router).run(([127, 0, 0, 1], 3030));
     //draft_handler.await.map_err(|e|println!("{}", e.to_string()));

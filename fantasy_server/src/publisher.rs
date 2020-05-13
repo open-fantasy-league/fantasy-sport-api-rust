@@ -1,57 +1,233 @@
-use warp::ws;
+use crate::subscriptions::SubType;
+use crate::types::{drafts::*, fantasy_teams::*, leagues::*, users::*};
 use std::collections::HashMap;
 use uuid::Uuid;
 use warp_ws_server::*;
-use serde::Serialize;
-use crate::WSConnections_;
-use diesel_utils::PgConn;
 
-pub trait Publishable {
-    fn message_type<'a>() -> &'a str;
-    fn subscription_map_key(&self) -> Uuid;
-    fn subscription_id_map(conn: Option<&PgConn>, publishables: &Vec<Self>) -> Result<HashMap<Uuid, Uuid>, BoxError> where Self: Sized;
+impl Publishable<SubType> for League {
+    fn message_type<'a>() -> &'a str {
+        "league"
+    }
+
+    fn partial_subscribed_publishables<'b>(
+        publishables: &'b Vec<Self>,
+        sub: &mut Subscription,
+        sub_type: &SubType,
+        _: &Option<HashMap<Uuid, Uuid>>,
+    ) -> Vec<&'b Self> {
+        match sub_type {
+            SubType::League => publishables
+                .iter()
+                .filter(|x| sub.ids.contains(&x.league_id))
+                .collect(),
+            SubType::Draft => {
+                warp_ws_server::this_should_never_happen(publishables, "League published for Draft")
+            }
+            SubType::User => {
+                warp_ws_server::this_should_never_happen(publishables, "League published for User")
+            }
+        }
+    }
 }
 
-//TODO really should just take an id_map, rather than inefficiently lookup subscription_id_map() in every call.
-// Note that the id-maps are things that arent gonna be mutable/updateable, so should be able to cache them
-pub async fn publish_for_leagues<T: Publishable + Serialize + std::fmt::Debug>(conn_opt: Option<PgConn>, ws_conns: &mut WSConnections_, publishables: &Vec<T>) -> Result<bool, BoxError>{
-    // TODO This doesnt include team-names that were mutated by their name-timestamp being
-    let id_map: HashMap<Uuid, Uuid> = T::subscription_id_map(conn_opt.as_ref(), publishables)?; 
-    for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
-        println!("publish_f_leagues");
-        let subscribed_publishables: Vec<&T> = publishables.iter()
-            .filter(|x| wsconn.subscriptions.leagues.contains(&id_map.get(&x.subscription_map_key()).unwrap())).collect();
-        println!("publish_f_leagues2");
-        let push_msg = WSMsgOut::push(T::message_type(), subscribed_publishables);
-        let subscribed_json_r = serde_json::to_string(&push_msg);
-        match subscribed_json_r.as_ref(){
-            Ok(subscribed_json) => {
-                if let Err(publish) = wsconn.tx.send(Ok(ws::Message::text(subscribed_json))){
-                    println!("Error publishing update {:?} to {} : {}", &subscribed_json, uid, &publish)
-                };
-            },
-            Err(_) => println!("Error json serializing publisher update {:?} to {}", &subscribed_json_r, uid)
-        };
-    };
-    Ok(true)
+impl Publishable<SubType> for Period {
+    fn message_type<'a>() -> &'a str {
+        "period"
+    }
+
+    fn partial_subscribed_publishables<'b>(
+        publishables: &'b Vec<Self>,
+        sub: &mut Subscription,
+        sub_type: &SubType,
+        _: &Option<HashMap<Uuid, Uuid>>,
+    ) -> Vec<&'b Self> {
+        match sub_type {
+            SubType::League => publishables
+                .iter()
+                .filter(|x| sub.ids.contains(&x.league_id))
+                .collect(),
+            SubType::Draft => {
+                warp_ws_server::this_should_never_happen(publishables, "League published for Draft")
+            }
+            SubType::User => {
+                warp_ws_server::this_should_never_happen(publishables, "League published for User")
+            }
+        }
+    }
 }
 
-pub async fn publish_for_drafts<T: Publishable + Serialize + std::fmt::Debug>(conn_opt: Option<PgConn>, ws_conns: &mut WSConnections_, publishables: &Vec<T>) -> Result<bool, BoxError>{
-    // TODO This doesnt include team-names that were mutated by their name-timestamp being
-    let id_map: HashMap<Uuid, Uuid> = T::subscription_id_map(conn_opt.as_ref(), publishables)?;
-    for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
-        let subscribed_publishables: Vec<&T> = publishables.iter()
-            .filter(|x| wsconn.subscriptions.drafts.contains(&id_map.get(&x.subscription_map_key()).unwrap())).collect();
-        let push_msg = WSMsgOut::push(T::message_type(), subscribed_publishables);
-        let subscribed_json_r = serde_json::to_string(&push_msg);
-        match subscribed_json_r.as_ref(){
-            Ok(subscribed_json) => {
-                if let Err(publish) = wsconn.tx.send(Ok(ws::Message::text(subscribed_json))){
-                    println!("Error publishing update {:?} to {} : {}", &subscribed_json, uid, &publish)
-                };
-            },
-            Err(_) => println!("Error json serializing publisher update {:?} to {}", &subscribed_json_r, uid)
-        };
-    };
-    Ok(true)
+impl Publishable<SubType> for StatMultiplier {
+    fn message_type<'a>() -> &'a str {
+        "stat_multiplier"
+    }
+
+    fn partial_subscribed_publishables<'b>(
+        publishables: &'b Vec<Self>,
+        sub: &mut Subscription,
+        sub_type: &SubType,
+        _: &Option<HashMap<Uuid, Uuid>>,
+    ) -> Vec<&'b Self> {
+        match sub_type {
+            SubType::League => publishables
+                .iter()
+                .filter(|x| sub.ids.contains(&x.league_id))
+                .collect(),
+            SubType::Draft => {
+                warp_ws_server::this_should_never_happen(publishables, "League published for Draft")
+            }
+            SubType::User => {
+                warp_ws_server::this_should_never_happen(publishables, "League published for User")
+            }
+        }
+    }
+}
+
+impl Publishable<SubType> for ApiDraft {
+    fn message_type<'a>() -> &'a str {
+        "draft"
+    }
+
+    fn partial_subscribed_publishables<'b>(
+        publishables: &'b Vec<Self>,
+        sub: &mut Subscription,
+        sub_type: &SubType,
+        _: &Option<HashMap<Uuid, Uuid>>,
+    ) -> Vec<&'b Self> {
+        match sub_type {
+            SubType::League => publishables
+                .iter()
+                .filter(|x| sub.ids.contains(&x.league_id))
+                .collect(),
+            SubType::Draft => publishables
+                .iter()
+                .filter(|x| sub.ids.contains(&x.draft_id))
+                .collect(),
+            SubType::User => {
+                warp_ws_server::this_should_never_happen(publishables, "Draft published for User")
+            }
+        }
+    }
+}
+
+impl Publishable<SubType> for FantasyTeam {
+    fn message_type<'a>() -> &'a str {
+        "fantasy_team"
+    }
+
+    fn partial_subscribed_publishables<'b>(
+        publishables: &'b Vec<Self>,
+        sub: &mut Subscription,
+        sub_type: &SubType,
+        _: &Option<HashMap<Uuid, Uuid>>,
+    ) -> Vec<&'b Self> {
+        match sub_type {
+            SubType::League => publishables
+                .iter()
+                .filter(|x| sub.ids.contains(&x.league_id))
+                .collect(),
+            SubType::Draft => warp_ws_server::this_should_never_happen(
+                publishables,
+                "FantasyTeam published for Draft",
+            ),
+            SubType::User => publishables
+                .iter()
+                .filter(|x| sub.ids.contains(&x.external_user_id))
+                .collect(),
+        }
+    }
+}
+
+impl Publishable<SubType> for Pick {
+    fn message_type<'a>() -> &'a str {
+        "pick"
+    }
+
+    fn partial_subscribed_publishables<'b>(
+        publishables: &'b Vec<Self>,
+        sub: &mut Subscription,
+        sub_type: &SubType,
+        _: &Option<HashMap<Uuid, Uuid>>,
+    ) -> Vec<&'b Self> {
+        match sub_type {
+            // SubType::League => publishables
+            //     .iter()
+            //     .filter(|x| sub.ids.contains(&x.league_id))
+            //     .collect(),
+            SubType::Draft => warp_ws_server::this_should_never_happen(
+                publishables,
+                "FantasyTeam published for Draft",
+            ),
+            // SubType::User => publishables
+            //     .iter()
+            //     .filter(|x| sub.ids.contains(&x.external_user_id))
+            //     .collect(),
+            _ => panic!("fudge")
+        }
+    }
+
+    // fn subscription_id_map(
+    //     conn: Option<&PgConn>,
+    //     publishables: &Vec<Self>,
+    // ) -> Result<HashMap<Uuid, Uuid>, BoxError> {
+    //     let id_map = db::get_draft_ids_for_picks(
+    //         conn.unwrap(),
+    //         &publishables.iter().map(|p| p.pick_id).collect(),
+    //     )?;
+    //     Ok(id_map.into_iter().collect())
+    // }
+}
+
+impl Publishable<SubType> for ActivePick {
+    fn message_type<'a>() -> &'a str {
+        "active_pick"
+    }
+
+    fn partial_subscribed_publishables<'b>(
+        publishables: &'b Vec<Self>,
+        sub: &mut Subscription,
+        sub_type: &SubType,
+        _: &Option<HashMap<Uuid, Uuid>>,
+    ) -> Vec<&'b Self> {
+        match sub_type {
+            // SubType::League => publishables
+            //     .iter()
+            //     .filter(|x| sub.ids.contains(&x.league_id))
+            //     .collect(),
+            SubType::Draft => warp_ws_server::this_should_never_happen(
+                publishables,
+                "FantasyTeam published for Draft",
+            ),
+            // SubType::User => publishables
+            //     .iter()
+            //     .filter(|x| sub.ids.contains(&x.external_user_id))
+            //     .collect(),
+            _ => panic!("fudge")
+        }
+    }
+}
+
+impl Publishable<SubType> for ExternalUser {
+    fn message_type<'a>() -> &'a str {
+        "user"
+    }
+
+    fn partial_subscribed_publishables<'b>(
+        publishables: &'b Vec<Self>,
+        sub: &mut Subscription,
+        sub_type: &SubType,
+        _: &Option<HashMap<Uuid, Uuid>>,
+    ) -> Vec<&'b Self> {
+        match sub_type {
+            SubType::League => {
+                warp_ws_server::this_should_never_happen(publishables, "User published for League")
+            }
+            SubType::Draft => {
+                warp_ws_server::this_should_never_happen(publishables, "League published for Draft")
+            }
+            SubType::User => publishables
+                .iter()
+                .filter(|x| sub.ids.contains(&x.external_user_id))
+                .collect(),
+        }
+    }
 }

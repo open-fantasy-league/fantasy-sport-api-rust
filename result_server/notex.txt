@@ -45,6 +45,7 @@ tues:
 - need to asdd timepsan to Leaderboard DONE
 Wed:
 - add inactive pick to team/remove active
+- sort out pick-publishing (dont need to handle passing multiple id-maps, as can match on the SUbType)
 
 thurs:
 - docker container to boot/run things

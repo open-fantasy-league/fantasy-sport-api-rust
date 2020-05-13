@@ -1,15 +1,15 @@
 use crate::schema::{self, *};
-use crate::types::{fantasy_teams::*, leagues::*, users::*, drafts::*, valid_players::*};
+use crate::types::{drafts::*, fantasy_teams::*, leagues::*, users::*, valid_players::*};
 use diesel::pg::expression::dsl::any;
 use diesel::prelude::*;
 use diesel::ExpressionMethods;
 use diesel::RunQueryDsl;
 use diesel::{sql_query, sql_types};
+use diesel_utils::PgConn;
 use itertools::izip;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
-use diesel_utils::PgConn;
 // use diesel_utils::PgConn;
 // use warp_ws_server::WSReq;
 // use warp_ws_server::BoxError;
@@ -35,11 +35,44 @@ use diesel_utils::PgConn;
 
 pub fn get_full_leagues(
     conn: &PgConnection,
-    league_ids: Vec<Uuid>,
+    league_ids_filter: Option<Vec<&Uuid>>,
 ) -> Result<Vec<ApiLeague>, diesel::result::Error> {
-    let leagues: Vec<League> = leagues::table
-        .filter(leagues::dsl::league_id.eq(any(league_ids)))
-        .load::<League>(conn)?;
+    let leagues: Vec<League> = match league_ids_filter {
+        Some(league_ids) => leagues::table
+            .filter(leagues::dsl::league_id.eq(any(league_ids)))
+            .load::<League>(conn),
+        None => leagues::table.load(conn),
+    }?;
+    let periods = Period::belonging_to(&leagues).load::<Period>(conn)?;
+    let stats = StatMultiplier::belonging_to(&leagues).load::<StatMultiplier>(conn)?;
+    let grouped_periods = periods.grouped_by(&leagues);
+    let grouped_stats = stats.grouped_by(&leagues);
+    Ok(ApiLeague::from_rows(
+        izip!(leagues, grouped_periods, grouped_stats).collect(),
+    ))
+}
+
+/*
+#[derive(Serialize, Debug)]
+pub struct ApiDraft {
+    pub league_id: Uuid,
+    pub draft_id: Uuid,
+    pub period_id: Uuid,
+    pub meta: serde_json::Value,
+    pub choices: Vec<ApiDraftChoice>, //pub teams: Vec<ApiTeamDraft>,
+}
+*/
+
+pub fn get_full_drafts(
+    conn: &PgConnection,
+    league_ids_filter: Option<Vec<&Uuid>>,
+) -> Result<Vec<ApiLeague>, diesel::result::Error> {
+    let leagues: Vec<League> = match league_ids_filter {
+        Some(league_ids) => leagues::table
+            .filter(leagues::dsl::league_id.eq(any(league_ids)))
+            .load::<League>(conn),
+        None => leagues::table.load(conn),
+    }?;
     let periods = Period::belonging_to(&leagues).load::<Period>(conn)?;
     let stats = StatMultiplier::belonging_to(&leagues).load::<StatMultiplier>(conn)?;
     let grouped_periods = periods.grouped_by(&leagues);
@@ -80,11 +113,19 @@ pub fn get_undrafted_periods(conn: PgConn) -> Result<Vec<Period>, diesel::result
     //.first::<Period>(conn)
 }
 
-pub fn get_valid_picks(conn: &PgConnection, period_id: Uuid) -> Result<Vec<Uuid>, diesel::result::Error> {
-    valid_players::table.select(valid_players::player_id).filter(valid_players::period_id.eq(period_id)).load(conn)
-} 
+pub fn get_valid_picks(
+    conn: &PgConnection,
+    period_id: Uuid,
+) -> Result<Vec<Uuid>, diesel::result::Error> {
+    valid_players::table
+        .select(valid_players::player_id)
+        .filter(valid_players::period_id.eq(period_id))
+        .load(conn)
+}
 
-pub fn get_unchosen_draft_choices(conn: PgConn) -> Result<Vec<(DraftChoice, Period, TeamDraft, League)>, diesel::result::Error> {
+pub fn get_unchosen_draft_choices(
+    conn: PgConn,
+) -> Result<Vec<(DraftChoice, Period, TeamDraft, League)>, diesel::result::Error> {
     // So this would join every row, including old rows, then filter most of them out.
     // Should check postgresql optimises nicely.
 
@@ -93,11 +134,20 @@ pub fn get_unchosen_draft_choices(conn: PgConn) -> Result<Vec<(DraftChoice, Peri
     // When fantasy-teams/users are locked in for draft, then settings should lock as well, and be pulled into memory
 
     draft_choices::table
-    .left_join(picks::table).filter(picks::pick_id.is_null())
-    .inner_join(team_drafts::table.inner_join(drafts::table.inner_join(periods::table.inner_join(leagues::table))))
-    .select((draft_choices::all_columns, periods::all_columns, team_drafts::all_columns, leagues::all_columns))
-    .load(&conn)
-} 
+        .left_join(picks::table)
+        .filter(picks::pick_id.is_null())
+        .inner_join(
+            team_drafts::table
+                .inner_join(drafts::table.inner_join(periods::table.inner_join(leagues::table))),
+        )
+        .select((
+            draft_choices::all_columns,
+            periods::all_columns,
+            team_drafts::all_columns,
+            leagues::all_columns,
+        ))
+        .load(&conn)
+}
 
 pub fn get_randomised_teams_for_league(
     conn: &PgConnection,
@@ -109,7 +159,7 @@ pub fn get_randomised_teams_for_league(
         sql_types::Integer,
         "Represents the SQL RANDOM() function"
     );
-    
+
     fantasy_teams::table
         .filter(schema::fantasy_teams::league_id.eq(league_id))
         .order(random)
@@ -126,19 +176,28 @@ pub fn get_league_squad_size(
         .get_result(conn)
 }
 
-pub fn get_draft_queue_for_choice(conn: &PgConnection, unchosen: DraftChoice) -> Result<Vec<Uuid>, diesel::result::Error>{
+pub fn get_draft_queue_for_choice(
+    conn: &PgConnection,
+    unchosen: DraftChoice,
+) -> Result<Vec<Uuid>, diesel::result::Error> {
     // maybe no queue been upserted. could be empty, could be missing?
     schema::team_drafts::table
-    .inner_join(schema::fantasy_teams::table.inner_join(schema::draft_queues::table))
-    .inner_join(schema::draft_choices::table)
-    .filter(schema::team_drafts::team_draft_id.eq(unchosen.team_draft_id))
-    .select(schema::draft_queues::player_ids).get_result(conn)
-
+        .inner_join(schema::fantasy_teams::table.inner_join(schema::draft_queues::table))
+        .inner_join(schema::draft_choices::table)
+        .filter(schema::team_drafts::team_draft_id.eq(unchosen.team_draft_id))
+        .select(schema::draft_queues::player_ids)
+        .get_result(conn)
 }
 
-pub fn get_current_picks(conn: &PgConnection, fantasy_team_id: Uuid, period_id: Uuid) -> Result<Vec<Uuid>, diesel::result::Error>{
-    picks::table.select(picks::pick_id).filter(picks::fantasy_team_id.eq(fantasy_team_id))
-    .inner_join(draft_choices::table.inner_join(team_drafts::table.inner_join(drafts::table)))
-    .filter(drafts::period_id.eq(period_id))
-    .load(conn)
+pub fn get_current_picks(
+    conn: &PgConnection,
+    fantasy_team_id: Uuid,
+    period_id: Uuid,
+) -> Result<Vec<Uuid>, diesel::result::Error> {
+    picks::table
+        .select(picks::pick_id)
+        .filter(picks::fantasy_team_id.eq(fantasy_team_id))
+        .inner_join(draft_choices::table.inner_join(team_drafts::table.inner_join(drafts::table)))
+        .filter(drafts::period_id.eq(period_id))
+        .load(conn)
 }

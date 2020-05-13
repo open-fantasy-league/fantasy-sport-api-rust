@@ -1,5 +1,4 @@
 use crate::db;
-use crate::diesel::ExpressionMethods;
 use crate::diesel::RunQueryDsl; // imported here so that can run db macros
 use crate::schema;
 use crate::types::{drafts::*, fantasy_teams::*, leagues::*};
@@ -14,14 +13,13 @@ use crate::types::thisisshit::*;
 use tokio::sync::{MutexGuard, Mutex};
 use std::sync::Arc;
 use futures::join;
-use std::ops::Bound::*;
 use rand::seq::SliceRandom;
 use rand;
-use warp_ws_server::BoxError;
+use warp_ws_server::{publish, BoxError};
 use std::fmt;
 use std::ops::RangeBounds;
-use crate::publisher::publish_for_drafts;
 use crate::WSConnections_;
+use crate::subscriptions::SubType;
 
 #[derive(Debug, Clone)]
 struct NoValidPicksError {
@@ -68,7 +66,8 @@ pub async fn draft_builder(pg_pool: PgPool, mut ws_conns: WSConnections_) {
                     if (time_to_draft_gen) < chrono::Duration::zero(){
                         match generate_drafts(pg_pool.get().unwrap(), undrafted){
                             Ok(drafts) => {
-                                match publish_for_drafts(None, &mut ws_conns, &drafts).await{
+                                // TODO publkish league as well
+                                match publish::<SubType, ApiDraft>(&mut ws_conns, &drafts, SubType::Draft, None).await{
                                     Err(e) => println!("Error publishing drafts: {:?}", e),
                                     _ => {}
                                 }
@@ -183,6 +182,7 @@ pub fn generate_drafts(
                 let to_insert: Vec<DraftChoice> = choices.iter().map(|c| c.clone().into()).collect();
                 let _: Vec<DraftChoice> = insert!(&conn, schema::draft_choices::table, to_insert)?;
                 let out = ApiDraft {
+                    league_id: period.league_id,
                     draft_id: draft.draft_id,
                     period_id: period.period_id,
                     meta: draft.meta.clone(),
@@ -232,17 +232,17 @@ pub async fn draft_handler(pg_pool: PgPool, teams_and_players_mut: Arc<Mutex<Opt
                                 match out
                                 {
                                     Ok((pick, None)) => {
-                                        match publish_for_drafts(Some(pg_pool.get().unwrap()), &mut ws_conns, &vec![pick]).await{
+                                        match publish::<SubType, Pick>(&mut ws_conns, &vec![pick], SubType::Draft, None).await{
                                             Err(e) => println!("Error publishing draft picks: {:?}", e),
                                             _ => {}
                                         }
                                     },
                                     Ok((pick, Some(active_pick))) => {
-                                        match publish_for_drafts(Some(pg_pool.get().unwrap()), &mut ws_conns, &vec![pick]).await{
+                                        match publish::<SubType, Pick>(&mut ws_conns, &vec![pick], SubType::Draft, None).await{
                                             Err(e) => println!("Error publishing draft picks: {:?}", e),
                                             _ => {}
                                         };
-                                        match publish_for_drafts(Some(pg_pool.get().unwrap()), &mut ws_conns, &vec![active_pick]).await{
+                                        match publish::<SubType, ActivePick>(&mut ws_conns, &vec![active_pick], SubType::Draft, None).await{
                                             Err(e) => println!("Error publishing draft picks: {:?}", e),
                                             _ => {}
                                         }
