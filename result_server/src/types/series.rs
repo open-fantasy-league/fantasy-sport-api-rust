@@ -8,7 +8,6 @@ use super::{competitions::*, matches::*, results::*, teams::*};
 use crate::diesel::RunQueryDsl;  // imported here so that can run db macros
 use crate::diesel::ExpressionMethods;
 use frunk::labelled::transform_from;
-use crate::publisher::Publishable;
 use itertools::Itertools;
 
 
@@ -115,23 +114,3 @@ impl ApiSeriesNew{
 //     series_id: Uuid,
 //     pub team_id: Uuid,
 // }
-
-impl Publishable for ApiSeriesNew {
-    fn message_type<'a>() -> &'a str {
-        "series"
-    }
-
-    fn get_hierarchy_id(&self) -> Uuid {
-        self.series_id
-    }
-}
-
-impl Publishable for Series {
-    fn message_type<'a>() -> &'a str {
-        "series_update"
-    }
-
-    fn get_hierarchy_id(&self) -> Uuid {
-        self.series_id
-    }
-}

@@ -6,7 +6,6 @@ use serde_json;
 use frunk::LabelledGeneric;
 use frunk::labelled::transform_from;
 use std::collections::HashMap;
-use crate::publisher::Publishable;
 use crate::diesel::RunQueryDsl;  // imported here so that can run db macros
 use crate::diesel::ExpressionMethods;
 use itertools::Itertools;
@@ -143,55 +142,5 @@ impl ApiPlayer{
         let raw_players: Vec<Player> = players.into_iter().map(transform_from).collect();
         insert_exec!(&conn, players::table, raw_players)?;
         Ok(true)
-    }
-}
-
-impl Publishable for ApiPlayer {
-    fn message_type<'a>() -> &'a str {
-        "player"
-    }
-
-    fn get_hierarchy_id(&self) -> Uuid {
-        self.player_id
-    }
-}
-
-impl Publishable for Player {
-    fn message_type<'a>() -> &'a str {
-        "player"
-    }
-
-    fn get_hierarchy_id(&self) -> Uuid {
-        self.player_id
-    }
-}
-
-impl Publishable for PlayerUpdate {
-    fn message_type<'a>() -> &'a str {
-        "player_update"
-    }
-
-    fn get_hierarchy_id(&self) -> Uuid {
-        self.player_id
-    }
-}
-
-impl Publishable for PlayerName {
-    fn message_type<'a>() -> &'a str {
-        "player_name"
-    }
-
-    fn get_hierarchy_id(&self) -> Uuid {
-        self.player_id
-    }
-}
-
-impl Publishable for PlayerPosition {
-    fn message_type<'a>() -> &'a str {
-        "player_position"
-    }
-
-    fn get_hierarchy_id(&self) -> Uuid {
-        self.player_id
     }
 }

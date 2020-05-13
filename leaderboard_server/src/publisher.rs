@@ -1,27 +1,30 @@
+use crate::subscriptions::SubType;
+use crate::types::leaderboards::*;
 use std::collections::HashMap;
 use uuid::Uuid;
 use warp_ws_server::*;
-use diesel_utils::PgConn;
-use crate::types::leaderboards::*;
-use crate::subscriptions::SubType;
-use crate::db;
 
 impl Publishable<SubType> for Leaderboard {
     fn message_type<'a>() -> &'a str {
         "leaderboard"
     }
 
-    fn partial_subscribed_publishables<'b>(publishables: &'b Vec<Self>, sub: &mut Subscription, sub_type: &SubType, _: Option<&PgConn>) -> Result<Vec<&'b Self>, BoxError>{
-        Ok(match sub_type{
-            SubType::League => {
-                publishables.iter()
-                .filter(|x| sub.ids.contains(&x.league_id)).collect()
-            },
-            SubType::Leaderboard => {
-                publishables.iter()
-                .filter(|x| sub.ids.contains(&x.leaderboard_id)).collect()
-            }
-        })
+    fn partial_subscribed_publishables<'b>(
+        publishables: &'b Vec<Self>,
+        sub: &mut Subscription,
+        sub_type: &SubType,
+        _: &Option<HashMap<Uuid, Uuid>>,
+    ) -> Vec<&'b Self> {
+        match sub_type {
+            SubType::League => publishables
+                .iter()
+                .filter(|x| sub.ids.contains(&x.league_id))
+                .collect(),
+            SubType::Leaderboard => publishables
+                .iter()
+                .filter(|x| sub.ids.contains(&x.leaderboard_id))
+                .collect(),
+        }
     }
 }
 
@@ -32,17 +35,22 @@ impl Publishable<SubType> for ApiLeaderboard {
 
     // Can commonise in a generic func between Leaderboard types
     // Would need to attach getters for league/leaderboard_id though
-    fn partial_subscribed_publishables<'b>(publishables: &'b Vec<Self>, sub: &mut Subscription, sub_type: &SubType, _: Option<&PgConn>) -> Result<Vec<&'b Self>, BoxError>{
-        Ok(match sub_type{
-            SubType::League => {
-                publishables.iter()
-                .filter(|x| sub.ids.contains(&x.league_id)).collect()
-            },
-            SubType::Leaderboard => {
-                publishables.iter()
-                .filter(|x| sub.ids.contains(&x.leaderboard_id)).collect()
-            }
-        })
+    fn partial_subscribed_publishables<'b>(
+        publishables: &'b Vec<Self>,
+        sub: &mut Subscription,
+        sub_type: &SubType,
+        _: &Option<HashMap<Uuid, Uuid>>,
+    ) -> Vec<&'b Self> {
+        match sub_type {
+            SubType::League => publishables
+                .iter()
+                .filter(|x| sub.ids.contains(&x.league_id))
+                .collect(),
+            SubType::Leaderboard => publishables
+                .iter()
+                .filter(|x| sub.ids.contains(&x.leaderboard_id))
+                .collect(),
+        }
     }
 }
 
@@ -51,18 +59,24 @@ impl Publishable<SubType> for Stat {
         "stat"
     }
 
-    fn partial_subscribed_publishables<'b>(publishables: &'b Vec<Self>, sub: &mut Subscription, sub_type: &SubType, conn: Option<&PgConn>) -> Result<Vec<&'b Self>, BoxError>{
-        Ok(match sub_type{
-            SubType::League => {
-                let id_map: HashMap<Uuid, Uuid> = db::get_league_ids_to_leaderboard_ids(
-                    conn.unwrap(), publishables.iter().map(|s| s.leaderboard_id).collect()
-                )?.into_iter().collect();
-                publishables.iter()
-                .filter(|x| sub.ids.contains(&id_map.get(&x.leaderboard_id).unwrap())).collect()
-            },
-            SubType::Leaderboard => publishables.iter()
-                .filter(|x| sub.ids.contains(&x.leaderboard_id)).collect()
+    fn partial_subscribed_publishables<'b>(
+        publishables: &'b Vec<Self>,
+        sub: &mut Subscription,
+        sub_type: &SubType,
+        id_map_opt: &Option<HashMap<Uuid, Uuid>>,
+    ) -> Vec<&'b Self> {
+        match sub_type {
+            SubType::League => publishables
+                .iter()
+                .filter(|x| {
+                    sub.ids
+                        .contains(&id_map_opt.as_ref().unwrap().get(&x.leaderboard_id).unwrap())
+                })
+                .collect(),
+            SubType::Leaderboard => publishables
+                .iter()
+                .filter(|x| sub.ids.contains(&x.leaderboard_id))
+                .collect(),
         }
-    )
     }
 }

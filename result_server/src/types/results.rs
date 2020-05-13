@@ -5,7 +5,6 @@ use uuid::Uuid;
 use serde_json;
 use frunk::LabelledGeneric;
 use super::{matches::Match, series::Series};
-use crate::publisher::Publishable;
 
 #[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations, Clone)]
 #[primary_key(match_id, team_id)]
@@ -72,35 +71,4 @@ pub struct PlayerResultUpdate {
     pub match_id: Uuid,
     pub result: Option<serde_json::Value>,
     pub meta: Option<serde_json::Value>,
-}
-
-impl Publishable for TeamMatchResult {
-    fn message_type<'a>() -> &'a str {
-        "team_match_results"
-    }
-
-    fn get_hierarchy_id(&self) -> Uuid {
-        self.match_id
-    }
-}
-
-
-impl Publishable for PlayerResult {
-    fn message_type<'a>() -> &'a str {
-        "player_match_results"
-    }
-
-    fn get_hierarchy_id(&self) -> Uuid {
-        self.match_id
-    }
-}
-
-impl Publishable for TeamSeriesResult {
-    fn message_type<'a>() -> &'a str {
-        "team_series_results"
-    }
-
-    fn get_hierarchy_id(&self) -> Uuid {
-        self.series_id
-    }
 }

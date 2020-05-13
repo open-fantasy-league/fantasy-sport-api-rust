@@ -1,8 +1,7 @@
-
 use crate::db;
 use crate::publisher::Publishable;
 use crate::schema::*;
-use diesel_utils::{DieselTimespan, PgConn, my_timespan_format};
+use diesel_utils::{my_timespan_format, DieselTimespan, PgConn};
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::collections::HashMap;
@@ -107,8 +106,10 @@ impl Publishable for Pick {
         conn: Option<&PgConn>,
         publishables: &Vec<Self>,
     ) -> Result<HashMap<Uuid, Uuid>, BoxError> {
-        let id_map =
-            db::get_draft_ids_for_picks(        conn.unwrap(), &publishables.iter().map(|p| p.pick_id).collect())?;
+        let id_map = db::get_draft_ids_for_picks(
+            conn.unwrap(),
+            &publishables.iter().map(|p| p.pick_id).collect(),
+        )?;
         Ok(id_map.into_iter().collect())
     }
 }
@@ -126,8 +127,10 @@ impl Publishable for ActivePick {
         conn: Option<&PgConn>,
         publishables: &Vec<Self>,
     ) -> Result<HashMap<Uuid, Uuid>, BoxError> {
-        let id_map =
-            db::get_draft_ids_for_picks(conn.unwrap(), &publishables.iter().map(|p| p.pick_id).collect())?;
+        let id_map = db::get_draft_ids_for_picks(
+            conn.unwrap(),
+            &publishables.iter().map(|p| p.pick_id).collect(),
+        )?;
         Ok(id_map.into_iter().collect())
     }
 }

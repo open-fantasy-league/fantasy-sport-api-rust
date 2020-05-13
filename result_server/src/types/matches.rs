@@ -6,7 +6,6 @@ use frunk::LabelledGeneric;
 use frunk::labelled::transform_from;
 use super::series::Series;
 use super::results::{TeamMatchResult, PlayerResult};
-use crate::publisher::Publishable;
 use diesel_utils::{PgConn, DieselTimespan, my_timespan_format, my_timespan_format_opt};
 use itertools::Itertools;
 use crate::diesel::RunQueryDsl;  // imported here so that can run db macros
@@ -88,37 +87,3 @@ impl ApiMatchNew{
             Ok(true)
     }
 }
-
-impl Publishable for Match {
-    fn message_type<'a>() -> &'a str {
-        "matches_update"
-    }
-
-    fn get_hierarchy_id(&self) -> Uuid {
-        self.match_id
-    }
-}
-
-impl Publishable for ApiMatchNew {
-    fn message_type<'a>() -> &'a str {
-        "matches"
-    }
-
-    fn get_hierarchy_id(&self) -> Uuid {
-        self.match_id
-    }
-}
-
-// use crate::handlers::ServerInsertable;
-
-// #[async_trait]
-// impl ServerInsertable for ApiMatchNew{
-//     fn comp_id_map_tup(
-//         conn: PgConn,
-//         me: &Vec<Self>,
-//     ) -> Result<Vec<(Uuid, Uuid)>, diesel::result::Error>{
-//         let series_ids: Vec<Uuid> = me.iter().map(|s| s.series_id).dedup().collect();
-//         db::get_competition_ids_for_series(&conn, &series_ids)
-//     }
-
-// }

@@ -10,7 +10,6 @@ use super::{series::Series, players::*};
 use itertools::Itertools;
 use crate::diesel::RunQueryDsl;  // imported here so that can run db macros
 use crate::diesel::ExpressionMethods;
-use crate::publisher::Publishable;
 use crate::db;
 
 #[derive(Insertable, Deserialize, LabelledGeneric, Queryable, Serialize, Debug)]
@@ -90,16 +89,6 @@ pub struct ApiTeamPlayer {
     pub timespan: DieselTimespan,
 }
 
-// #[derive(Deserialize, Insertable, LabelledGeneric, Debug, Clone)]
-// #[table_name = "team_players"]
-// pub struct ApiTeamPlayerNew {
-//     pub team_player_id: Uuid,
-//     pub team_id: Uuid,
-//     pub player_id: Uuid,
-//     #[serde(with = "my_timespan_format")]
-//     pub timespan: DieselTimespan,
-// }
-
 
 impl ApiTeam{
     
@@ -139,70 +128,5 @@ impl ApiTeam{
         let raw_teams: Vec<Team> = teams.into_iter().map(transform_from).collect();
         insert_exec!(&conn, teams::table, raw_teams)?;
         Ok(true)
-    }
-}
-
-impl Publishable for ApiTeam {
-    fn message_type<'a>() -> &'a str {
-        "team"
-    }
-
-    // TODO get rid of unnecessary hierarchy-ids
-    fn get_hierarchy_id(&self) -> Uuid {
-        self.team_id
-    }
-}
-
-// impl ApiTeamPlayer{
-//     pub async fn insert(conn: PgConn, team_players: Vec<Self>) -> Result<bool, diesel::result::Error>{
-//         let num_entries = team_players.len();
-//         let mut raw_team_players = Vec::with_capacity(num_entries);
-//         conn.build_transaction().run(|| {
-//             let trimmed: Vec<TeamPlayer> = trim_timespans_many::<ApiTeamPlayerNew, TeamPlayer>(conn, "team_player", new)?;
-//             insert_exec!(&conn, team_players::table, raw_team_players)?;
-//             Ok(true)
-//         })
-//     }
-// }
-
-impl Publishable for TeamPlayer {
-    fn message_type<'a>() -> &'a str {
-        "team_player"
-    }
-
-    fn get_hierarchy_id(&self) -> Uuid {
-        self.team_id
-    }
-}
-
-impl Publishable for TeamUpdate {
-    fn message_type<'a>() -> &'a str {
-        "team_update"
-    }
-
-    fn get_hierarchy_id(&self) -> Uuid {
-        self.team_id
-    }
-}
-
-// TODO should this come under team message?
-impl Publishable for TeamName {
-    fn message_type<'a>() -> &'a str {
-        "team_name"
-    }
-
-    fn get_hierarchy_id(&self) -> Uuid {
-        self.team_id
-    }
-}
-
-// TODO should this come under team message?
-impl Publishable for Team {
-    fn message_type<'a>() -> &'a str {
-        "team"
-    }
-
-    fn get_hierarchy_id(&self) -> Uuid {
-        self.team_id
     }
 }

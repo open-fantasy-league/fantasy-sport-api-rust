@@ -131,7 +131,7 @@ pub fn trim_timespans_player_position(
 // would prob help to pass trim postgresql func a vector 
 
 // TODO maybe move these funcs onto struct::insert
-pub async fn insert_team_names(
+pub fn insert_team_names(
     conn: PgConn,
     new: Vec<ApiTeamNameNew>,
 ) -> Result<Vec<TeamName>, diesel::result::Error> {
@@ -144,41 +144,41 @@ pub async fn insert_team_names(
     Ok(inserted)
 }
 
-pub async fn insert_player_names(
-    conn: PgConn,
-    new: Vec<ApiPlayerNameNew>,
+pub fn insert_player_names(
+    conn: &PgConn,
+    new: &Vec<ApiPlayerNameNew>,
 ) -> Result<Vec<PlayerName>, diesel::result::Error> {
     use crate::schema::player_names;
     // trim_timespans(conn, "team_name", t.team_id, new_timespan)
     let num_entries = new.len();
-    let trimmed: Vec<_> = trim_timespans_player_name(&conn, "player_name", &new)?;
-    let inserted: Vec<PlayerName> = insert!(&conn, player_names::table, new)?;
+    let trimmed: Vec<_> = trim_timespans_player_name(conn, "player_name", new)?;
+    let inserted: Vec<PlayerName> = insert!(conn, player_names::table, new)?;
     //inserted.append(&mut trimmed);
     Ok(inserted)
 }
 
-pub async fn insert_player_positions(
-    conn: PgConn,
-    new: Vec<ApiPlayerPositionNew>,
+pub fn insert_player_positions(
+    conn: &PgConn,
+    new: &Vec<ApiPlayerPositionNew>,
 ) -> Result<Vec<PlayerPosition>, diesel::result::Error> {
     use crate::schema::player_positions;
     // trim_timespans(conn, "team_name", t.team_id, new_timespan)
     let num_entries = new.len();
-    let trimmed: Vec<_> = trim_timespans_player_position(&conn, "player_position", &new)?;
-    let inserted: Vec<PlayerPosition> = insert!(&conn, player_positions::table, new)?;
+    let trimmed: Vec<_> = trim_timespans_player_position(conn, "player_position", new)?;
+    let inserted: Vec<PlayerPosition> = insert!(conn, player_positions::table, new)?;
     //inserted.append(&mut trimmed);
     Ok(inserted)
 }
 
-pub async fn insert_team_players(
-    conn: PgConn,
-    new: Vec<ApiTeamPlayer>,
+pub fn insert_team_players(
+    conn: &PgConn,
+    new: &Vec<ApiTeamPlayer>,
 ) -> Result<Vec<TeamPlayer>, diesel::result::Error> {
     use crate::schema::team_players;
     // trim_timespans(conn, "team_name", t.team_id, new_timespan)
     let num_entries = new.len();
-    let trimmed: Vec<_> = trim_timespans_team_player(&conn, "team_player", &new)?;
-    let inserted: Vec<TeamPlayer> = insert!(&conn, team_players::table, new)?;
+    let trimmed: Vec<_> = trim_timespans_team_player(conn, "team_player", new)?;
+    let inserted: Vec<TeamPlayer> = insert!(conn, team_players::table, new)?;
     //inserted.append(&mut trimmed);
     Ok(inserted)
 }
@@ -212,6 +212,18 @@ pub fn get_competition_ids_for_matches(
         .load(conn)
 }
 
+pub fn get_player_ids_to_team_ids(
+    conn: &PgConnection,
+    player_ids: &Vec<Uuid>,
+) -> Result<Vec<(Uuid, Uuid)>, diesel::result::Error> {
+    use crate::schema::team_players;
+
+    team_players::table
+        .select((team_players::player_id, team_players::team_id))
+        .filter(team_players::player_id.eq(any(player_ids)))
+        .load(conn)
+}
+
 pub fn get_all_teams(conn: &PgConnection) -> Result<Vec<(Team, TeamName)>, diesel::result::Error> {
     use crate::schema::{team_names, teams};
     teams::table.inner_join(team_names::table).load(conn)
@@ -238,12 +250,15 @@ pub fn get_all_competitions(
 
 pub fn get_full_competitions(
     conn: &PgConnection,
-    competition_ids: Vec<Uuid>,
+    competition_ids_filter: Option<Vec<&Uuid>>,
 ) -> Result<CompetitionHierarchy, diesel::result::Error> {
     use crate::schema::competitions;
-    let comps = competitions::table
+    let comps = match competition_ids_filter{
+        Some(competition_ids) => competitions::table
         .filter(competitions::dsl::competition_id.eq(any(competition_ids)))
-        .load::<Competition>(conn)?;
+        .load::<Competition>(conn),
+        None => competitions::table.load::<Competition>(conn)
+    }?;
     let series = Series::belonging_to(&comps).load::<Series>(conn)?;
     let matches = Match::belonging_to(&series).load::<Match>(conn)?;
     let team_series_results =

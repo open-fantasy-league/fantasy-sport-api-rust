@@ -1,10 +1,24 @@
-use uuid::Uuid;
-use crate::WSConnection_;
-use serde::Deserialize;
-use crate::publisher::Publishable;
-use diesel_utils::PgConn;
-use std::collections::{HashSet, HashMap};
-use warp_ws_server::BoxError;
+use std::collections::HashMap;
+use warp_ws_server::{Subscription, Subscriptions};
+
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub enum SubType {
+    League,
+    Draft,
+    User
+}
+
+pub struct MySubHandler {}
+
+impl warp_ws_server::SubscriptionHandler<SubType> for MySubHandler {
+    fn new() -> Subscriptions<SubType> {
+        let mut inner = HashMap::new();
+        inner.insert(SubType::League, Subscription::new());
+        inner.insert(SubType::Leaderboard, Subscription::new());
+        inner
+    }
+}
+
 
 // Maybe split up subscriptions into a hashmap is better for commonising?
 pub struct Subscriptions{
