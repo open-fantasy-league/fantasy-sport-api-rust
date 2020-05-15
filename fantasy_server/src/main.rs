@@ -30,7 +30,7 @@ use std::collections::HashMap;
 pub type WSConnections_ = warp_ws_server::WSConnections<subscriptions::SubType>;
 pub type WSConnection_ = warp_ws_server::WSConnection<subscriptions::SubType>;
 
-type Caches = (Arc<Mutex<Option<HashMap<Uuid, &String>>>>, Arc<Mutex<Option<HashMap<Uuid, Uuid>>>>);
+type Caches = (Arc<Mutex<Option<HashMap<Uuid, String>>>>, Arc<Mutex<Option<HashMap<Uuid, Uuid>>>>);
 
 struct MyWsHandler{
 }
@@ -77,8 +77,12 @@ async fn main() {
     let result_port: u16 = env::var("Result_PORT").expect("RESULT_PORT env var must be set").parse().expect("Port must be a number you lemming.");
 
     //let teams_and_players_mut: Arc<Mutex<Option<ApiTeamsAndPlayers>>> = Arc::new(Mutex::new(None));
-    let player_position_cache: Arc<Mutex<Option<HashMap<Uuid, &String>>>> = Arc::new(Mutex::new(None));
+    let player_position_cache: Arc<Mutex<Option<HashMap<Uuid, String>>>> = Arc::new(Mutex::new(None));
     let player_team_cache: Arc<Mutex<Option<HashMap<Uuid, Uuid>>>> = Arc::new(Mutex::new(None));
+    let mapper_listener_player_position_cache = player_position_cache.clone();
+    let mapper_listener_player_team_cache = player_team_cache.clone();
+    let draft_handler_player_position_cache = player_position_cache.clone();
+    let draft_handler_player_team_cache = player_team_cache.clone();
     let pool = pg_pool(db_url);
     let ws_conns =  warp_ws_server::ws_conns::<subscriptions::SubType>();
     // Is PgPool thread-safe? its not behind an arc...does it need to be?
@@ -108,8 +112,8 @@ async fn main() {
     //let server = warp::serve(ws_router).run(([127, 0, 0, 1], 3030));
     //draft_handler.await.map_err(|e|println!("{}", e.to_string()));
     join!(
-        listen_pick_results(result_port, player_position_cache.clone(), player_team_cache.clone()),
-        drafting::draft_handler(draft_handler_pool, player_position_cache.clone(), player_team_cache.clone(), draft_handler_ws_conns),
+        listen_pick_results(result_port, mapper_listener_player_position_cache, mapper_listener_player_team_cache),
+        drafting::draft_handler(draft_handler_pool, draft_handler_player_position_cache, draft_handler_player_team_cache, draft_handler_ws_conns),
         draft_builder,
         warp::serve(ws_router).run(([127, 0, 0, 1], port)));
 }

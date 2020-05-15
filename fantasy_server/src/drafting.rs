@@ -197,7 +197,7 @@ pub fn generate_drafts(
 
 pub async fn draft_handler(
     pg_pool: PgPool, 
-    player_position_cache_mut: Arc<Mutex<Option<HashMap<Uuid, &String>>>>, 
+    player_position_cache_mut: Arc<Mutex<Option<HashMap<Uuid, String>>>>, 
     player_team_cache_mut: Arc<Mutex<Option<HashMap<Uuid, Uuid>>>>, 
     mut ws_conns: WSConnections_
 ) {
@@ -226,7 +226,7 @@ pub async fn draft_handler(
                         let pick_straight_into_team = league.team_size == league.squad_size;
                         let player_position_cache_opt = player_position_cache_mut.lock().await;
                         let player_team_cache_opt = player_team_cache_mut.lock().await;
-                        match (*player_position_cache_opt, *player_team_cache_opt){
+                        match (player_position_cache_opt.as_ref(), player_team_cache_opt.as_ref()){
                             (Some(ref player_position_cache), Some(ref player_team_cache)) => {
                                 let out: Result<(Pick, Option<ActivePick>), BoxError> = pick_from_queue_or_random(
                                     pg_pool.get().unwrap(), team_draft.fantasy_team_id, draft_choice, period.timespan, period.period_id,
@@ -310,7 +310,7 @@ pub fn pick_from_queue_or_random(
     max_squad_players_same_team: &i32,
     max_squad_players_same_position: &i32,
     pick_straight_into_team: bool,
-    player_position_cache: &HashMap<Uuid, &String>,
+    player_position_cache: &HashMap<Uuid, String>,
     player_team_cache: &HashMap<Uuid, Uuid>
 ) -> Result<(Pick, Option<ActivePick>), BoxError>{
     conn.build_transaction().run(||{
@@ -324,13 +324,13 @@ pub fn pick_from_queue_or_random(
         let valid_remaining_picks: Vec<Uuid> = db::get_valid_picks(&conn, period_id)?;
         let (positions, teams) = (player_position_cache, player_team_cache);
         let current_squad = db::get_current_picks(&conn, fantasy_team_id, period_id)?;
-        let (mut position_counts, mut team_counts): (HashMap<&String, i32>, HashMap<Uuid, i32>) = (HashMap::new(), HashMap::new());
+        let (mut position_counts, mut team_counts): (HashMap<String, i32>, HashMap<Uuid, i32>) = (HashMap::new(), HashMap::new());
         // TODO rust defaultdict?
         let (position_counts, team_counts) = position_team_counts(
             current_squad, player_position_cache, player_team_cache
         );
         let banned_teams: HashSet<Uuid> = team_counts.into_iter().filter(|(_, count)| count > max_squad_players_same_team).map(|(team, _)| team).collect();
-        let banned_positions: HashSet<&String> = position_counts.into_iter().filter(|(_, count)| count > max_squad_players_same_position).map(|(pos, _)| pos).collect();
+        let banned_positions: HashSet<String> = position_counts.into_iter().filter(|(_, count)| count > max_squad_players_same_position).map(|(pos, _)| pos).collect();
         let valid_remaining_picks_hash: HashSet<&Uuid> = valid_remaining_picks.iter().collect();
         // TODO do dumb then tidy
         let mut new_pick: Option<Pick> = None;
@@ -375,11 +375,13 @@ pub fn pick_from_queue_or_random(
     // we dont mutate the draft-queue. because maybe they want the same queue for future drafts
 }
 
-fn position_team_counts<'a>(
-    player_ids: Vec<Uuid>, player_position_cache: &HashMap<Uuid, &'a String>, player_team_cache: &HashMap<Uuid, Uuid>
-) -> (HashMap<&'a String, i32>, HashMap<Uuid, i32>){
-    let (mut position_counts, mut team_counts): (HashMap<&String, i32>, HashMap<Uuid, i32>) = (HashMap::new(), HashMap::new());
+fn position_team_counts(
+    player_ids: Vec<Uuid>, player_position_cache: &HashMap<Uuid, String>, player_team_cache: &HashMap<Uuid, Uuid>
+) -> (HashMap<String, i32>, HashMap<Uuid, i32>){
+    let (mut position_counts, mut team_counts): (HashMap<String, i32>, HashMap<Uuid, i32>) = (HashMap::new(), HashMap::new());
     // TODO rust defaultdict?
+    //https://github.com/rust-lang/rust/issues/42505
+    // https://github.com/rust-lang/rust/issues/35463
     player_ids.iter().for_each(|pick_id|{
         // pretty sure these unwraps are super-safe as we've built the maps ourselves with these pick-ids.
         let (position, team) = (player_position_cache.get(&pick_id).unwrap(), player_team_cache.get(&pick_id).unwrap());
@@ -388,7 +390,11 @@ fn position_team_counts<'a>(
                 *v = *v + 1;
             }
             None => {
-                position_counts.insert(position, 1);
+                // TODO get red of clone, be smarter?
+                // issue with using reference in hashmap value is this is in the "Caches" type, seems to force me to put a specific lifetime on so many things,
+                // cos it gets passed through everything
+                // Ooh does this work, or is it different
+                position_counts.insert((*position).clone(), 1);
             }
         };
         match team_counts.get_mut(team) {
@@ -405,24 +411,25 @@ fn position_team_counts<'a>(
 
 pub fn verify_teams(
     all_teams: Vec<db::VecUuid>, 
-    player_position_cache: &HashMap<Uuid, &String>,
+    player_position_cache: &HashMap<Uuid, String>,
     player_team_cache: &HashMap<Uuid, Uuid>,
     max_team_players_same_team: &i32,
     max_team_players_same_position: &i32,
     max_team_size: &i32
 ) -> Result<bool, BoxError>{
     for team in all_teams{
+        let team_len = team.inner.len() as i32;
         let (position_counts, team_counts) = position_team_counts(
             team.inner, player_position_cache, player_team_cache
         );
-        if team.length() > max_team_size {
-            Err(errors::InvalidTeamError{description: format!("Team cannot be larger than {}", max_team_size)} as BoxError)
+        if &team_len > max_team_size {
+            return Err(Box::new(errors::InvalidTeamError{description: format!("Team cannot be larger than {}", max_team_size)}) as BoxError)
         }
-        if position_counts.values().max() > max_team_players_same_position{
-            Err(errors::InvalidTeamError{description: format!("Team cannot have more than {} players from same position", max_team_players_same_position)} as BoxError)
+        if position_counts.values().max().unwrap_or(&0i32) > max_team_players_same_position{
+            return Err(Box::new(errors::InvalidTeamError{description: format!("Team cannot have more than {} players from same position", max_team_players_same_position)}) as BoxError)
         }
-        if team_counts.values().max() > max_team_players_same_team {
-            Err(errors::InvalidTeamError{description: format!("Team cannot have more than {} players from same team", max_team_players_same_team)} as BoxError)
+        if team_counts.values().max().unwrap_or(&0i32) > max_team_players_same_team {
+            return Err(Box::new(errors::InvalidTeamError{description: format!("Team cannot have more than {} players from same team", max_team_players_same_team)}) as BoxError)
         }
     }
     Ok(true)

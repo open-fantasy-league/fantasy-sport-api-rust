@@ -225,7 +225,7 @@ pub struct VecUuid {
 
 pub fn get_all_updated_teams(
     conn: &PgConnection,
-    ids: Vec<Uuid>,
+    ids: &Vec<Uuid>,
 ) -> Result<Vec<VecUuid>, diesel::result::Error> {
     // https://www.reddit.com/r/PostgreSQL/comments/gjsham/query_to_list_combinations_of_band_members/
     let sql = "
@@ -254,10 +254,11 @@ pub fn get_all_updated_teams(
 
 pub fn get_leagues_for_picks(
     conn: &PgConnection,
-    pick_ids: Vec<Uuid>,
+    pick_ids: &Vec<Uuid>,
 ) -> Result<Vec<League>, diesel::result::Error> {
     picks::table
         .inner_join(fantasy_teams::table.inner_join(leagues::table))
+        .filter(picks::pick_id.eq(any(pick_ids)))
         .select(leagues::all_columns)
         .load(conn)
 }

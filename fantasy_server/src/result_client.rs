@@ -13,7 +13,7 @@ use chrono::{Utc, DateTime};
 
 
 pub async fn listen_pick_results(
-    result_port: u16, player_position_cache_mut: Arc<Mutex<Option<HashMap<Uuid, &String>>>>, player_team_cache_mut: Arc<Mutex<Option<HashMap<Uuid, Uuid>>>>
+    result_port: u16, player_position_cache_mut: Arc<Mutex<Option<HashMap<Uuid, String>>>>, player_team_cache_mut: Arc<Mutex<Option<HashMap<Uuid, Uuid>>>>
 ) -> Result<(), BoxError>{
     // connect to websocket on port
     // subscribe to teams/players.
@@ -53,12 +53,13 @@ pub async fn listen_pick_results(
     Ok(())
 }
 
-fn build_team_and_position_maps(teams_and_players: &ApiTeamsAndPlayers, time: DateTime<Utc>) -> (HashMap<Uuid, &String>, HashMap<Uuid, Uuid>){
+fn build_team_and_position_maps(teams_and_players: &ApiTeamsAndPlayers, time: DateTime<Utc>) -> (HashMap<Uuid, String>, HashMap<Uuid, Uuid>){
     //TODO could probably do fancy and build as iterate. no inserts
-    let mut positions: HashMap<Uuid, &String> = HashMap::new();
+    let mut positions: HashMap<Uuid, String> = HashMap::new();
     let mut teams: HashMap<Uuid, Uuid> = HashMap::new();
     // We only care about the latest team/position
     // (That might not technically be true, i.e. if a future transfer is confirmed, next team might already be in db)
+    use std::ops::RangeBounds;
     teams_and_players.team_players.iter().for_each(|tp|{
         if tp.timespan.contains(&time){
             teams.insert(tp.player_id, tp.team_id);
@@ -67,7 +68,7 @@ fn build_team_and_position_maps(teams_and_players: &ApiTeamsAndPlayers, time: Da
     teams_and_players.players.iter().for_each(|player| {
         player.positions.iter().for_each(|p|{
             if p.timespan.contains(&time){
-                positions.insert(player.player_id, &p.position);
+                positions.insert(player.player_id, p.position.clone());
             }
         })
     });
