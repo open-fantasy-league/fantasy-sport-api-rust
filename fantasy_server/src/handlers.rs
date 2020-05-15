@@ -14,7 +14,7 @@ use crate::errors;
 use std::collections::HashMap;
 use tokio::sync::{MutexGuard, Mutex};
 use std::sync::Arc;
-use tokio::runtime::Runtime;
+use tokio::runtime::Handle;
 
 
 pub async fn insert_leagues(method: &str, message_id: Uuid, data: Vec<League>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
@@ -248,7 +248,8 @@ pub async fn upsert_active_picks(
         // https://stackoverflow.com/a/52521592/3920439
         // This essentially forces an async func, into a synchronous context.
         // Diesel doesnt support async in transactions yet.
-        let (player_position_cache_opt, player_team_cache_opt) = Runtime::new().unwrap().block_on(
+        //https://docs.rs/tokio/0.2.21/tokio/runtime/struct.Handle.html#method.current
+        let (player_position_cache_opt, player_team_cache_opt) = Handle::current().block_on(
             get_cache_mutexs(&player_position_cache_mut, &player_team_cache_mut)
         );
         match (player_position_cache_opt.as_ref(), player_team_cache_opt.as_ref()){
