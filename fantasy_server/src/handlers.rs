@@ -14,6 +14,7 @@ use crate::errors;
 use std::collections::HashMap;
 use tokio::sync::{MutexGuard, Mutex};
 use std::sync::Arc;
+use tokio::runtime::Runtime;
 
 
 pub async fn insert_leagues(method: &str, message_id: Uuid, data: Vec<League>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
@@ -207,6 +208,15 @@ pub async fn update_picks(method: &str, message_id: Uuid, data: Vec<PickUpdate>,
 //     }
 // }
 
+async fn get_cache_mutexs<'a>(
+    player_position_cache_mut: &'a Arc<Mutex<Option<HashMap<Uuid, String>>>>, 
+    player_team_cache_mut: &'a Arc<Mutex<Option<HashMap<Uuid, Uuid>>>>
+) -> (MutexGuard<'a, Option<HashMap<Uuid, String>>>, MutexGuard<'a, Option<HashMap<Uuid, Uuid>>>){
+    let player_position_cache_opt = player_position_cache_mut.lock().await;
+    let player_team_cache_opt = player_team_cache_mut.lock().await;
+    (player_position_cache_opt, player_team_cache_opt)
+}
+
 pub async fn upsert_active_picks(
     method: &str, message_id: Uuid, data: Vec<ActivePick>, conn: PgConn, ws_conns: &mut WSConnections_,
     player_position_cache_mut: Arc<Mutex<Option<HashMap<Uuid, String>>>>, 
@@ -216,8 +226,8 @@ pub async fn upsert_active_picks(
     println!("{:?}", &data);
     // TODO How to await inside the transaction????
     // Really shouldnt lock these for so long, means can only do one pick-update at a time
-    let player_position_cache_opt = player_position_cache_mut.lock().await;
-    let player_team_cache_opt = player_team_cache_mut.lock().await;
+    // let player_position_cache_opt = player_position_cache_mut.lock().await;
+    // let player_team_cache_opt = player_team_cache_mut.lock().await;
     conn.build_transaction().run(|| {
         // let (player_position_cache, player_team_cache, all_teams, league) = inner(
         //     conn, data, player_position_cache_mut, player_team_cache_mut
@@ -235,6 +245,12 @@ pub async fn upsert_active_picks(
         };
         // let player_position_cache_opt = player_position_cache_mut.lock().await;
         // let player_team_cache_opt = player_team_cache_mut.lock().await;
+        // https://stackoverflow.com/a/52521592/3920439
+        // This essentially forces an async func, into a synchronous context.
+        // Diesel doesnt support async in transactions yet.
+        let (player_position_cache_opt, player_team_cache_opt) = Runtime::new().unwrap().block_on(
+            get_cache_mutexs(&player_position_cache_mut, &player_team_cache_mut)
+        );
         match (player_position_cache_opt.as_ref(), player_team_cache_opt.as_ref()){
             (Some(ref player_position_cache), Some(ref player_team_cache)) => {
                 let verified_teams = drafting::verify_teams(
