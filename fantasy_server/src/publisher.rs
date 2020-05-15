@@ -161,7 +161,7 @@ impl Publishable<SubType> for Pick {
             //     .iter()
             //     .filter(|x| sub.ids.contains(&x.external_user_id))
             //     .collect(),
-            _ => panic!("fudge")
+            _ => panic!("fudge"),
         }
     }
 
@@ -189,19 +189,18 @@ impl Publishable<SubType> for ActivePick {
         _: &Option<HashMap<Uuid, Uuid>>,
     ) -> Vec<&'b Self> {
         match sub_type {
-            // SubType::League => publishables
-            //     .iter()
-            //     .filter(|x| sub.ids.contains(&x.league_id))
-            //     .collect(),
+            SubType::League => warp_ws_server::this_should_never_happen(
+                publishables,
+                "ActivePick published for League",
+            ),
             SubType::Draft => warp_ws_server::this_should_never_happen(
                 publishables,
-                "FantasyTeam published for Draft",
+                "ActivePick published for Draft",
             ),
-            // SubType::User => publishables
-            //     .iter()
-            //     .filter(|x| sub.ids.contains(&x.external_user_id))
-            //     .collect(),
-            _ => panic!("fudge")
+            SubType::User => warp_ws_server::this_should_never_happen(
+                publishables,
+                "ActivePick published for User",
+            )
         }
     }
 }

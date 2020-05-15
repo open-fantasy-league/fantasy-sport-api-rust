@@ -5,21 +5,20 @@ use crate::types::{drafts::*, fantasy_teams::*, leagues::*};
 use diesel;
 use diesel_utils::*;
 use std::collections::{HashSet, HashMap};
-use chrono::{DateTime, Utc, self};
+use chrono::{Utc, self};
 use uuid::Uuid;
 use tokio::sync::Notify;
 use tokio::time::delay_for;
-use crate::types::thisisshit::*;
-use tokio::sync::{MutexGuard, Mutex};
+use tokio::sync::Mutex;
 use std::sync::Arc;
 use futures::join;
 use rand::seq::SliceRandom;
 use rand;
 use warp_ws_server::{publish, BoxError};
 use std::fmt;
-use std::ops::RangeBounds;
 use crate::WSConnections_;
 use crate::subscriptions::SubType;
+use crate::errors;
 
 #[derive(Debug, Clone)]
 struct NoValidPicksError {
@@ -196,7 +195,12 @@ pub fn generate_drafts(
 }
 
 
-pub async fn draft_handler(pg_pool: PgPool, teams_and_players_mut: Arc<Mutex<Option<ApiTeamsAndPlayers>>>, mut ws_conns: WSConnections_) {
+pub async fn draft_handler(
+    pg_pool: PgPool, 
+    player_position_cache_mut: Arc<Mutex<Option<HashMap<Uuid, &String>>>>, 
+    player_team_cache_mut: Arc<Mutex<Option<HashMap<Uuid, Uuid>>>>, 
+    mut ws_conns: WSConnections_
+) {
     println!("In draft builder");
     let notify = Arc::new(Notify::new());
     let notify2 = notify.clone();
@@ -220,14 +224,15 @@ pub async fn draft_handler(pg_pool: PgPool, teams_and_players_mut: Arc<Mutex<Opt
                     let time_to_unchosen = raw_time - Utc::now();
                     if (time_to_unchosen) < chrono::Duration::zero(){
                         let pick_straight_into_team = league.team_size == league.squad_size;
-                        let teams_and_players_opt: MutexGuard<Option<ApiTeamsAndPlayers>> = teams_and_players_mut.lock().await;
-                        match *teams_and_players_opt{
-                            Some(ref teams_and_players) => {
+                        let player_position_cache_opt = player_position_cache_mut.lock().await;
+                        let player_team_cache_opt = player_team_cache_mut.lock().await;
+                        match (*player_position_cache_opt, *player_team_cache_opt){
+                            (Some(ref player_position_cache), Some(ref player_team_cache)) => {
                                 let out: Result<(Pick, Option<ActivePick>), BoxError> = pick_from_queue_or_random(
                                     pg_pool.get().unwrap(), team_draft.fantasy_team_id, draft_choice, period.timespan, period.period_id,
                                     &league.max_squad_players_same_team, &league.max_squad_players_same_position,
                                     pick_straight_into_team,
-                                    teams_and_players
+                                    player_position_cache, player_team_cache
                                 );
                                 match out
                                 {
@@ -255,7 +260,7 @@ pub async fn draft_handler(pg_pool: PgPool, teams_and_players_mut: Arc<Mutex<Opt
                             // only minor problem might be that whilst iterating the unchosen, this gets populated, and so a later pick gets priority, before we outer-loop again,
                             // and come back to this....thats a good point actually, it just queries once for unchosen and then goes through, 
                             // its not like this is getting thrown back on rear of queue, it will wait until the next round of processing (could be long time), prob needs a rethink.
-                            None => {println!("teams_and_players still empty")}
+                            _ => {println!("teams_and_players still empty")}
                         }
                     } else{
                         timeout = Some(time_to_unchosen);
@@ -296,27 +301,6 @@ pub async fn draft_handler(pg_pool: PgPool, teams_and_players_mut: Arc<Mutex<Opt
     
 }
 
-fn build_team_and_position_maps(teams_and_players: &ApiTeamsAndPlayers, time: DateTime<Utc>) -> (HashMap<Uuid, &String>, HashMap<Uuid, Uuid>){
-    //TODO handle different timespans
-    //TODO could probably do fancy and build as iterate. no inserts
-    // Think this wants caching/calculating on player/team update msg
-    let mut positions: HashMap<Uuid, &String> = HashMap::new();
-    let mut teams: HashMap<Uuid, Uuid> = HashMap::new();
-    teams_and_players.team_players.iter().for_each(|tp|{
-        if tp.timespan.contains(&time){
-            teams.insert(tp.player_id, tp.team_id);
-        }
-    });
-    teams_and_players.players.iter().for_each(|player| {
-        player.positions.iter().for_each(|p|{
-            if p.timespan.contains(&time){
-                positions.insert(player.player_id, &p.position);
-            }
-        })
-    });
-    (positions, teams)
-}
-
 pub fn pick_from_queue_or_random(
     conn: PgConn,
     fantasy_team_id: Uuid,
@@ -326,8 +310,8 @@ pub fn pick_from_queue_or_random(
     max_squad_players_same_team: &i32,
     max_squad_players_same_position: &i32,
     pick_straight_into_team: bool,
-    teams_and_players: &ApiTeamsAndPlayers
-    //teams_and_players: MutexGuard<ApiTeamsAndPlayers>
+    player_position_cache: &HashMap<Uuid, &String>,
+    player_team_cache: &HashMap<Uuid, Uuid>
 ) -> Result<(Pick, Option<ActivePick>), BoxError>{
     conn.build_transaction().run(||{
         // TODO deal with squads not just teams
@@ -338,30 +322,13 @@ pub fn pick_from_queue_or_random(
         // but also need access random element if !picked
         //teams_and_players_mut
         let valid_remaining_picks: Vec<Uuid> = db::get_valid_picks(&conn, period_id)?;
-        let (positions, teams) = build_team_and_position_maps(teams_and_players, DieselTimespan::lower(belongs_to_team_for));
+        let (positions, teams) = (player_position_cache, player_team_cache);
         let current_squad = db::get_current_picks(&conn, fantasy_team_id, period_id)?;
         let (mut position_counts, mut team_counts): (HashMap<&String, i32>, HashMap<Uuid, i32>) = (HashMap::new(), HashMap::new());
         // TODO rust defaultdict?
-        current_squad.iter().for_each(|pick_id|{
-            // pretty sure these unwraps are super-safe as we've built the maps ourselves with these pick-ids.
-            let (position, team) = (positions.get(&pick_id).unwrap(), teams.get(&pick_id).unwrap());
-            match position_counts.get_mut(position) {
-                Some(v) => {
-                    *v = *v + 1;
-                }
-                None => {
-                    position_counts.insert(position, 1);
-                }
-            };
-            match team_counts.get_mut(team) {
-                Some(v) => {
-                    *v = *v + 1;
-                }
-                None => {
-                    team_counts.insert(*team, 1);
-                }
-            };
-        });
+        let (position_counts, team_counts) = position_team_counts(
+            current_squad, player_position_cache, player_team_cache
+        );
         let banned_teams: HashSet<Uuid> = team_counts.into_iter().filter(|(_, count)| count > max_squad_players_same_team).map(|(team, _)| team).collect();
         let banned_positions: HashSet<&String> = position_counts.into_iter().filter(|(_, count)| count > max_squad_players_same_position).map(|(pos, _)| pos).collect();
         let valid_remaining_picks_hash: HashSet<&Uuid> = valid_remaining_picks.iter().collect();
@@ -406,4 +373,57 @@ pub fn pick_from_queue_or_random(
         }
     })
     // we dont mutate the draft-queue. because maybe they want the same queue for future drafts
+}
+
+fn position_team_counts<'a>(
+    player_ids: Vec<Uuid>, player_position_cache: &HashMap<Uuid, &'a String>, player_team_cache: &HashMap<Uuid, Uuid>
+) -> (HashMap<&'a String, i32>, HashMap<Uuid, i32>){
+    let (mut position_counts, mut team_counts): (HashMap<&String, i32>, HashMap<Uuid, i32>) = (HashMap::new(), HashMap::new());
+    // TODO rust defaultdict?
+    player_ids.iter().for_each(|pick_id|{
+        // pretty sure these unwraps are super-safe as we've built the maps ourselves with these pick-ids.
+        let (position, team) = (player_position_cache.get(&pick_id).unwrap(), player_team_cache.get(&pick_id).unwrap());
+        match position_counts.get_mut(position) {
+            Some(v) => {
+                *v = *v + 1;
+            }
+            None => {
+                position_counts.insert(position, 1);
+            }
+        };
+        match team_counts.get_mut(team) {
+            Some(v) => {
+                *v = *v + 1;
+            }
+            None => {
+                team_counts.insert(*team, 1);
+            }
+        };
+    });
+    (position_counts, team_counts)
+}
+
+pub fn verify_teams(
+    all_teams: Vec<db::VecUuid>, 
+    player_position_cache: &HashMap<Uuid, &String>,
+    player_team_cache: &HashMap<Uuid, Uuid>,
+    max_team_players_same_team: &i32,
+    max_team_players_same_position: &i32,
+    max_team_size: &i32
+) -> Result<bool, BoxError>{
+    for team in all_teams{
+        let (position_counts, team_counts) = position_team_counts(
+            team.inner, player_position_cache, player_team_cache
+        );
+        if team.length() > max_team_size {
+            Err(errors::InvalidTeamError{description: format!("Team cannot be larger than {}", max_team_size)} as BoxError)
+        }
+        if position_counts.values().max() > max_team_players_same_position{
+            Err(errors::InvalidTeamError{description: format!("Team cannot have more than {} players from same position", max_team_players_same_position)} as BoxError)
+        }
+        if team_counts.values().max() > max_team_players_same_team {
+            Err(errors::InvalidTeamError{description: format!("Team cannot have more than {} players from same team", max_team_players_same_team)} as BoxError)
+        }
+    }
+    Ok(true)
 }

@@ -9,6 +9,12 @@ use crate::diesel::RunQueryDsl;  // imported here so that can run db macros
 use crate::diesel::ExpressionMethods;
 use crate::types::{leagues::*, users::*, drafts::*, fantasy_teams::*};
 use crate::subscriptions::SubType;
+use crate::drafting;
+use crate::errors;
+use std::collections::HashMap;
+use tokio::sync::{MutexGuard, Mutex};
+use std::sync::Arc;
+
 
 pub async fn insert_leagues(method: &str, message_id: Uuid, data: Vec<League>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
     println!("{:?}", &data);
@@ -156,8 +162,8 @@ pub async fn update_draft_choices(method: &str, message_id: Uuid, data: Vec<Draf
 
 pub async fn insert_picks(method: &str, message_id: Uuid, data: Vec<Pick>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
     let out: Vec<Pick> = insert!(&conn, picks::table, data)?;
-    // TODO do draft-queues even want publishing to anyone except caller (person's queue should be private)
-    publish::<SubType, Pick>(ws_conns, &out, SubType::Draft, None).await?;
+    let draft_id_map: HashMap<Uuid, Uuid> = db::get_draft_ids_for_picks(&conn, &data.iter().map(|p|p.pick_id).collect())?.into_iter().collect();
+    publish::<SubType, Pick>(ws_conns, &out, SubType::Draft, Some(draft_id_map)).await?;
     let resp_msg = WSMsgOut::resp(message_id, method, out);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
@@ -168,8 +174,97 @@ pub async fn update_picks(method: &str, message_id: Uuid, data: Vec<PickUpdate>,
         data.iter().map(|c| {
         update!(&conn, picks, pick_id, c)
     }).collect()})?;
+    let draft_id_map: HashMap<Uuid, Uuid> = db::get_draft_ids_for_picks(&conn, &data.iter().map(|p|p.pick_id).collect())?.into_iter().collect();
+    publish::<SubType, Pick>(ws_conns, &out, SubType::Draft, Some(draft_id_map)).await?;
     let resp_msg = WSMsgOut::resp(message_id, method, out);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
+}
+
+async fn inner<'a, 'b>(
+    conn: &PgConn,
+    data: &Vec<ActivePick>,
+    player_position_cache_mut: Arc<Mutex<Option<HashMap<Uuid, &'a String>>>>, 
+    player_team_cache_mut: Arc<Mutex<Option<HashMap<Uuid, Uuid>>>>
+) -> Result<(&'b HashMap<Uuid, &'a String>, &'b HashMap<Uuid, Uuid>, Vec<db::VecUuid>, &'b League), BoxError>{
+    let _ = db::upsert_active_picks(&conn, &data)?;
+    let pick_ids = data.iter().map(|ap|ap.pick_id).collect();
+    let all_teams = db::get_all_updated_teams(&conn, pick_ids)?;
+    let leagues = db::get_leagues_for_picks(&conn, pick_ids)?;
+    if leagues.len() > 1{
+        return Err(Box::new(errors::InvalidInputError{description: "Active picks specified are from more than one league"}) as BoxError)
+    }
+    let league = match leagues.first(){
+        Some(league) => league,
+        None => {return Err(Box::new(errors::InvalidInputError{description: "Could not find a league for active picks"}) as BoxError)}
+    };
+    let player_position_cache_opt = player_position_cache_mut.lock().await;
+    let player_team_cache_opt = player_team_cache_mut.lock().await;
+    match (*player_position_cache_opt, *player_team_cache_opt){
+        (Some(ref player_position_cache), Some(ref player_team_cache)) => {
+            Ok((player_position_cache, player_team_cache, all_teams, league))
+        },
+        _ => {Err(Box::new(errors::CustomError{description: "Player team and position caches not yet populated"}) as BoxError)}
+    }
+}
+
+pub async fn upsert_active_picks(
+    method: &str, message_id: Uuid, data: Vec<ActivePick>, conn: PgConn, ws_conns: &mut WSConnections_,
+    player_position_cache_mut: Arc<Mutex<Option<HashMap<Uuid, &String>>>>, 
+    player_team_cache_mut: Arc<Mutex<Option<HashMap<Uuid, Uuid>>>>,
+) -> Result<String, BoxError>{
+    // ideas: just do the sql, then rollback if invalid
+    // what if always send in whole team?
+    println!("{:?}", &data);
+    use tokio::task;
+    // conn.build_transaction().run(|| {
+    //     let (player_position_cache, player_team_cache, all_teams, league) = inner(
+    //         conn, data, player_position_cache_mut, player_team_cache_mut
+    //     ).await?;
+    //     let verified_teams = drafting::verify_teams(
+    //         all_teams, player_position_cache,
+    //         player_team_cache,
+    //         &league.max_team_players_same_team,
+    //         &league.max_team_players_same_position,
+    //         &league.team_size
+    //     );
+    //     Ok(verified_teams)
+    // });
+    let draft_id_map: HashMap<Uuid, Uuid> = db::get_draft_ids_for_picks(&conn, &data.iter().map(|p|p.pick_id).collect())?.into_iter().collect();
+    publish::<SubType, ActivePick>(ws_conns, &data, SubType::Draft, Some(draft_id_map)).await?;
+
+    // publish::<SubType, FantasyTeam>(
+    //     ws_conns, &out, SubType::User, None
+    // ).await?;
+    let resp_msg = WSMsgOut::resp(message_id, method, data);
+    serde_json::to_string(&resp_msg).map_err(|e| e.into())
+
+    // conn.build_transaction().run(|| {
+    //     let upserted = db::upsert_active_picks(&conn, &data);
+    //     let pick_ids = data.iter().map(|ap|ap.pick_id).collect();
+    //     let all_teams = db::get_all_updated_teams(&conn, pick_ids)?;
+    //     let leagues = db::get_leagues_for_picks(&conn, pick_ids)?;
+    //     if leagues.len() > 1{
+    //         return Err(Box::new(errors::InvalidInputError{description: "Active picks specified are from more than one league"}) as BoxError)
+    //     }
+    //     let league = match leagues.first(){
+    //         Some(league) => league,
+    //         None => {return Err(Box::new(errors::InvalidInputError{description: "Could not find a league for active picks"}) as BoxError)}
+    //     };
+    //     let player_position_cache_opt = player_position_cache_mut.lock().await;
+    //     let player_team_cache_opt = player_team_cache_mut.lock().await;
+    //     match (*player_position_cache_opt, *player_team_cache_opt){
+    //         (Some(ref player_position_cache), Some(ref player_team_cache)) => {
+    //             let verified_teams = drafting::verify_teams(
+    //                 all_teams, player_position_cache,
+    //                 player_team_cache,
+    //                 &league.max_team_players_same_team,
+    //                 &league.max_team_players_same_position,
+    //                 &league.team_size);
+    //                 Ok(verified_teams)
+    //             },
+    //         _ => {Err(Box::new(errors::CustomError{description: "Player team and position caches not yet populated"}) as BoxError)}
+    //     }?
+    // });
 }
 
 pub async fn insert_fantasy_teams(method: &str, message_id: Uuid, data: Vec<FantasyTeam>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{

@@ -8,47 +8,102 @@
 //     // SO want to do a second from_string on the data
 //     pub data: serde_json::Value
 // }
-use uuid::Uuid;
+use crate::types::{drafts::*, fantasy_teams::*, leagues::*, users::*};
 use serde::Deserialize;
-use crate::types::{drafts::*, users::*, fantasy_teams::*, leagues::*};
+use uuid::Uuid;
 
 #[derive(Deserialize, Debug)]
-pub struct SubUser{
+pub struct SubUser {
     pub toggle: bool,
 }
 
 #[derive(Deserialize, Debug)]
-pub struct SubDraft{
+pub struct SubDraft {
     pub sub_draft_ids: Option<Vec<Uuid>>,
     pub unsub_draft_ids: Option<Vec<Uuid>>,
-    pub all: Option<bool>
+    pub all: Option<bool>,
 }
 
 #[derive(Deserialize, Debug)]
-pub struct SubLeague{
+pub struct SubLeague {
     pub sub_league_ids: Option<Vec<Uuid>>,
     pub unsub_league_ids: Option<Vec<Uuid>>,
-    pub all: Option<bool>
+    pub all: Option<bool>,
 }
 
 #[derive(Deserialize)]
 #[serde(tag = "method")]
 pub enum WSReq {
-    League { message_id: Uuid, data: Vec<League>},
-    LeagueUpdate { message_id: Uuid, data: Vec<LeagueUpdate>},
-    Period { message_id: Uuid, data: Vec<Period>},
-    PeriodUpdate { message_id: Uuid, data: Vec<PeriodUpdate>},
-    StatMultiplier { message_id: Uuid, data: Vec<StatMultiplier>},
-    StatMultiplierUpdate { message_id: Uuid, data: Vec<StatMultiplierUpdate>},
-    ExternalUser { message_id: Uuid, data: Vec<ExternalUser>},
-    ExternalUserUpdate { message_id: Uuid, data: Vec<ExternalUserUpdate>},
-    DraftQueue { message_id: Uuid, data: Vec<DraftQueue>},
-    DraftChoiceUpdate { message_id: Uuid, data: Vec<DraftChoiceUpdate>},
-    Pick { message_id: Uuid, data: Vec<Pick>},
-    PickUpdate { message_id: Uuid, data: Vec<PickUpdate>},
-    FantasyTeam { message_id: Uuid, data: Vec<FantasyTeam>},
-    FantasyTeamUpdate { message_id: Uuid, data: Vec<FantasyTeamUpdate>},
-    SubLeague { message_id: Uuid, data: SubLeague},
-    SubDraft { message_id: Uuid, data: SubDraft},
-    SubUser { message_id: Uuid, data: SubUser},
+    League {
+        message_id: Uuid,
+        data: Vec<League>,
+    },
+    LeagueUpdate {
+        message_id: Uuid,
+        data: Vec<LeagueUpdate>,
+    },
+    Period {
+        message_id: Uuid,
+        data: Vec<Period>,
+    },
+    PeriodUpdate {
+        message_id: Uuid,
+        data: Vec<PeriodUpdate>,
+    },
+    StatMultiplier {
+        message_id: Uuid,
+        data: Vec<StatMultiplier>,
+    },
+    StatMultiplierUpdate {
+        message_id: Uuid,
+        data: Vec<StatMultiplierUpdate>,
+    },
+    ExternalUser {
+        message_id: Uuid,
+        data: Vec<ExternalUser>,
+    },
+    ExternalUserUpdate {
+        message_id: Uuid,
+        data: Vec<ExternalUserUpdate>,
+    },
+    DraftQueue {
+        message_id: Uuid,
+        data: Vec<DraftQueue>,
+    },
+    DraftChoiceUpdate {
+        message_id: Uuid,
+        data: Vec<DraftChoiceUpdate>,
+    },
+    Pick {
+        message_id: Uuid,
+        data: Vec<Pick>,
+    },
+    PickUpdate {
+        message_id: Uuid,
+        data: Vec<PickUpdate>,
+    },
+    ActivePick {
+        message_id: Uuid,
+        data: Vec<ActivePick>,
+    },
+    FantasyTeam {
+        message_id: Uuid,
+        data: Vec<FantasyTeam>,
+    },
+    FantasyTeamUpdate {
+        message_id: Uuid,
+        data: Vec<FantasyTeamUpdate>,
+    },
+    SubLeague {
+        message_id: Uuid,
+        data: SubLeague,
+    },
+    SubDraft {
+        message_id: Uuid,
+        data: SubDraft,
+    },
+    SubUser {
+        message_id: Uuid,
+        data: SubUser,
+    },
 }

@@ -102,7 +102,6 @@ impl ApiCompetition{
         insert_exec!(&conn, schema::team_match_results::table, team_match_results)?;
         insert_exec!(&conn, schema::team_series_results::table, team_results)?;
         return Ok(true)
-
     }
 }
 

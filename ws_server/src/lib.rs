@@ -96,8 +96,8 @@ pub fn ws_error_resp(error_msg: String) -> ws::Message{
     )
 }
 
-pub async fn handle_ws_conn<CustomSubType: std::cmp::Eq + std::hash::Hash, T: SubscriptionHandler<CustomSubType>, U: WSHandler<CustomSubType>>(
-    ws: ws::WebSocket, pg_pool: PgPool, mut ws_conns: WSConnections<CustomSubType>
+pub async fn handle_ws_conn<CustomSubType: std::cmp::Eq + std::hash::Hash, T: SubscriptionHandler<CustomSubType>, U: WSHandler<CustomSubType, CachesType>, CachesType: Clone>(
+    ws: ws::WebSocket, pg_pool: PgPool, mut ws_conns: WSConnections<CustomSubType>, caches: CachesType
 ) {
     // https://github.com/seanmonstar/warp/blob/master/examples/websockets_chat.rs
     let (ws_send, mut ws_recv) = ws.split();
@@ -122,7 +122,10 @@ pub async fn handle_ws_conn<CustomSubType: std::cmp::Eq + std::hash::Hash, T: Su
             // pgpool get should probably be deferred until after we unwrap/get websocket message
             // but trying like this as worried about ownership of pool, so moving it into funcs
             Ok(msg) => match pg_pool.get(){
-                Ok(conn) => handle_ws_msg::<CustomSubType, U>(msg, conn, &mut ws_conns, ws_id).await,
+                // TODO for the caches im using, each msg just need to read-lock, not full lock. How do in rust?
+                Ok(conn) => handle_ws_msg::<CustomSubType, U, CachesType>(
+                    msg, conn, &mut ws_conns, ws_id, caches.clone()
+                ).await,
                 Err(e) => ws_error_resp(e.to_string())
             },
             Err(e) => {
@@ -149,13 +152,13 @@ pub async fn handle_ws_conn<CustomSubType: std::cmp::Eq + std::hash::Hash, T: Su
     }
 }
 
-async fn handle_ws_msg<CustomSubType: std::cmp::Eq + std::hash::Hash, U: WSHandler<CustomSubType>>(
-    msg: ws::Message, conn: PgConn, ws_conns: &mut WSConnections<CustomSubType>, user_ws_id: Uuid
+async fn handle_ws_msg<CustomSubType: std::cmp::Eq + std::hash::Hash, U: WSHandler<CustomSubType, CachesType>, CachesType>(
+    msg: ws::Message, conn: PgConn, ws_conns: &mut WSConnections<CustomSubType>, user_ws_id: Uuid, caches: CachesType
 ) -> ws::Message{
     dbg!(&msg);
     match msg.to_str(){
         // Can't get await inside `and_then`/`map` function chains to work properly
-        Ok(msg_str) => match U::ws_req_resp(msg_str.to_string(), conn, ws_conns, user_ws_id).await{
+        Ok(msg_str) => match U::ws_req_resp(msg_str.to_string(), conn, ws_conns, user_ws_id, caches).await{
             Ok(text) => ws::Message::text(text),
             Err(e) => {
                 dbg!(&e);
@@ -168,9 +171,9 @@ async fn handle_ws_msg<CustomSubType: std::cmp::Eq + std::hash::Hash, U: WSHandl
 }
 
 #[async_trait]
-pub trait WSHandler<CustomSubType: std::cmp::Eq + std::hash::Hash>{
+pub trait WSHandler<CustomSubType: std::cmp::Eq + std::hash::Hash, CachesType>{
     async fn ws_req_resp(
-        msg: String, conn: PgConn, ws_conns: &mut WSConnections<CustomSubType>, user_ws_id: Uuid
+        msg: String, conn: PgConn, ws_conns: &mut WSConnections<CustomSubType>, user_ws_id: Uuid, caches: CachesType
     ) -> Result<String, BoxError>;
 }
 

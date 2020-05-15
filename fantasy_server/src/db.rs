@@ -1,6 +1,7 @@
 use crate::schema::{self, *};
 use crate::types::{drafts::*, fantasy_teams::*, leagues::*, users::*, valid_players::*};
 use diesel::pg::expression::dsl::any;
+use diesel::pg::upsert::excluded;
 use diesel::prelude::*;
 use diesel::ExpressionMethods;
 use diesel::RunQueryDsl;
@@ -199,5 +200,64 @@ pub fn get_current_picks(
         .filter(picks::fantasy_team_id.eq(fantasy_team_id))
         .inner_join(draft_choices::table.inner_join(team_drafts::table.inner_join(drafts::table)))
         .filter(drafts::period_id.eq(period_id))
+        .load(conn)
+}
+
+pub fn upsert_active_picks(
+    conn: &PgConnection,
+    data: &Vec<ActivePick>,
+) -> Result<Vec<ActivePick>, diesel::result::Error> {
+    diesel::insert_into(active_picks::table)
+        .values(data)
+        // constraint unique pick-with timespan (want same on pick itself so only 1 of player in squad)
+        .on_conflict((active_picks::pick_id, active_picks::timespan))
+        .do_update()
+        .set(active_picks::timespan.eq(excluded(active_picks::timespan)))
+        //.set(name.eq(coalesce::<sql_types::Text>(excluded(name), name)))
+        .get_results(conn)
+}
+
+#[derive(QueryableByName)]
+pub struct VecUuid {
+    #[sql_type = "sql_types::Array<sql_types::Uuid>"]
+    pub inner: Vec<Uuid>,
+}
+
+pub fn get_all_updated_teams(
+    conn: &PgConnection,
+    ids: Vec<Uuid>,
+) -> Result<Vec<VecUuid>, diesel::result::Error> {
+    // https://www.reddit.com/r/PostgreSQL/comments/gjsham/query_to_list_combinations_of_band_members/
+    let sql = "
+        WITH upper_and_lower AS (select t1.timespan,
+        (select array_agg(t2.pick_id) 
+         from active_picks t2
+         where t2.timespan @> lower(t1.timespan)) as lower_ids,
+        (select array_agg(t3.pick_id) 
+         from active_picks t3
+         where t3.timespan @> upper(t1.timespan)) as upper_ids
+        from (
+            select timespan
+            from active_picks where pick_id = ANY($1)
+        ) as t1)
+
+        select distinct ids from 
+        (select lower_ids as ids, lower(timespan) as ttime from upper_and_lower 
+        union 
+            select upper_ids as ids, upper(timespan) as ttime from upper_and_lower
+        ) as final_sub;
+    ";
+    sql_query(sql)
+        .bind::<sql_types::Array<sql_types::Uuid>, _>(ids)
+        .load::<VecUuid>(conn)
+}
+
+pub fn get_leagues_for_picks(
+    conn: &PgConnection,
+    pick_ids: Vec<Uuid>,
+) -> Result<Vec<League>, diesel::result::Error> {
+    picks::table
+        .inner_join(fantasy_teams::table.inner_join(leagues::table))
+        .select(leagues::all_columns)
         .load(conn)
 }

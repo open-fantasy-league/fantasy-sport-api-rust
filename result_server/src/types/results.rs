@@ -1,10 +1,10 @@
 use serde::{Deserialize, Serialize};
-use diesel_utils::{PgConn, DieselTimespan, my_timespan_format, my_timespan_format_opt};
 use crate::schema::*;
 use uuid::Uuid;
 use serde_json;
-use frunk::LabelledGeneric;
 use super::{matches::Match, series::Series};
+use diesel_utils::PgConn;
+use crate::types::competitions::ApiCompetition;
 
 #[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations, Clone)]
 #[primary_key(match_id, team_id)]
