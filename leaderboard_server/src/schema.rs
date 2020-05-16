@@ -20,4 +20,7 @@ table! {
 
 joinable!(stats -> leaderboards (leaderboard_id));
 
-allow_tables_to_appear_in_same_query!(leaderboards, stats,);
+allow_tables_to_appear_in_same_query!(
+    leaderboards,
+    stats,
+);

@@ -1,4 +1,7 @@
 
+
+//https://github.com/emk/rust-musl-builder#making-diesel-work
+extern crate openssl;
 #[macro_use]
 extern crate diesel;
 extern crate dotenv;
@@ -25,15 +28,16 @@ use async_trait::async_trait;
 pub type WSConnections_ = warp_ws_server::WSConnections<subscriptions::SubType>;
 pub type WSConnection_ = warp_ws_server::WSConnection<subscriptions::SubType>;
 
+type Caches = ();
 
 struct MyWsHandler{
 }
 
 #[async_trait]
-impl WSHandler<subscriptions::SubType> for MyWsHandler{
+impl WSHandler<subscriptions::SubType, Caches> for MyWsHandler{
 
     async fn ws_req_resp(
-        msg: String, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid
+        msg: String, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid, _: Caches
     ) -> Result<String, BoxError>{
         let req: WSReq = serde_json::from_str(&msg)?;
         match req{
@@ -49,6 +53,7 @@ impl WSHandler<subscriptions::SubType> for MyWsHandler{
 #[tokio::main]
 async fn main() {
     dotenv().ok();
+    println!("Doing stuff");
     let db_url = env::var("LEADERBOARD_DB").expect("LEADERBOARD_URL env var must be set");
     let port = env::var("LEADERBOARD_PORT").expect("LEADERBOARD_PORT env var must be set").parse().expect("Port must be a number you lemming.");
     let pool = pg_pool(db_url);
@@ -60,8 +65,8 @@ async fn main() {
         .map(move |ws: warp::ws::Ws, ws_conns|{
             let pool = pool.clone();
             ws.on_upgrade(move |socket| 
-                warp_ws_server::handle_ws_conn::<subscriptions::SubType, subscriptions::MySubHandler, MyWsHandler>(
-                    socket, pool, ws_conns
+                warp_ws_server::handle_ws_conn::<subscriptions::SubType, subscriptions::MySubHandler, MyWsHandler, Caches>(
+                    socket, pool, ws_conns, ()
                 ))
         });
     warp::serve(ws_router).run(([127, 0, 0, 1], port)).await;
