@@ -1,0 +1,44 @@
+# https://blog.sedrik.se/posts/my-docker-setup-for-rust/
+FROM ekidd/rust-musl-builder as builder
+USER rust
+# Face and palm are in alignment https://github.com/moby/moby/issues/36408
+RUN mkdir -p /home/rust/leaderboard/src
+WORKDIR /home/rust/leaderboard
+
+# Avoid having to install/build all dependencies by copying
+# the Cargo files and making a dummy src/main.rs
+COPY --chown=rust:rust Cargo.toml .
+COPY --chown=rust:rust Cargo.lock .
+# Just to get diesel_utils and warp_ws_server onto container. In future these can be published crates
+RUN git clone https://github.com/open-fantasy-league/fantasy-sport-api-rust.git /home/rust/fantasy-sport-api-rust
+RUN mv /home/rust/fantasy-sport-api-rust/diesel_utils /home/rust/diesel_utils
+RUN mv /home/rust/fantasy-sport-api-rust/ws_server /home/rust/ws_server
+#RUN echo "fn main() {}" > /home/rust/leaderboard/src/main.rs
+#RUN cargo test
+#RUN cargo build --release
+
+# We need to touch our real main.rs file or else docker will use
+# the cached one.
+COPY --chown=rust:rust . .
+RUN chmod +x /home/rust/leaderboard/run.sh
+#RUN touch /home/rust/leaderboard/src/main.rs
+
+# RUN cargo test
+#RUN cargo build --release
+RUN cargo build
+RUN cargo install diesel_cli --no-default-features --features postgres
+
+# Size optimization
+#RUN strip target/x86_64-unknown-linux-musl/release/leaderboard_server
+
+# Start building the final image
+# THis doesnt work because need diesel cli to run migrations
+# FROM scratch
+# WORKDIR /home/rust/leaderboard
+# #COPY --from=builder /home/rust/leaderboard/target/x86_64-unknown-linux-musl/release/leaderboard_server .
+# COPY --from=builder /home/rust/leaderboard/target/x86_64-unknown-linux-musl/debug/leaderboard_server .
+RUN cp /home/rust/leaderboard/target/x86_64-unknown-linux-musl/debug/leaderboard_server .
+# # RUN diesel setup --database-url postgres://fantasy:fantasy@db/leaderboard
+# # RUN diesel migration run --database-url postgres://fantasy:fantasy@db/leaderboard
+# RUN ls -la ./
+ENTRYPOINT ["./run.sh"]

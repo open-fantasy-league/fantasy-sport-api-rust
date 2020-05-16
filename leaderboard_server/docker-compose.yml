@@ -1,0 +1,37 @@
+version: '3.3'
+
+services:
+  api:
+    build: .
+    depends_on:
+      - db
+    environment:
+      STAGE: test
+      SQLALCHEMY_DATABASE_URI: postgresql+psycopg2://test:test@db/test
+      LEADERBOARD_DB: postgres://fantasy:fantasy@db/leaderboard
+      LEADERBOARD_PORT: 3002
+    networks:
+      - default
+    ports:
+      - 3002:3002
+    # volumes:
+    #   - ./app:/usr/src/app/app
+    #   - ./migrations:/usr/src/app/migrations
+    restart: always
+    command: bash -c "bash ./wait-for-it.sh db:5432 -q -- diesel setup && cargo watch -x run"
+
+  db:
+    environment:
+      POSTGRES_USER: fantasy
+      POSTGRES_PASSWORD: fantasy
+      POSTGRES_DB: leaderboard
+    image: postgres:latest
+    networks:
+      - default
+    ports:
+      - 3102:5432
+    restart: always
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+
+# https://github.com/ghotiphud/rust-web-starter/blob/master/docker-compose.yml
