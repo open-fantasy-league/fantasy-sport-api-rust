@@ -69,5 +69,5 @@ async fn main() {
                     socket, pool, ws_conns, ()
                 ))
         });
-    warp::serve(ws_router).run(([127, 0, 0, 1], port)).await;
+    warp::serve(ws_router).run(([0, 0, 0, 0], port)).await;
 }

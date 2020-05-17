@@ -13,15 +13,15 @@ COPY --chown=rust:rust Cargo.lock .
 RUN git clone https://github.com/open-fantasy-league/fantasy-sport-api-rust.git /home/rust/fantasy-sport-api-rust
 RUN mv /home/rust/fantasy-sport-api-rust/diesel_utils /home/rust/diesel_utils
 RUN mv /home/rust/fantasy-sport-api-rust/ws_server /home/rust/ws_server
-#RUN echo "fn main() {}" > /home/rust/leaderboard/src/main.rs
-#RUN cargo test
-#RUN cargo build --release
+
+RUN echo "fn main() {}" > /home/rust/leaderboard/src/main.rs
+RUN cargo build --release
 
 # We need to touch our real main.rs file or else docker will use
 # the cached one.
 COPY --chown=rust:rust . .
 #RUN chmod +x /home/rust/leaderboard/run.sh
-#RUN touch /home/rust/leaderboard/src/main.rs
+RUN touch /home/rust/leaderboard/src/main.rs
 
 # RUN cargo test
 #RUN cargo build --release

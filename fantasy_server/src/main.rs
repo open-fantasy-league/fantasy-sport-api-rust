@@ -115,5 +115,5 @@ async fn main() {
         listen_pick_results(result_port, mapper_listener_player_position_cache, mapper_listener_player_team_cache),
         drafting::draft_handler(draft_handler_pool, draft_handler_player_position_cache, draft_handler_player_team_cache, draft_handler_ws_conns),
         draft_builder,
-        warp::serve(ws_router).run(([127, 0, 0, 1], port)));
+        warp::serve(ws_router).run(([0, 0, 0, 0], port)));
 }
