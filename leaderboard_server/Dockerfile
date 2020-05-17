@@ -15,7 +15,7 @@ RUN mv /home/rust/fantasy-sport-api-rust/diesel_utils /home/rust/diesel_utils
 RUN mv /home/rust/fantasy-sport-api-rust/ws_server /home/rust/ws_server
 
 RUN echo "fn main() {}" > /home/rust/leaderboard/src/main.rs
-RUN cargo build --release
+RUN cargo build
 
 # We need to touch our real main.rs file or else docker will use
 # the cached one.
