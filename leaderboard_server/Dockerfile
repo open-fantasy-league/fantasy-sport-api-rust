@@ -1,5 +1,5 @@
 # https://blog.sedrik.se/posts/my-docker-setup-for-rust/
-FROM ekidd/rust-musl-builder as builder
+FROM ekidd/rust-musl-builder:latest as builder
 USER rust
 # Face and palm are in alignment https://github.com/moby/moby/issues/36408
 RUN mkdir -p /home/rust/leaderboard/src
@@ -20,19 +20,22 @@ RUN mv /home/rust/fantasy-sport-api-rust/ws_server /home/rust/ws_server
 # We need to touch our real main.rs file or else docker will use
 # the cached one.
 COPY --chown=rust:rust . .
-RUN chmod +x /home/rust/leaderboard/run.sh
+#RUN chmod +x /home/rust/leaderboard/run.sh
 #RUN touch /home/rust/leaderboard/src/main.rs
 
 # RUN cargo test
 #RUN cargo build --release
+# Current diesel_cli compile on rust-musl is borken
+#RUN cargo install diesel_cli --no-default-features --features postgres
 RUN cargo build
-RUN cargo install diesel_cli --no-default-features --features postgres
 
 # Size optimization
 #RUN strip target/x86_64-unknown-linux-musl/release/leaderboard_server
 
 # Start building the final image
 # THis doesnt work because need diesel cli to run migrations
+# can actually just copy diesel binary from builder
+# https://github.com/guangie88/diesel-cli/blob/master/Dockerfile
 # FROM scratch
 # WORKDIR /home/rust/leaderboard
 # #COPY --from=builder /home/rust/leaderboard/target/x86_64-unknown-linux-musl/release/leaderboard_server .

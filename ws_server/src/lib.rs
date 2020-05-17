@@ -99,12 +99,14 @@ pub fn ws_error_resp(error_msg: String) -> ws::Message{
 pub async fn handle_ws_conn<CustomSubType: std::cmp::Eq + std::hash::Hash, T: SubscriptionHandler<CustomSubType>, U: WSHandler<CustomSubType, CachesType>, CachesType: Clone>(
     ws: ws::WebSocket, pg_pool: PgPool, mut ws_conns: WSConnections<CustomSubType>, caches: CachesType
 ) {
+    println!("handling ws conn");
     // https://github.com/seanmonstar/warp/blob/master/examples/websockets_chat.rs
     let (ws_send, mut ws_recv) = ws.split();
     let (tx, rx) = mpsc::unbounded_channel();
     let ws_conn = WSConnection::new::<T>(tx);
     let ws_id = ws_conn.id;
     ws_conns.lock().await.insert(ws_conn.id, ws_conn);
+    println!("post ws_conns lock");
     tokio::task::spawn(rx.forward(ws_send).map(|result| {
         if let Err(e) = result {
             eprintln!("websocket send error: {}", e);

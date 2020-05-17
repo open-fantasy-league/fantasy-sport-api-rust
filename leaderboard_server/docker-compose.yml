@@ -21,6 +21,9 @@ services:
     command: bash -c "bash ./wait-for-it.sh db:5432 -q -- diesel setup && cargo watch -x run"
 
   db:
+    build:
+      context: .
+      dockerfile: db.Dockerfile
     environment:
       POSTGRES_USER: fantasy
       POSTGRES_PASSWORD: fantasy
@@ -33,5 +36,6 @@ services:
     restart: always
     volumes:
       - ./postgres-data:/var/lib/postgresql/data
+      #- ./scripts:/docker-entrypoint-initdb.d
 
 # https://github.com/ghotiphud/rust-web-starter/blob/master/docker-compose.yml
