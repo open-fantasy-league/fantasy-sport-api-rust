@@ -26,6 +26,7 @@ RUN chmod +x /home/rust/leaderboard/run.sh
 # RUN cargo test
 #RUN cargo build --release
 RUN cargo build
+RUN cargo install openssl
 RUN cargo install diesel_cli --no-default-features --features postgres
 
 # Size optimization

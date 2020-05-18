@@ -158,17 +158,27 @@ async fn handle_ws_msg<CustomSubType: std::cmp::Eq + std::hash::Hash, U: WSHandl
     msg: ws::Message, conn: PgConn, ws_conns: &mut WSConnections<CustomSubType>, user_ws_id: Uuid, caches: CachesType
 ) -> ws::Message{
     dbg!(&msg);
-    match msg.to_str(){
-        // Can't get await inside `and_then`/`map` function chains to work properly
-        Ok(msg_str) => match U::ws_req_resp(msg_str.to_string(), conn, ws_conns, user_ws_id, caches).await{
-            Ok(text) => ws::Message::text(text),
-            Err(e) => {
-                dbg!(&e);
-                println!("{:?}", e.source());
-                ws_error_resp(e.to_string())
-            }
-        },
-        Err(_) => ws_error_resp(String::from("wtf. How does msg.to_str fail?"))
+    if msg.is_text(){
+        match msg.to_str(){
+            // Can't get await inside `and_then`/`map` function chains to work properly
+            Ok(msg_str) => match U::ws_req_resp(msg_str.to_string(), conn, ws_conns, user_ws_id, caches).await{
+                Ok(text) => ws::Message::text(text),
+                Err(e) => {
+                    dbg!(&e);
+                    println!("{:?}", e.source());
+                    ws_error_resp(e.to_string())
+                }
+            },
+            Err(_) => ws_error_resp(String::from("wtf. How does msg.to_str fail?"))
+        }
+    }
+    else if msg.is_ping(){
+        // currently no pong method? https://docs.rs/warp/0.2.2/warp/filters/ws/struct.Message.html#method.ping
+        // should I add?
+        ws::Message::text("pong")
+    }
+    else{
+        ws_error_resp(String::from("Unexpected message type received"))
     }
 }
 

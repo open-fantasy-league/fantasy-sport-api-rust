@@ -1,7 +1,7 @@
 -- Your SQL goes here
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-CREATE EXTENSION IF NOT EXISTS btree_gist;
-CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
+-- CREATE EXTENSION IF NOT EXISTS pgcrypto;
+-- CREATE EXTENSION IF NOT EXISTS btree_gist;
+-- CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
 -- https://computingforgeeks.com/how-to-install-timescaledb-on-ubuntu-18-04-lts/
 
 -- other stats for tiebreakers?

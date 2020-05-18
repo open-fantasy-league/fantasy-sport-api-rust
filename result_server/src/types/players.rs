@@ -11,8 +11,9 @@ use crate::diesel::ExpressionMethods;
 use itertools::Itertools;
 use crate::db;
 
-#[derive(Insertable, Deserialize, LabelledGeneric, Queryable, Serialize, Debug)]
+#[derive(Insertable, Deserialize, LabelledGeneric, Queryable, Serialize, Debug, Identifiable)]
 #[table_name = "players"]
+#[primary_key(player_id)]
 pub struct Player {
     pub player_id: Uuid,
     pub meta: serde_json::Value,

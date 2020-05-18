@@ -80,3 +80,27 @@ impl Publishable<SubType> for Stat {
         }
     }
 }
+
+impl Publishable<SubType> for ApiStat {
+    fn message_type<'a>() -> &'a str {
+        "stat"
+    }
+
+    fn partial_subscribed_publishables<'b>(
+        publishables: &'b Vec<Self>,
+        sub: &mut Subscription,
+        sub_type: &SubType,
+        id_map_opt: &Option<HashMap<Uuid, Uuid>>,
+    ) -> Vec<&'b Self> {
+        match sub_type {
+            SubType::League => publishables
+                .iter()
+                .filter(|x| sub.ids.contains(&x.league_id))
+                .collect(),
+            SubType::Leaderboard => publishables
+                .iter()
+                .filter(|x| sub.ids.contains(&x.leaderboard_id))
+                .collect(),
+        }
+    }
+}

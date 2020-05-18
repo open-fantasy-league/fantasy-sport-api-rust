@@ -1,12 +1,14 @@
 use crate::schema::*;
 use chrono::{DateTime, Utc};
-use diesel_utils::{my_timespan_format, my_timespan_format_opt, DieselTimespan, PgConn};
+use diesel::associations::*;
+use diesel_utils::{my_timespan_format, my_timespan_format_opt, DieselTimespan};
 use serde::{Deserialize, Serialize};
 use serde_json;
 use uuid::Uuid;
 
-#[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations)]
+#[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable)]
 #[primary_key(leaderboard_id)]
+#[table_name = "leaderboards"]
 pub struct Leaderboard {
     pub leaderboard_id: Uuid,
     pub league_id: Uuid,
@@ -14,6 +16,20 @@ pub struct Leaderboard {
     pub meta: serde_json::Value,
     #[serde(with = "my_timespan_format")]
     pub timespan: DieselTimespan,
+}
+
+#[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations)]
+//#[primary_key(leaderboard_id, player_id, timestamp)]
+#[primary_key(test_pkey)]
+#[table_name = "stats"]
+#[belongs_to(Leaderboard)]
+pub struct Stat {
+    pub test_pkey: Uuid,
+    pub player_id: Uuid,
+    pub leaderboard_id: Uuid,
+    pub timestamp: DateTime<Utc>,
+    pub points: f32,
+    pub meta: serde_json::Value,
 }
 
 #[derive(Deserialize, Debug, AsChangeset)]
@@ -28,15 +44,29 @@ pub struct LeaderboardUpdate {
     pub timespan: Option<DieselTimespan>,
 }
 
-#[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations)]
-#[belongs_to(Leaderboard)]
-#[primary_key(leaderboard_id, player_id, timestamp)]
-pub struct Stat {
+#[derive(Deserialize, Serialize, Debug)]
+pub struct ApiStat {
     pub player_id: Uuid,
     pub leaderboard_id: Uuid,
+    pub league_id: Uuid,
     pub timestamp: DateTime<Utc>,
     pub points: f32,
     pub meta: serde_json::Value,
+}
+
+impl ApiStat {
+    pub fn from_rows(rows: Vec<(Stat, Uuid)>) -> Vec<Self> {
+        rows.into_iter()
+            .map(|(s, league_id)| Self {
+                league_id,
+                player_id: s.player_id,
+                leaderboard_id: s.leaderboard_id,
+                timestamp: s.timestamp,
+                points: s.points,
+                meta: s.meta,
+            })
+            .collect()
+    }
 }
 
 #[derive(Serialize, Debug, LabelledGeneric)]

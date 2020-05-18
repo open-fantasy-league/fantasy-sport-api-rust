@@ -102,9 +102,23 @@ pub async fn insert_stats(method: &str, message_id: Uuid, data: Vec<Stat>, conn:
     )?
     .into_iter()
     .collect();
-    publish::<SubType, Stat>(
-        ws_conns, &out, SubType::League, Some(id_map)
+
+    let id_map: HashMap<Uuid, Uuid> = db::get_league_ids_to_leaderboard_ids(
+        &conn,
+        data.iter().map(|s| s.leaderboard_id).collect(),
+    )?
+    .into_iter()
+    .collect();
+    let with_league_id = ApiStat::from_rows(db::get_stat_with_ids(
+        &conn,
+        &data,
+    )?);
+    publish::<SubType, ApiStat>(
+        ws_conns, &with_league_id, SubType::League, Some(id_map)
     ).await?;
+    // publish::<SubType, Stat>(
+    //     ws_conns, &out, SubType::League, Some(id_map)
+    // ).await?;
     publish::<SubType, Stat>(
         ws_conns, &out, SubType::Leaderboard, None
     ).await?;
