@@ -26,15 +26,16 @@ use async_trait::async_trait;
 pub type WSConnections_ = warp_ws_server::WSConnections<subscriptions::SubType>;
 pub type WSConnection_ = warp_ws_server::WSConnection<subscriptions::SubType>;
 
+type Caches = ();
 
 struct MyWsHandler{
 }
 
 #[async_trait]
-impl WSHandler<subscriptions::SubType> for MyWsHandler{
+impl WSHandler<subscriptions::SubType, Caches> for MyWsHandler{
 
     async fn ws_req_resp(
-        msg: String, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid
+        msg: String, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid, _: Caches
     ) -> Result<String, BoxError>{
         let req: WSReq = serde_json::from_str(&msg)?;
         match req{
@@ -77,8 +78,8 @@ async fn main() {
     let ws_router = warp::any().and(warp::ws()).and(ws_conns_filt)
         .map(move |ws: warp::ws::Ws, ws_conns|{
             let pool = pool.clone();
-            ws.on_upgrade(move |socket| warp_ws_server::handle_ws_conn::<subscriptions::SubType, subscriptions::MySubHandler, MyWsHandler>(
-                socket, pool, ws_conns
+            ws.on_upgrade(move |socket| warp_ws_server::handle_ws_conn::<subscriptions::SubType, subscriptions::MySubHandler, MyWsHandler, Caches>(
+                socket, pool, ws_conns, ()
             ))
         });
     warp::serve(ws_router).run(([0, 0, 0, 0], port)).await;

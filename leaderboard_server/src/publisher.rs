@@ -1,5 +1,5 @@
 use crate::subscriptions::SubType;
-use crate::types::leaderboards::*;
+use crate::types::*;
 use std::collections::HashMap;
 use uuid::Uuid;
 use warp_ws_server::*;

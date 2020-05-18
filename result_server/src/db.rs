@@ -9,6 +9,7 @@ use uuid::Uuid;
 use itertools::{izip, Itertools};
 use diesel_utils::{PgConn};
 use crate::types::{competitions::*, series::*, matches::*, teams::*, results::*, players::*};
+use crate::schema;
 
 //sql_function! {fn coalesce<T: sql_types::NotNull>(a: sql_types::Nullable<T>, b: T) -> T;}
 //sql_function!(fn trim_team_name_timespans(new_team_id sql_types::Uuid, new_timespan sql_types::Range<sql_types::Timestamptz>) -> ());
@@ -279,4 +280,25 @@ pub fn get_full_competitions(
     .grouped_by(&comps);
     let everything: CompetitionHierarchy = comps.into_iter().zip(series_lvl).collect();
     Ok(everything)
+}
+
+
+pub fn get_publishable_matches(conn: &PgConnection, data: Vec<(Match, Vec<PlayerResult>, Vec<TeamMatchResult>)>) -> Result<Vec<CompetitionHierarchyMatchRow>, diesel::result::Error>{
+    let inserted_ids: Vec<Uuid> = data.iter().map(|x| x.0.series_id).collect();
+    let series = schema::series::table.filter(schema::series::series_id.eq(any(inserted_ids))).load::<Series>(conn)?;
+    let comp_ids: Vec<Uuid> = series.iter().map(|s| s.competition_id).collect();
+    let comps = schema::competitions::table.filter(schema::competitions::competition_id.eq(any(comp_ids))).load::<Competition>(conn)?;
+    let grouped_matches = data.grouped_by(&series);
+    let series_level: Vec<(Series,Vec<(Match, Vec<PlayerResult>, Vec<TeamMatchResult>)>)> = series.into_iter().zip(grouped_matches).collect();
+    let grouped_comps = series_level.grouped_by(&comps);
+    Ok(comps.into_iter().zip(grouped_comps).collect())
+}
+
+pub fn get_publishable_series(
+    conn: &PgConnection, data: Vec<(Series, Vec<TeamSeriesResult>, Vec<(Match, Vec<PlayerResult>, Vec<TeamMatchResult>)>)>
+) -> Result<CompetitionHierarchy, diesel::result::Error>{
+    let comp_ids: Vec<Uuid> = data.iter().map(|x| x.0.competition_id).collect();
+    let comps = schema::competitions::table.filter(schema::competitions::competition_id.eq(any(comp_ids))).load::<Competition>(conn)?;
+    let grouped = data.grouped_by(&comps);
+    Ok(comps.into_iter().zip(grouped).collect())
 }

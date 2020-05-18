@@ -9,6 +9,7 @@ use super::{series::*, matches::*, results::*};
 use itertools::Itertools;
 use crate::diesel::RunQueryDsl;  // imported here so that can run db macros
 use crate::diesel::ExpressionMethods;
+use std::collections::HashMap;
 
 #[derive(Deserialize, Serialize, Debug, LabelledGeneric, Clone)]
 pub struct ApiCompetition{
@@ -52,6 +53,7 @@ pub type CompetitionHierarchy = Vec<(
 )>;
 
 impl ApiCompetition{
+    // TODO could commonise this better
     // Vec<(Competition, Vec<(Series, Vec<TeamSeriesResult>, Vec<(Match, Vec<PlayerResult>, Vec<TeamMatchResult>)>)>)>
     pub fn from_rows(rows: CompetitionHierarchy) -> Vec<Self>{
         rows.into_iter().map(|(c, v)| {
@@ -60,17 +62,55 @@ impl ApiCompetition{
                 series: v.into_iter().map(|(s, tr, v)|{
                     ApiSeries{
                         series_id: s.series_id, name: s.name, meta: s.meta, timespan: s.timespan,
-                        team_results: tr, matches: v.into_iter().map(|(m, pr, tr)|{
+                        team_results: Some(tr), matches: Some(v.into_iter().map(|(m, pr, tr)|{
                             ApiMatch{
                                 match_id: m.match_id, name: m.name, meta: m.meta, timespan: m.timespan,
-                                player_results: pr, team_results: tr
+                                player_results: Some(pr), team_results: Some(tr)
                             }
-                        }).collect_vec()
+                        }).collect_vec())
                     }
                 }).collect_vec()
             }
         }).collect_vec()
     }
+
+    pub fn from_match_rows(rows: Vec<CompetitionHierarchyMatchRow>) -> Vec<Self>{
+        rows.into_iter().map(|(c, v)| {
+            Self{
+                competition_id: c.competition_id, name: c.name, meta: c.meta, timespan: c.timespan,
+                series: v.into_iter().map(|(s, v)|{
+                    ApiSeries{
+                        series_id: s.series_id, name: s.name, meta: s.meta, timespan: s.timespan,
+                        team_results: None, matches: Some(v.into_iter().map(|(m, pr, tr)|{
+                            ApiMatch{
+                                match_id: m.match_id, name: m.name, meta: m.meta, timespan: m.timespan,
+                                player_results: Some(pr), team_results: Some(tr)
+                            }
+                        }).collect_vec())
+                    }
+                }).collect_vec()
+            }
+        }).collect_vec()
+    }
+
+    // pub fn from_series_rows(rows: Vec<CompetitionHierarchySeriesRow>) -> Vec<Self>{
+    //     rows.into_iter().map(|(c, v)| {
+    //         Self{
+    //             competition_id: c.competition_id, name: c.name, meta: c.meta, timespan: c.timespan,
+    //             series: v.into_iter().map(|(s, tr, v)|{
+    //                 ApiSeries{
+    //                     series_id: s.series_id, name: s.name, meta: s.meta, timespan: s.timespan,
+    //                     team_results: Some(tr), matches: Some(v.into_iter().map(|(m, pr, tr)|{
+    //                         ApiMatch{
+    //                             match_id: m.match_id, name: m.name, meta: m.meta, timespan: m.timespan,
+    //                             player_results: Some(pr), team_results: Some(tr)
+    //                         }
+    //                     }).collect_vec())
+    //                 }
+    //             }).collect_vec()
+    //         }
+    //     }).collect_vec()
+    // }
 
     pub async fn insert(conn: PgConn, comps: Vec<Self>) -> Result<bool, diesel::result::Error>{
         // Couldnt get awkward flat_map and unzip_n to work properly

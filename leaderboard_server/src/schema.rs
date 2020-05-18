@@ -9,8 +9,7 @@ table! {
 }
 
 table! {
-    stats (test_pkey) {
-        test_pkey -> Uuid,
+    stats (leaderboard_id, player_id, timestamp) {
         player_id -> Uuid,
         leaderboard_id -> Uuid,
         timestamp -> Timestamptz,

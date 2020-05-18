@@ -44,15 +44,11 @@ pub async fn insert_series(method: &str, message_id: Uuid, data: Vec<ApiSeriesNe
         // Need to clone comps, so that can still publish it, after has been "consumed" adding to db.
     // It's possible to just borrow it in db-insertion,
     // but it leads to having to specify lifetimes on nearly EVERYTHING. Not worth the hassle unless need perf
-    ApiSeriesNew::insert(&conn, data.clone())?;
-   // let comps: Vec<Competition> = insert!(&conn, schema::competitions::table, data)?;
-    // assume anything upserted the user wants to subscribe to
-    // TODO ideally would return response before awaiting publishing going out
-    let comp_and_series_ids = db::get_competition_ids_for_series(
-        &conn, &data.iter().map(|s|s.series_id).dedup().collect()
-    )?.into_iter().collect();
-    publish::<SubType, ApiSeriesNew>(
-        ws_conns, &data, SubType::Competition, Some(comp_and_series_ids)
+    let inserted_ser = ApiSeriesNew::insert(&conn, data.clone())?;
+    let to_publish_rows = db::get_publishable_series(&conn, inserted_ser)?;
+    let to_publish = ApiCompetition::from_rows(to_publish_rows);
+    publish::<SubType, ApiCompetition>(
+        ws_conns, &to_publish, SubType::Competition, None
     ).await;
     let resp_msg = WSMsgOut::resp(message_id, method, data);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
@@ -63,11 +59,14 @@ pub async fn update_series(method: &str, message_id: Uuid, data: Vec<SeriesUpdat
         data.iter().map(|c| {
         update!(&conn, series, series_id, c)
     }).collect::<Result<Vec<Series>, _>>()})?;
+    let add_empty_shit = out.into_iter().map(|m| (m, vec![], vec![])).collect();
+    let to_publish_rows = db::get_publishable_series(&conn, add_empty_shit)?;
+    let to_publish = ApiCompetition::from_rows(to_publish_rows);
     // TODO ideally would return response before awaiting publishing going out
-    publish::<SubType, Series>(
-        ws_conns, &out, SubType::Competition, None
+    publish::<SubType, ApiCompetition>(
+        ws_conns, &to_publish, SubType::Competition, None
     ).await;
-    let resp_msg = WSMsgOut::resp(message_id, method, out);
+    let resp_msg = WSMsgOut::resp(message_id, method, to_publish);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
@@ -75,14 +74,14 @@ pub async fn insert_matches(method: &str, message_id: Uuid, data: Vec<ApiMatchNe
     // Need to clone comps, so that can still publish it, after has been "consumed" adding to db.
     // It's possible to just borrow it in db-insertion,
     // but it leads to having to specify lifetimes on nearly EVERYTHING. Not worth the hassle unless need perf
-    ApiMatchNew::insert(&conn, data.clone())?;
+    let new_matches = ApiMatchNew::insert(&conn, data.clone())?;
    // let comps: Vec<Competition> = insert!(&conn, schema::competitions::table, data)?;
     // assume anything upserted the user wants to subscribe to
     // TODO ideally would return response before awaiting publishing going out
-    let series_ids: Vec<Uuid> = data.iter().map(|s| s.series_id).dedup().collect();
-    let comp_and_series_ids = db::get_competition_ids_for_series(&conn, &series_ids)?.into_iter().collect();
-    publish::<SubType, ApiMatchNew>(
-        ws_conns, &data, SubType::Competition, Some(comp_and_series_ids)
+    let to_publish_rows = db::get_publishable_matches(&conn, new_matches)?;
+    let to_publish = ApiCompetition::from_match_rows(to_publish_rows);
+    publish::<SubType, ApiCompetition>(
+        ws_conns, &to_publish, SubType::Competition, None
     ).await;
     let resp_msg = WSMsgOut::resp(message_id, method, data);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
@@ -93,13 +92,13 @@ pub async fn update_matches(method: &str, message_id: Uuid, data: Vec<MatchUpdat
         data.iter().map(|c| {
         update!(&conn, matches, match_id, c)
     }).collect()})?;
-    // TODO ideally would return response before awaiting publishing going out
-    let series_ids: Vec<Uuid> = out.iter().map(|s| s.series_id).dedup().collect();
-    let comp_and_series_ids = db::get_competition_ids_for_series(&conn, &series_ids)?.into_iter().collect();
-    publish::<SubType, Match>(
-        ws_conns, &out, SubType::Competition, Some(comp_and_series_ids)
+    // TODO a bit ugly hacking in the empty vecs. improve
+    let to_publish_rows = db::get_publishable_matches(&conn, out.into_iter().map(|m| (m, vec![], vec![])).collect())?;
+    let to_publish = ApiCompetition::from_match_rows(to_publish_rows);
+    publish::<SubType, ApiCompetition>(
+        ws_conns, &to_publish, SubType::Competition, None
     ).await;
-    let resp_msg = WSMsgOut::resp(message_id, method, out);
+    let resp_msg = WSMsgOut::resp(message_id, method, to_publish);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 

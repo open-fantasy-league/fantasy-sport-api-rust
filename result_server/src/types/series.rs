@@ -8,7 +8,8 @@ use super::{competitions::*, matches::*, results::*, teams::*};
 use crate::diesel::RunQueryDsl;  // imported here so that can run db macros
 use crate::diesel::ExpressionMethods;
 use frunk::labelled::transform_from;
-use itertools::Itertools;
+use itertools::{izip, Itertools};
+use diesel::prelude::*;
 
 
 #[derive(Queryable, Serialize, Deserialize, Insertable, Debug, Identifiable, Associations, LabelledGeneric)]
@@ -44,24 +45,32 @@ pub struct ApiSeries{
     pub meta: serde_json::Value,
     #[serde(with = "my_timespan_format")]
     pub timespan: DieselTimespan,
-    pub matches: Vec<ApiMatch>,
-    pub team_results: Vec<TeamSeriesResult>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub matches: Option<Vec<ApiMatch>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub team_results: Option<Vec<TeamSeriesResult>>,
 }
 
 impl ApiSeries{
     pub fn insertable(self, competition_id: Uuid) -> (Series, Vec<Match>, Vec<PlayerResult>, Vec<TeamMatchResult>, Vec<TeamSeriesResult>){
-        let (mut player_results, mut team_match_results) = (vec![], vec![]);
         let series_id = self.series_id;
-        let matches = self.matches
-            .into_iter().map(|m| {
-                let (new_m, mut new_pr, mut new_tr) = m.insertable(series_id);
-                team_match_results.append(&mut new_tr);
-                player_results.append(&mut new_pr);
-                new_m
-            }).collect_vec();
+        let (matches, player_results, team_match_results) = match self.matches{
+            Some(matches) => {
+                let (mut player_results, mut team_match_results) = (vec![], vec![]);
+                let matches = matches
+                    .into_iter().map(|m| {
+                        let (new_m, mut new_pr, mut new_tr) = m.insertable(series_id);
+                        team_match_results.append(&mut new_tr);
+                        player_results.append(&mut new_pr);
+                        new_m
+                    }).collect_vec();
+                (matches, player_results, team_match_results)
+            },
+            None => (vec![], vec![], vec![])
+        };
         (
             Series{series_id: self.series_id, name: self.name, meta: self.meta, timespan: self.timespan, competition_id},
-            matches, player_results, team_match_results, self.team_results
+            matches, player_results, team_match_results, self.team_results.unwrap_or(vec![])
         )
     }
 }
@@ -74,12 +83,38 @@ pub struct ApiSeriesNew{
     pub meta: serde_json::Value,
     #[serde(with = "my_timespan_format")]
     pub timespan: DieselTimespan,
-    pub matches: Vec<ApiMatch>,
-    pub team_results: Vec<TeamSeriesResult>,
+    pub matches: Option<Vec<ApiMatch>>,
+    pub team_results: Option<Vec<TeamSeriesResult>>,
 }
 
 impl ApiSeriesNew{
-    pub fn insert(conn: &PgConn, new: Vec<ApiSeriesNew>) -> Result<bool, diesel::result::Error>{
+    /*
+        pub fn insert(conn: &PgConn, new: Vec<ApiMatchNew>) -> Result<Vec<(Match, Vec<PlayerResult>, Vec<TeamMatchResult>)>, diesel::result::Error>{
+        let (mut player_results, mut team_match_results) = (vec![], vec![]);
+        let matches: Vec<Match> = new
+            .into_iter().map(|m|{
+                let series_id = m.series_id;
+                let m2: ApiMatch = transform_from(m);
+                let mut tup = m2.insertable(series_id);
+                player_results.append(&mut tup.1);
+                team_match_results.append(&mut tup.2);
+                tup.0
+            }).collect_vec();
+        let _: Vec<Match> = insert!(conn, matches::table, &matches)?;
+        let _: Vec<PlayerResult> = insert!(conn, player_results::table, &player_results)?;
+        let _: Vec<TeamMatchResult> = insert!(conn, team_match_results::table, &team_match_results)?;
+        let grouped_presults = player_results.grouped_by(&matches);
+        let grouped_tresults = team_match_results.grouped_by(&matches);
+        let out = izip!(matches, grouped_presults, grouped_tresults).collect();
+        Ok(out)
+    }
+
+    */
+
+
+    pub fn insert(conn: &PgConn, new: Vec<ApiSeriesNew>) -> Result<Vec<
+    (Series, Vec<TeamSeriesResult>, Vec<(Match, Vec<PlayerResult>, Vec<TeamMatchResult>)>)
+    >, diesel::result::Error>{
         // TODO EWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW
         // I think i need to define my own iterator so flatmap can flatmap nicely?
         let(
@@ -97,12 +132,18 @@ impl ApiSeriesNew{
                 team_results.append(&mut tup.4);
                 tup.0
             }).collect_vec();
-            insert_exec!(conn, series::table, series)?;
-            insert_exec!(conn, matches::table, matches)?;
-            insert_exec!(conn, player_results::table, player_results)?;
-            insert_exec!(conn, team_match_results::table, team_match_results)?;
-            insert_exec!(conn, team_series_results::table, team_results)?;
-            Ok(true)
+        insert_exec!(conn, series::table, &series)?;
+        insert_exec!(conn, matches::table, &matches)?;
+        insert_exec!(conn, player_results::table, &player_results)?;
+        insert_exec!(conn, team_match_results::table, &team_match_results)?;
+        insert_exec!(conn, team_series_results::table, &team_results)?;
+        let grouped_presults = player_results.grouped_by(&matches);
+        let grouped_tresults = team_match_results.grouped_by(&matches);
+        let grouped_series_res = team_results.grouped_by(&series);
+        let matches_stuff: Vec<(Match, Vec<PlayerResult>, Vec<TeamMatchResult>)> = izip!(matches, grouped_presults, grouped_tresults).collect();
+        let grouped_matches = matches_stuff.grouped_by(&series);
+        let out = izip!(series, grouped_series_res, grouped_matches).collect();
+        Ok(out)
     }
 }
 

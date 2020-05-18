@@ -1,4 +1,4 @@
-use crate::types::leaderboards::*;
+use crate::types::*;
 use serde::Deserialize;
 use uuid::Uuid;
 

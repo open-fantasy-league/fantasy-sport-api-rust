@@ -1,7 +1,7 @@
 use crate::schema::{self, *};
 use crate::WSConnections_;
 use uuid::Uuid;
-use crate::types::leaderboards::*;
+use crate::types::*;
 use warp_ws_server::{WSMsgOut, BoxError};
 use crate::subscriptions::*;
 use crate::db;
@@ -111,7 +111,7 @@ pub async fn insert_stats(method: &str, message_id: Uuid, data: Vec<Stat>, conn:
     .collect();
     let with_league_id = ApiStat::from_rows(db::get_stat_with_ids(
         &conn,
-        &data,
+        data,
     )?);
     publish::<SubType, ApiStat>(
         ws_conns, &with_league_id, SubType::League, Some(id_map)
@@ -119,8 +119,8 @@ pub async fn insert_stats(method: &str, message_id: Uuid, data: Vec<Stat>, conn:
     // publish::<SubType, Stat>(
     //     ws_conns, &out, SubType::League, Some(id_map)
     // ).await?;
-    publish::<SubType, Stat>(
-        ws_conns, &out, SubType::Leaderboard, None
+    publish::<SubType, ApiStat>(
+        ws_conns, &with_league_id, SubType::Leaderboard, None
     ).await?;
     let resp_msg = WSMsgOut::resp(message_id, method, out);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
