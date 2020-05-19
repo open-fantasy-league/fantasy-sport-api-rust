@@ -33,16 +33,18 @@ pub async fn publish<CustomSubType: std::cmp::Eq + std::hash::Hash, T: Publishab
     // (i.e. everyone subscribed to `all`, will definitely get the same message)
     for (&uid, wsconn) in ws_conns.lock().await.iter_mut(){
         let subscribed_publishables: Vec<&T> = T::subscribed_publishables(publishables, wsconn.subscriptions.get_ez(&sub_type), &sub_type, &id_map_opt);
-        let push_msg = WSMsgOut::push(T::message_type(), subscribed_publishables);
-        let subscribed_json_r = serde_json::to_string(&push_msg);
-        match subscribed_json_r.as_ref(){
-            Ok(subscribed_json) => {
-                if let Err(publish) = wsconn.tx.send(Ok(ws::Message::text(subscribed_json))){
-                    println!("Error publishing update {:?} to {} : {}", &subscribed_json, uid, &publish)
-                };
-            },
-            Err(_) => println!("Error json serializing publisher update {:?} to {}", &subscribed_json_r, uid)
-        };
+        if !subscribed_publishables.is_empty(){
+            let push_msg = WSMsgOut::push(T::message_type(), subscribed_publishables);
+            let subscribed_json_r = serde_json::to_string(&push_msg);
+            match subscribed_json_r.as_ref(){
+                Ok(subscribed_json) => {
+                    if let Err(publish) = wsconn.tx.send(Ok(ws::Message::text(subscribed_json))){
+                        println!("Error publishing update {:?} to {} : {}", &subscribed_json, uid, &publish)
+                    };
+                },
+                Err(_) => println!("Error json serializing publisher update {:?} to {}", &subscribed_json_r, uid)
+            };
+        }
     };
     Ok(true)
 }

@@ -10,6 +10,8 @@ use itertools::{izip, Itertools};
 use diesel_utils::{PgConn};
 use crate::types::{competitions::*, series::*, matches::*, teams::*, results::*, players::*};
 use crate::schema;
+use std::collections::HashMap;
+use frunk::labelled::transform_from;
 
 //sql_function! {fn coalesce<T: sql_types::NotNull>(a: sql_types::Nullable<T>, b: T) -> T;}
 //sql_function!(fn trim_team_name_timespans(new_team_id sql_types::Uuid, new_timespan sql_types::Range<sql_types::Timestamptz>) -> ());
@@ -133,14 +135,14 @@ pub fn trim_timespans_player_position(
 
 // TODO maybe move these funcs onto struct::insert
 pub fn insert_team_names(
-    conn: PgConn,
+    conn: &PgConn,
     new: Vec<ApiTeamNameNew>,
 ) -> Result<Vec<TeamName>, diesel::result::Error> {
     use crate::schema::team_names;
     // trim_timespans(conn, "team_name", t.team_id, new_timespan)
-    let trimmed: Vec<_> = trim_timespans_team_name(&conn, "team_name", &new)?;
+    let trimmed: Vec<_> = trim_timespans_team_name(conn, "team_name", &new)?;
     //let trimmed: Vec<TeamName> = trim_timespans_many::<ApiTeamNameNew, TeamName>(conn, "team_name", new)?;
-    let inserted: Vec<TeamName> = insert!(&conn, team_names::table, new)?;
+    let inserted: Vec<TeamName> = insert!(conn, team_names::table, new)?;
     //inserted.append(&mut trimmed);
     Ok(inserted)
 }
@@ -302,3 +304,170 @@ pub fn get_publishable_series(
     let grouped = data.grouped_by(&comps);
     Ok(comps.into_iter().zip(grouped).collect())
 }
+
+pub fn get_publishable_team_series_results(conn: &PgConnection, data: Vec<TeamSeriesResult>) -> Result<CompetitionHierarchy, diesel::result::Error>{
+    let inserted_ids: Vec<Uuid> = data.iter().map(|x| x.series_id).collect();
+    let series = schema::series::table.filter(schema::series::series_id.eq(any(inserted_ids))).load::<Series>(conn)?;
+    let comp_ids: Vec<Uuid> = series.iter().map(|s| s.competition_id).collect();
+    let comps = schema::competitions::table.filter(schema::competitions::competition_id.eq(any(comp_ids))).load::<Competition>(conn)?;
+    let grouped_by_series = data.grouped_by(&series);
+    let series_level: Vec<(Series, Vec<TeamSeriesResult>, Vec<(Match, Vec<PlayerResult>, Vec<TeamMatchResult>)>)> = izip!(
+        series, grouped_by_series, None
+    ).collect();
+    let grouped_comps = series_level.grouped_by(&comps);
+    Ok(comps.into_iter().zip(grouped_comps).collect())
+}
+
+/*
+pub type CompetitionHierarchy = Vec<(
+    Competition,
+    Vec<(
+        Series,
+        Vec<TeamSeriesResult>,
+        Vec<(Match, Vec<PlayerResult>, Vec<TeamMatchResult>)>,
+    )>,
+)>;
+*/
+// TODO commonise this stuff
+pub fn get_publishable_team_match_results(conn: &PgConnection, data: Vec<TeamMatchResult>) -> Result<Vec<CompetitionHierarchyOptyRow>, diesel::result::Error>{
+    let inserted_ids: Vec<Uuid> = data.iter().map(|x| x.match_id).collect();
+    let matches = schema::matches::table.filter(schema::matches::match_id.eq(any(inserted_ids))).load::<Match>(conn)?;
+    let series_ids: Vec<Uuid> = matches.iter().map(|s| s.series_id).collect();
+    let series = schema::series::table.filter(schema::series::series_id.eq(any(series_ids))).load::<Series>(conn)?;
+    let comp_ids: Vec<Uuid> = series.iter().map(|s| s.competition_id).collect();
+    let comps = schema::competitions::table.filter(schema::competitions::competition_id.eq(any(comp_ids))).load::<Competition>(conn)?;
+
+    let grouped_by_matches = data.grouped_by(&matches);
+    let match_len = matches.len();
+    let match_stuff: Vec<(Match, Option<Vec<PlayerResult>>, Option<Vec<TeamMatchResult>>)> = izip!(
+        matches, vec![None; match_len], grouped_by_matches.into_iter().map(Some).collect_vec()
+    ).collect();
+    let grouped_by_series = match_stuff.grouped_by(&series);
+    let series_len = series.len();
+    let series_level: Vec<(Series, Option<Vec<TeamSeriesResult>>, Option<Vec<(Match, Option<Vec<PlayerResult>>, Option<Vec<TeamMatchResult>>)>>)> = izip!(
+        series, vec![None; series_len], grouped_by_series.into_iter().map(Some).collect_vec()
+    ).collect();
+    let grouped_comps = series_level.grouped_by(&comps);
+    Ok(comps.into_iter().zip(grouped_comps).collect())
+}
+
+pub fn get_publishable_player_results(conn: &PgConnection, data: Vec<PlayerResult>) -> Result<Vec<CompetitionHierarchyOptyRow>, diesel::result::Error>{
+    let inserted_ids: Vec<Uuid> = data.iter().map(|x| x.match_id).collect();
+    let matches = schema::matches::table.filter(schema::matches::match_id.eq(any(inserted_ids))).load::<Match>(conn)?;
+    let series_ids: Vec<Uuid> = matches.iter().map(|s| s.series_id).collect();
+    let series = schema::series::table.filter(schema::series::series_id.eq(any(series_ids))).load::<Series>(conn)?;
+    let comp_ids: Vec<Uuid> = series.iter().map(|s| s.competition_id).collect();
+    let comps = schema::competitions::table.filter(schema::competitions::competition_id.eq(any(comp_ids))).load::<Competition>(conn)?;
+
+    let grouped_by_matches = data.grouped_by(&matches);
+    let matches_len = matches.len();
+    let match_stuff: Vec<(Match, Option<Vec<PlayerResult>>, Option<Vec<TeamMatchResult>>)> = izip!(
+        matches, grouped_by_matches.into_iter().map(Some).collect_vec(), vec![None; matches_len]
+    ).collect();
+    let grouped_by_series = match_stuff.grouped_by(&series);
+    let series_len = series.len();
+    let series_level: Vec<(Series, Option<Vec<TeamSeriesResult>>, Option<Vec<(Match, Option<Vec<PlayerResult>>, Option<Vec<TeamMatchResult>>)>>)> = izip!(
+        series, vec![None; series_len], grouped_by_series.into_iter().map(Some).collect_vec()
+    ).collect();
+    let grouped_comps = series_level.grouped_by(&comps);
+    Ok(comps.into_iter().zip(grouped_comps).collect())
+}
+
+// pub fn get_hierarchy_for_team_ids(conn: &PgConnection, team_ids: Vec<Uuid>) -> Result<Vec<CompetitionHierarchyOptyRow>, diesel::result::Error>{
+//     let inserted_ids: Vec<Uuid> = data.iter().map(|x| x.match_id).collect();
+//     let matches = schema::matches::table.filter(schema::matches::match_id.eq(any(inserted_ids))).load::<Match>(conn)?;
+//     let series_ids: Vec<Uuid> = matches.iter().map(|s| s.series_id).collect();
+//     let series = schema::series::table.filter(schema::series::series_id.eq(any(series_ids))).load::<Series>(conn)?;
+//     let comp_ids: Vec<Uuid> = series.iter().map(|s| s.competition_id).collect();
+//     let comps = schema::competitions::table.filter(schema::competitions::competition_id.eq(any(comp_ids))).load::<Competition>(conn)?;
+
+//     let grouped_by_matches = data.grouped_by(&matches);
+//     let matches_len = matches.len();
+//     let match_stuff: Vec<(Match, Option<Vec<PlayerResult>>, Option<Vec<TeamMatchResult>>)> = izip!(
+//         matches, grouped_by_matches.into_iter().map(Some).collect_vec(), vec![None; matches_len]
+//     ).collect();
+//     let grouped_by_series = match_stuff.grouped_by(&series);
+//     let series_len = series.len();
+//     let series_level: Vec<(Series, Option<Vec<TeamSeriesResult>>, Option<Vec<(Match, Option<Vec<PlayerResult>>, Option<Vec<TeamMatchResult>>)>>)> = izip!(
+//         series, vec![None; series_len], grouped_by_series.into_iter().map(Some).collect_vec()
+//     ).collect();
+//     let grouped_comps = series_level.grouped_by(&comps);
+//     Ok(comps.into_iter().zip(grouped_comps).collect())
+// }
+
+pub fn get_teams_from_players(conn: &PgConn, player_ids: Vec<Uuid>)-> Result<Vec<ApiTeamWithPlayersHierarchy>, diesel::result::Error>{
+    // let rows: Vec<(Player, TeamPlayer, Team, PlayerName, PlayerPosition)> = schema::players::table.filter(schema::players::player_id.eq(any(player_ids)))
+    //    .inner_join(schema::team_players::table.inner_join(schema::teams::table))
+    //    .inner_join(schema::player_names::table)
+    //    .inner_join(schema::player_positions::table)
+    //    .load(conn)?;
+    let team_players: Vec<TeamPlayer> = schema::team_players::table.filter(schema::team_players::player_id.eq(any(&player_ids))).load(conn)?;
+    //let players: Vec<Player> = Player::belonging_to(&team_players).load::<Player>(conn)?;
+    let players: Vec<Player> = schema::players::table.filter(schema::players::player_id.eq(any(&player_ids))).load(conn)?;
+    //let team_players: Vec<TeamPlayer> = TeamPlayer::belonging_to(&players).load::<TeamPlayer>(conn)?;
+    let player_names = PlayerName::belonging_to(&players).load::<PlayerName>(conn)?;
+    let player_positions = PlayerPosition::belonging_to(&players).load::<PlayerPosition>(conn)?;
+    let grouped_player_names = player_names.grouped_by(&players);
+    let grouped_player_positions = player_positions.grouped_by(&players);
+    let grouped_players: Vec<(Player, Vec<PlayerName>, Vec<PlayerPosition>)> = izip!(players, grouped_player_names, grouped_player_positions).collect();
+    let api_players = ApiPlayer::from_diesel_rows(grouped_players);
+    let team_ids = team_players.iter().map(|tp| tp.team_id).dedup().collect_vec();
+    let teams: Vec<Team> = schema::teams::table.filter(schema::teams::team_id.eq(any(team_ids))).load(conn)?;
+    let mut teams_to_team_players: HashMap<Uuid, Vec<TeamPlayer>> = team_players.into_iter().fold(HashMap::new(), |mut hm, tp| {
+        match hm.get_mut(&tp.team_id) {
+            Some(v) => {
+                v.push(tp);
+            }
+            None => {
+                hm.insert(tp.team_id, vec![tp]);
+            }
+        };
+        hm
+    });
+    let mut player_map: HashMap<Uuid, ApiPlayer> = api_players.into_iter().map(|p| (p.player_id, p)).collect();
+    //let team_players_grouped = team_players.grouped_by(&teams);
+    let out = teams.into_iter().map(|t|{
+        let team_players = teams_to_team_players.remove(&t.team_id).unwrap_or(vec![]);
+        let players = team_players.into_iter().map(|tp| {
+            let api_player = player_map.remove(&tp.player_id).unwrap();
+            ApiTeamPlayerOut{
+                team_id: tp.team_id,
+                timespan: tp.timespan,
+                player: api_player
+            }
+        }).collect_vec();
+        ApiTeamWithPlayersHierarchy{
+            team_id: t.team_id,
+            names: None,
+            meta: t.meta,
+            players: Some(players)
+        }
+    }).collect_vec();
+    Ok(out)
+}
+
+pub fn get_teams_names(conn: &PgConn, team_ids: Vec<Uuid>)-> Result<Vec<ApiTeamWithPlayersHierarchy>, diesel::result::Error>{
+    let teams: Vec<Team> = schema::teams::table.filter(schema::teams::team_id.eq(any(&team_ids))).load(conn)?;
+    let team_names: Vec<TeamName> = TeamName::belonging_to(&teams).load(conn)?;
+    let grouped_names = team_names.grouped_by(&teams);
+    let out = teams.into_iter().zip(grouped_names).map(|(t, tnames)|{
+        ApiTeamWithPlayersHierarchy{
+            team_id: t.team_id,
+            names: Some(tnames.into_iter().map(transform_from).collect_vec()),
+            meta: t.meta,
+            players: None
+        }
+    }).collect_vec();
+    Ok(out)
+}
+
+/*
+pub struct ApiTeamWithPlayersHierarchy{
+    pub team_id: Uuid,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub names: Option<Vec<ApiTeamName>>,
+    pub meta: serde_json::Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub players: Option<Vec<ApiPlayer>>
+}
+*/

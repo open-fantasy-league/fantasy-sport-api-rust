@@ -103,15 +103,6 @@ pub type CompetitionHierarchyMatchRow = (
     )>,
 );
 
-pub type CompetitionHierarchySeriesRow = (
-    Competition,
-    Vec<(
-        Series,
-        TeamSeriesResult,
-        Vec<(Match, Vec<PlayerResult>, Vec<TeamMatchResult>)>,
-    )>,
-);
-
 #[derive(Deserialize, Serialize, Debug, Clone, LabelledGeneric)]
 pub struct ApiMatchHierarchy{
     pub competition_id: Uuid,

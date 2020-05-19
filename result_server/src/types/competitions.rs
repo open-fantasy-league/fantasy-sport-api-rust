@@ -52,6 +52,15 @@ pub type CompetitionHierarchy = Vec<(
     )>,
 )>;
 
+pub type CompetitionHierarchyOptyRow = (
+    Competition,
+    Vec<(
+        Series,
+        Option<Vec<TeamSeriesResult>>,
+        Option<Vec<(Match, Option<Vec<PlayerResult>>, Option<Vec<TeamMatchResult>>)>>,
+    )>,
+);
+
 impl ApiCompetition{
     // TODO could commonise this better
     // Vec<(Competition, Vec<(Series, Vec<TeamSeriesResult>, Vec<(Match, Vec<PlayerResult>, Vec<TeamMatchResult>)>)>)>
@@ -87,6 +96,26 @@ impl ApiCompetition{
                                 player_results: Some(pr), team_results: Some(tr)
                             }
                         }).collect_vec())
+                    }
+                }).collect_vec()
+            }
+        }).collect_vec()
+    }
+
+    pub fn from_opty_rows(rows: Vec<CompetitionHierarchyOptyRow>) -> Vec<Self>{
+        rows.into_iter().map(|(c, v)| {
+            Self{
+                competition_id: c.competition_id, name: c.name, meta: c.meta, timespan: c.timespan,
+                series: v.into_iter().map(|(s, series_results, v)|{
+                    ApiSeries{
+                        series_id: s.series_id, name: s.name, meta: s.meta, timespan: s.timespan,
+                        team_results: series_results, matches: v.map(|v_inner| {
+                            v_inner.into_iter().map(|(m, pr, tr)|{
+                                ApiMatch{
+                                    match_id: m.match_id, name: m.name, meta: m.meta, timespan: m.timespan,
+                                    player_results: pr, team_results: tr
+                                }
+                        }).collect_vec()})
                     }
                 }).collect_vec()
             }

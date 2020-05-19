@@ -54,23 +54,11 @@ pub fn get_stat_with_ids(
     conn: &PgConn,
     data: Vec<Stat>,
 ) -> Result<Vec<(Leaderboard, Vec<Stat>)>, diesel::result::Error> {
-    // let inserted: Vec<Stat> = diesel::insert_into(schema::stats::table)
-    //     .values(data)
-    //     .get_results(conn)?;
-    // let league_ids = schema::leaderboards::table.select(schema::leaderboards::league_id)
-    //     //.select(schema::leaderboards::league_id)
-    //     .load::<Leaderboard>(conn)?;
     let inserted_ids: Vec<Uuid> = data.iter().map(|x| x.leaderboard_id).collect();
     let leagues = schema::leaderboards::table
         .filter(schema::leaderboards::leaderboard_id.eq(any(inserted_ids)))
-        //.select(schema::leaderboards::league_id)
         .load::<Leaderboard>(conn)?;
     let grouped: Vec<Vec<Stat>> = data.grouped_by(&leagues);
     let out = leagues.into_iter().zip(grouped).collect();
     Ok(out)
-    // diesel::insert_into(schema::stats::table)
-    //     .values(data)
-    //     .inner_join(schema::leaderboards::table)
-    //     .returning((schema::stats::all_columns, schema::leaderboards::league_id))
-    //     .get_results(conn)
 }

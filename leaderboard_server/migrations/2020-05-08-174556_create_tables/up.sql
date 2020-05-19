@@ -7,7 +7,6 @@
 -- other stats for tiebreakers?
 -- think its more flexible to just have timestamps, rather than trying to have "daily/weekly/etc"
 -- with timestamp people have flexibility to choose when they want to update. Also easier to show historic rankings
-
 -- also for trying to rank by other stats (i.e. rank by wins n stuff...just have two separate tables. EZ)
 
 -- https://wiki.postgresql.org/images/1/1b/Ranges%2C_Partitioning_and_Limitations.pdf

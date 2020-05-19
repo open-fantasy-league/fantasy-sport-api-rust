@@ -11,6 +11,7 @@ use crate::diesel::RunQueryDsl;  // imported here so that can run db macros
 use crate::diesel::ExpressionMethods;
 use crate::types::{competitions::*, series::*, teams::*, matches::*, results::*, players::*};
 use crate::messages::*;
+use frunk::labelled::transform_from;
 
 
 pub async fn insert_competitions(method: &str, message_id: Uuid, data: Vec<ApiCompetition>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
@@ -50,7 +51,7 @@ pub async fn insert_series(method: &str, message_id: Uuid, data: Vec<ApiSeriesNe
     publish::<SubType, ApiCompetition>(
         ws_conns, &to_publish, SubType::Competition, None
     ).await;
-    let resp_msg = WSMsgOut::resp(message_id, method, data);
+    let resp_msg = WSMsgOut::resp(message_id, method, to_publish);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
@@ -83,7 +84,7 @@ pub async fn insert_matches(method: &str, message_id: Uuid, data: Vec<ApiMatchNe
     publish::<SubType, ApiCompetition>(
         ws_conns, &to_publish, SubType::Competition, None
     ).await;
-    let resp_msg = WSMsgOut::resp(message_id, method, data);
+    let resp_msg = WSMsgOut::resp(message_id, method, to_publish);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
@@ -103,31 +104,39 @@ pub async fn update_matches(method: &str, message_id: Uuid, data: Vec<MatchUpdat
 }
 
 pub async fn insert_team_series_results(method: &str, message_id: Uuid, data: Vec<TeamSeriesResult>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
-    let series_ids: Vec<Uuid> = data.iter().map(|x| x.series_id).collect();
-    insert_exec!(&conn, schema::team_series_results::table, &data)?;
-    let comp_to_series_ids = db::get_competition_ids_for_series(&conn, &series_ids)?.into_iter().collect();
-    publish::<SubType, TeamSeriesResult>(ws_conns, &data, SubType::Competition, Some(comp_to_series_ids)).await;
+    let new: Vec<TeamSeriesResult> = insert!(&conn, schema::team_series_results::table, &data)?;
+    let to_publish_rows = db::get_publishable_team_series_results(&conn, new)?;
+    let to_publish = ApiCompetition::from_rows(to_publish_rows);
+    publish::<SubType, ApiCompetition>(
+        ws_conns, &to_publish, SubType::Competition, None
+    ).await;
+    //publish::<SubType, TeamSeriesResult>(ws_conns, &data, SubType::Competition, Some(comp_to_series_ids)).await;
     let resp_msg = WSMsgOut::resp(message_id, method, data);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
 pub async fn update_team_series_results(method: &str, message_id: Uuid, data: Vec<TeamSeriesResultUpdate>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
-    let series_ids: Vec<Uuid> = data.iter().map(|x| x.series_id).collect();
     let out: Vec<TeamSeriesResult> = conn.build_transaction().run(|| {
         data.iter().map(|c| {
             update_2pkey!(&conn, team_series_results, series_id, team_id, c)
     }).collect::<Result<Vec<TeamSeriesResult>, _>>()})?;
-    let comp_to_series_ids = db::get_competition_ids_for_series(&conn, &series_ids)?.into_iter().collect();
-    publish::<SubType, TeamSeriesResult>(ws_conns, &out, SubType::Competition, Some(comp_to_series_ids)).await;
-    let resp_msg = WSMsgOut::resp(message_id, method, data);
+    let to_publish_rows = db::get_publishable_team_series_results(&conn, out)?;
+    let to_publish = ApiCompetition::from_rows(to_publish_rows);
+    publish::<SubType, ApiCompetition>(
+        ws_conns, &to_publish, SubType::Competition, None
+    ).await;
+    let resp_msg = WSMsgOut::resp(message_id, method, to_publish);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
 pub async fn insert_team_match_results(method: &str, message_id: Uuid, data: Vec<TeamMatchResult>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
     let match_ids: Vec<Uuid> = data.iter().map(|x| x.match_id).collect();
-    insert_exec!(&conn, schema::team_match_results::table, &data)?;
-    let comp_id_map: HashMap<Uuid, Uuid> = db::get_competition_ids_for_matches(&conn, &match_ids)?.into_iter().collect();
-    publish::<SubType, TeamMatchResult>(ws_conns, &data, SubType::Competition, Some(comp_id_map)).await;
+    let new: Vec<TeamMatchResult> = insert!(&conn, schema::team_match_results::table, &data)?;
+    let to_publish_rows = db::get_publishable_team_match_results(&conn, new)?;
+    let to_publish = ApiCompetition::from_opty_rows(to_publish_rows);
+    publish::<SubType, ApiCompetition>(
+        ws_conns, &to_publish, SubType::Competition, None
+    ).await;
     let resp_msg = WSMsgOut::resp(message_id, method, data);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
@@ -138,18 +147,23 @@ pub async fn update_team_match_results(method: &str, message_id: Uuid, data: Vec
         data.iter().map(|c| {
             update_2pkey!(&conn, team_match_results, match_id, team_id, c)
     }).collect::<Result<Vec<TeamMatchResult>, _>>()})?;
-    let comp_id_map: HashMap<Uuid, Uuid> = db::get_competition_ids_for_matches(&conn, &match_ids)?.into_iter().collect();
-    publish::<SubType, TeamMatchResult>(ws_conns, &out, SubType::Competition, Some(comp_id_map)).await;
-    let resp_msg = WSMsgOut::resp(message_id, method, out);
+    let to_publish_rows = db::get_publishable_team_match_results(&conn, out)?;
+    let to_publish = ApiCompetition::from_opty_rows(to_publish_rows);
+    publish::<SubType, ApiCompetition>(
+        ws_conns, &to_publish, SubType::Competition, None
+    ).await;
+    let resp_msg = WSMsgOut::resp(message_id, method, to_publish);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
 pub async fn insert_player_results(method: &str, message_id: Uuid, data: Vec<PlayerResult>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
-    let match_ids: Vec<Uuid> = data.iter().map(|x| x.match_id).collect();
-    insert_exec!(&conn, schema::player_results::table, &data)?;
-    let comp_id_map: HashMap<Uuid, Uuid> = db::get_competition_ids_for_matches(&conn, &match_ids)?.into_iter().collect();
-    publish::<SubType, PlayerResult>(ws_conns, &data, SubType::Competition, Some(comp_id_map)).await;
-    let resp_msg = WSMsgOut::resp(message_id, method, data);
+    let new: Vec<PlayerResult> = insert!(&conn, schema::player_results::table, &data)?;
+    let to_publish_rows = db::get_publishable_player_results(&conn, new)?;
+    let to_publish = ApiCompetition::from_opty_rows(to_publish_rows);
+    publish::<SubType, ApiCompetition>(
+        ws_conns, &to_publish, SubType::Competition, None
+    ).await;
+    let resp_msg = WSMsgOut::resp(message_id, method, to_publish);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
@@ -159,16 +173,20 @@ pub async fn update_player_results(method: &str, message_id: Uuid, data: Vec<Pla
         data.iter().map(|c| {
             update_2pkey!(&conn, player_results, match_id, player_id, c)
     }).collect()})?;
-    let comp_id_map: HashMap<Uuid, Uuid> = db::get_competition_ids_for_matches(&conn, &match_ids)?.into_iter().collect();
-    publish::<SubType, PlayerResult>(ws_conns, &out, SubType::Competition, Some(comp_id_map)).await;
-    let resp_msg = WSMsgOut::resp(message_id, method, out);
+    let to_publish_rows = db::get_publishable_player_results(&conn, out)?;
+    let to_publish = ApiCompetition::from_opty_rows(to_publish_rows);
+    publish::<SubType, ApiCompetition>(
+        ws_conns, &to_publish, SubType::Competition, None
+    ).await;
+    let resp_msg = WSMsgOut::resp(message_id, method, to_publish);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
 pub async fn insert_teams(method: &str, message_id: Uuid, data: Vec<ApiTeam>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
     ApiTeam::insert(conn, data.clone())?;
-    publish::<SubType, ApiTeam>(ws_conns, &data, SubType::Team, None).await;
-    let resp_msg = WSMsgOut::resp(message_id, method, data);
+    let to_publish = ApiTeamWithPlayersHierarchy::from_api_team(data);
+    publish::<SubType, ApiTeamWithPlayersHierarchy>(ws_conns, &to_publish, SubType::Team, None).await;
+    let resp_msg = WSMsgOut::resp(message_id, method, to_publish);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
@@ -177,15 +195,17 @@ pub async fn update_teams(method: &str, message_id: Uuid, data: Vec<TeamUpdate>,
         data.iter().map(|c| {
             update!(&conn, teams, team_id, c)
     }).collect()})?;
-    publish::<SubType, Team>(ws_conns, &out, SubType::Team, None).await;
-    let resp_msg = WSMsgOut::resp(message_id, method, out);
+    let to_publish = ApiTeamWithPlayersHierarchy::from_team(out);
+    publish::<SubType, ApiTeamWithPlayersHierarchy>(ws_conns, &to_publish, SubType::Team, None).await;
+    let resp_msg = WSMsgOut::resp(message_id, method, to_publish);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
 pub async fn insert_players(method: &str, message_id: Uuid, data: Vec<ApiPlayer>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
-    ApiPlayer::insert(conn, data.clone())?;
-    publish::<SubType, ApiPlayer>(ws_conns, &data, SubType::Team, None).await;
-    let resp_msg = WSMsgOut::resp(message_id, method, data);
+    ApiPlayer::insert(&conn, data.clone())?;
+    let to_publish = db::get_teams_from_players(&conn, data.iter().map(|p| p.player_id).collect_vec())?;
+    publish::<SubType, ApiTeamWithPlayersHierarchy>(ws_conns, &to_publish, SubType::Team, None).await;
+    let resp_msg = WSMsgOut::resp(message_id, method, to_publish);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
@@ -194,43 +214,42 @@ pub async fn update_players(method: &str, message_id: Uuid, data: Vec<PlayerUpda
         data.iter().map(|c| {
             update!(&conn, players, player_id, c)
     }).collect::<Result<Vec<Player>, _>>()})?;
-    publish::<SubType, Player>(ws_conns, &out, SubType::Team, None).await;
-    let resp_msg = WSMsgOut::resp(message_id, method, out);
+    let to_publish = db::get_teams_from_players(&conn, out.iter().map(|p| p.player_id).collect_vec())?;
+    publish::<SubType, ApiTeamWithPlayersHierarchy>(ws_conns, &to_publish, SubType::Team, None).await;
+    let resp_msg = WSMsgOut::resp(message_id, method, to_publish);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
 pub async fn insert_team_players(method: &str, message_id: Uuid, data: Vec<ApiTeamPlayer>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
     let out = db::insert_team_players(&conn, &data)?;
-    publish::<SubType, TeamPlayer>(ws_conns, &out, SubType::Team, None).await;
-    let resp_msg = WSMsgOut::resp(message_id, method, out);
+    let to_publish = db::get_teams_from_players(&conn, out.iter().map(|p| p.player_id).collect_vec())?;
+    publish::<SubType, ApiTeamWithPlayersHierarchy>(ws_conns, &to_publish, SubType::Team, None).await;
+    let resp_msg = WSMsgOut::resp(message_id, method, to_publish);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
 pub async fn insert_team_names(method: &str, message_id: Uuid, data: Vec<ApiTeamNameNew>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
-    let out = db::insert_team_names(conn, data)?;
-    publish::<SubType, TeamName>(ws_conns, &out, SubType::Team, None).await;
-    let resp_msg = WSMsgOut::resp(message_id, method, out);
+    let out = db::insert_team_names(&conn, data)?;
+    let to_publish = db::get_teams_names(&conn, out.into_iter().map(|t|t.team_id).collect_vec())?;
+    publish::<SubType, ApiTeamWithPlayersHierarchy>(ws_conns, &to_publish, SubType::Team, None).await;
+    let resp_msg = WSMsgOut::resp(message_id, method, to_publish);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
 pub async fn insert_player_names(method: &str, message_id: Uuid, data: Vec<ApiPlayerNameNew>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
     let out = db::insert_player_names(&conn, &data)?;
     //let comp_id_map: HashMap<Uuid, Uuid> = db::get_competition_ids_for_matches(&conn, &match_ids)?.into_iter().collect();
-    let team_id_map = db::get_player_ids_to_team_ids(
-        &conn, &data.iter().map(|x|x.player_id).dedup().collect()
-    )?.into_iter().collect();
-    publish::<SubType, PlayerName>(ws_conns, &out, SubType::Team, Some(team_id_map)).await;
-    let resp_msg = WSMsgOut::resp(message_id, method, out);
+    let to_publish = db::get_teams_from_players(&conn, out.iter().map(|p| p.player_id).collect_vec())?;
+    publish::<SubType, ApiTeamWithPlayersHierarchy>(ws_conns, &to_publish, SubType::Team, None).await;
+    let resp_msg = WSMsgOut::resp(message_id, method, to_publish);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
 pub async fn insert_player_positions(method: &str, message_id: Uuid, data: Vec<ApiPlayerPositionNew>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
     let out = db::insert_player_positions(&conn, &data)?;
-    let team_id_map = db::get_player_ids_to_team_ids(
-        &conn, &data.iter().map(|x|x.player_id).dedup().collect()
-    )?.into_iter().collect();
-    publish::<SubType, PlayerPosition>(ws_conns, &out, SubType::Team, Some(team_id_map)).await;
-    let resp_msg = WSMsgOut::resp(message_id, method, out);
+    let to_publish = db::get_teams_from_players(&conn, out.iter().map(|p| p.player_id).collect_vec())?;
+    publish::<SubType, ApiTeamWithPlayersHierarchy>(ws_conns, &to_publish, SubType::Team, None).await;
+    let resp_msg = WSMsgOut::resp(message_id, method, to_publish);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 // TODO Prob need some deletions
@@ -283,9 +302,9 @@ pub async fn sub_teams(method: &str, message_id: Uuid, data: SubTeam, conn: PgCo
             let team_out = db::get_all_teams(&conn).map(|rows| ApiTeam::from_rows(rows))?;
             let players_out = db::get_all_players(&conn).map(|rows| ApiPlayer::from_rows(rows))?;
             let team_players_out = db::get_all_team_players(&conn)?;
-            ApiTeamsAndPlayers{teams: team_out, players: players_out, team_players: team_players_out}
+            ApiTeamsAndPlayers{teams: Some(team_out), players: Some(players_out), team_players: Some(team_players_out)}
         },
-        false => ApiTeamsAndPlayers{teams: vec![], players: vec![], team_players: vec![]}
+        false => ApiTeamsAndPlayers{teams: None, players: None, team_players: None}
     };
     let resp_msg = WSMsgOut::resp(message_id, method, data);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())

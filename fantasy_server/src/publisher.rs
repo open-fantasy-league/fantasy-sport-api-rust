@@ -200,7 +200,7 @@ impl Publishable<SubType> for ActivePick {
             SubType::User => warp_ws_server::this_should_never_happen(
                 publishables,
                 "ActivePick published for User",
-            )
+            ),
         }
     }
 }

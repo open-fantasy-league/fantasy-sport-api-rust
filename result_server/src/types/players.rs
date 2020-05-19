@@ -24,8 +24,10 @@ pub struct Player {
 pub struct ApiPlayer{
     pub player_id: Uuid,
     pub meta: serde_json::Value,
-    pub names: Vec<ApiPlayerName>,
-    pub positions: Vec<ApiPlayerPosition>
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub names: Option<Vec<ApiPlayerName>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub positions: Option<Vec<ApiPlayerPosition>>
 }
 
 #[derive(Deserialize, Serialize, LabelledGeneric, AsChangeset, Debug)]
@@ -123,25 +125,42 @@ impl ApiPlayer{
             Self{
                 player_id: player_id,
                 meta: v.0.meta,
-                names: v.1,
-                positions: v.2
+                names: Some(v.1),
+                positions: Some(v.2)
             }
         })
         .collect_vec()
     }
 
-    pub fn insert(conn: PgConn, players: Vec<Self>) -> Result<bool, diesel::result::Error>{
+
+    pub fn from_diesel_rows(rows: Vec<(Player, Vec<PlayerName>, Vec<PlayerPosition>)>) -> Vec<Self>{
+        rows.into_iter().map(|(p, names, positions)|{
+            ApiPlayer{
+                player_id: p.player_id,
+                meta: p.meta,
+                names: Some(names.into_iter().map(transform_from).collect_vec()),
+                positions: Some(positions.into_iter().map(transform_from).collect_vec())
+            }
+        }).collect()
+    }
+
+    pub fn insert(conn: &PgConn, players: Vec<Self>) -> Result<bool, diesel::result::Error>{
         let names: Vec<PlayerName> = players.clone().into_iter().flat_map(|t| {
             let player_id = t.player_id;
-            t.names.into_iter().map(|n| {
-                PlayerName{
-                    player_name_id: Uuid::new_v4(), player_id, name: n.name, timespan: n.timespan
-                }
-            }).collect_vec()
+            match t.names{
+                Some(names) => {
+                    names.into_iter().map(|n| {
+                        PlayerName{
+                            player_name_id: Uuid::new_v4(), player_id, name: n.name, timespan: n.timespan
+                        }
+                        }).collect_vec()
+                },
+                None => vec![]
+            }
         }).collect();
-        insert_exec!(&conn, player_names::table, names)?;
+        insert_exec!(conn, player_names::table, names)?;
         let raw_players: Vec<Player> = players.into_iter().map(transform_from).collect();
-        insert_exec!(&conn, players::table, raw_players)?;
+        insert_exec!(conn, players::table, raw_players)?;
         Ok(true)
     }
 }

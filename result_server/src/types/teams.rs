@@ -12,8 +12,9 @@ use crate::diesel::RunQueryDsl;  // imported here so that can run db macros
 use crate::diesel::ExpressionMethods;
 use crate::db;
 
-#[derive(Insertable, Deserialize, LabelledGeneric, Queryable, Serialize, Debug)]
+#[derive(Insertable, Deserialize, LabelledGeneric, Queryable, Serialize, Debug, Identifiable)]
 #[table_name = "teams"]
+#[primary_key(team_id)]
 pub struct Team {
     pub team_id: Uuid,
     pub meta: serde_json::Value,
@@ -66,14 +67,53 @@ pub struct ApiTeamNameNew {
 
 #[derive(Serialize, Debug)]
 pub struct ApiTeamsAndPlayers{
-    pub teams: Vec<ApiTeam>,
-    pub players: Vec<ApiPlayer>,
-    pub team_players: Vec<TeamPlayer>
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub teams: Option<Vec<ApiTeam>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub players: Option<Vec<ApiPlayer>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub team_players: Option<Vec<TeamPlayer>>
 }
-#[derive(Queryable, Insertable, Deserialize, Serialize, Debug)]
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ApiTeamWithPlayersHierarchy{
+    pub team_id: Uuid,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub names: Option<Vec<ApiTeamName>>,
+    pub meta: serde_json::Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub players: Option<Vec<ApiTeamPlayerOut>>
+}
+
+impl ApiTeamWithPlayersHierarchy{
+    pub fn from_api_team(teams: Vec<ApiTeam>) -> Vec<Self>{
+        teams.into_iter().map(|t|{
+            Self{
+                team_id: t.team_id,
+                names: Some(t.names),
+                meta: t.meta,
+                players: None
+            }
+        }).collect_vec()
+    }
+
+    pub fn from_team(teams: Vec<Team>) -> Vec<Self>{
+        teams.into_iter().map(|t|{
+            Self{
+                team_id: t.team_id,
+                names: None,
+                meta: t.meta,
+                players: None
+            }
+        }).collect_vec()
+    }
+}
+
+#[derive(Queryable, Insertable, Deserialize, Serialize, Debug, Identifiable, Associations)]
+#[primary_key(team_player_id)]
 pub struct TeamPlayer {
     #[serde(skip_serializing)]
-    team_player_id: Uuid,
+    pub team_player_id: Uuid,
     pub team_id: Uuid,
     pub player_id: Uuid,
     #[serde(with = "my_timespan_format")]
@@ -85,6 +125,14 @@ pub struct TeamPlayer {
 pub struct ApiTeamPlayer {
     pub team_id: Uuid,
     pub player_id: Uuid,
+    #[serde(with = "my_timespan_format")]
+    pub timespan: DieselTimespan,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct ApiTeamPlayerOut {
+    pub team_id: Uuid,
+    pub player: ApiPlayer,
     #[serde(with = "my_timespan_format")]
     pub timespan: DieselTimespan,
 }
