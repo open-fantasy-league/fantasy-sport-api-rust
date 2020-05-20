@@ -1,6 +1,7 @@
 use crate::schema::*;
 use chrono::{DateTime, Utc};
 
+use super::fantasy_teams::*;
 use diesel_utils::{
     my_timespan_format, my_timespan_format_opt, new_dieseltimespan, DieselTimespan,
 };
@@ -135,16 +136,41 @@ pub struct ApiLeague {
     pub max_squad_players_same_position: i32,
     pub max_team_players_same_team: i32,
     pub max_team_players_same_position: i32,
-    pub periods: Vec<Period>,
-    pub stat_multipliers: Vec<StatMultiplier>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub periods: Option<Vec<Period>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stat_multipliers: Option<Vec<StatMultiplier>>,
+    pub fantasy_teams: Option<Vec<FantasyTeam>>,
 }
 
 impl ApiLeague {
-    pub fn from_rows(rows: Vec<(League, Vec<Period>, Vec<StatMultiplier>)>) -> Vec<Self> {
+    pub fn from_rows(rows: Vec<(League, Vec<Period>, Vec<StatMultiplier>, Vec<FantasyTeam>)>) -> Vec<Self> {
         rows.into_iter()
-            .map(|(l, periods, stats)| Self {
-                periods: periods,
-                stat_multipliers: stats,
+            .map(|(l, periods, stats, fantasy_teams)| Self {
+                periods: Some(periods),
+                stat_multipliers: Some(stats),
+                fantasy_teams: Some(fantasy_teams),
+                league_id: l.league_id,
+                name: l.name,
+                team_size: l.team_size,
+                squad_size: l.squad_size,
+                competition_id: l.competition_id,
+                meta: l.meta,
+                max_squad_players_same_team: l.max_squad_players_same_team,
+                max_squad_players_same_position: l.max_squad_players_same_position,
+                max_team_players_same_team: l.max_team_players_same_team,
+                max_team_players_same_position: l.max_team_players_same_position,
+            })
+            .collect()
+    }
+
+    pub fn from_leagues(leagues: Vec<League>) -> Vec<Self> {
+        leagues
+            .into_iter()
+            .map(|l| Self {
+                fantasy_teams: None,
+                periods: None,
+                stat_multipliers: None,
                 league_id: l.league_id,
                 name: l.name,
                 team_size: l.team_size,

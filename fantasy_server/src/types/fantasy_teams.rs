@@ -1,3 +1,4 @@
+use super::{leagues::*, drafts::*};
 use crate::schema::*;
 use diesel_utils::{my_timespan_format, DieselTimespan};
 use serde::{Deserialize, Serialize};
@@ -7,6 +8,7 @@ use uuid::Uuid;
 //https://kotiri.com/2018/01/31/postgresql-diesel-rust-types.html
 #[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations)]
 #[primary_key(fantasy_team_id)]
+#[belongs_to(League)]
 pub struct FantasyTeam {
     pub fantasy_team_id: Uuid,
     pub name: String,
@@ -29,6 +31,8 @@ pub struct FantasyTeamUpdate {
 
 #[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations)]
 #[primary_key(pick_id)]
+#[belongs_to(FantasyTeam)]
+#[belongs_to(DraftChoice)]
 pub struct Pick {
     pub pick_id: Uuid,
     // having fantasy_team_id on pick is kind of duplicating data, it can be accessed through the draft_choice_id,
@@ -54,6 +58,7 @@ pub struct PickUpdate {
 
 #[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations)]
 #[primary_key(active_pick_id)]
+#[belongs_to(Pick)]
 pub struct ActivePick {
     pub active_pick_id: Uuid,
     pub pick_id: Uuid,

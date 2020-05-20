@@ -1,3 +1,4 @@
+use super::fantasy_teams::*;
 use crate::schema::*;
 use diesel_utils::{my_timespan_format, my_timespan_format_opt, DieselTimespan};
 use frunk::LabelledGeneric;
@@ -37,6 +38,8 @@ pub struct DraftUpdate {
 }
 
 #[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations)]
+#[belongs_to(Draft)]
+#[belongs_to(FantasyTeam)]
 #[primary_key(team_draft_id)]
 pub struct TeamDraft {
     pub team_draft_id: Uuid,
@@ -74,6 +77,7 @@ impl TeamDraft {
     LabelledGeneric,
 )]
 #[primary_key(draft_choice_id)]
+#[belongs_to(TeamDraft)]
 pub struct DraftChoice {
     pub draft_choice_id: Uuid,
     pub team_draft_id: Uuid,
@@ -160,11 +164,50 @@ impl ApiDraftChoice {
 //     pub choices: Vec<DraftChoice>,
 // }
 
-#[derive(Serialize, Debug)]
+// #[derive(Serialize, Debug)]
+// pub struct ApiDraft {
+//     pub league_id: Uuid,
+//     pub draft_id: Uuid,
+//     pub period_id: Uuid,
+//     pub meta: serde_json::Value,
+//     pub choices: Vec<ApiDraftChoice>, //pub teams: Vec<ApiTeamDraft>,
+// }
+
+#[derive(Deserialize, Serialize, Debug)]
 pub struct ApiDraft {
     pub league_id: Uuid,
     pub draft_id: Uuid,
     pub period_id: Uuid,
     pub meta: serde_json::Value,
-    pub choices: Vec<ApiDraftChoice>, //pub teams: Vec<ApiTeamDraft>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub team_drafts: Option<Vec<ApiTeamDraft>>,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct ApiTeamDraft {
+    pub team_draft_id: Uuid,
+    pub fantasy_team_id: Uuid,
+    pub name: String,
+    pub external_user_id: Uuid,
+    pub meta: serde_json::Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub draft_choices: Option<Vec<ApiDraftChoice2>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active_picks: Option<Vec<ApiPick>>,
+}
+
+#[derive(Deserialize, Serialize, Debug, LabelledGeneric)]
+pub struct ApiPick {
+    pub pick_id: Uuid,
+    pub player_id: Uuid,
+    #[serde(with = "my_timespan_format")]
+    pub timespan: DieselTimespan,
+}
+
+#[derive(Deserialize, Serialize, Debug, LabelledGeneric)]
+pub struct ApiDraftChoice2 {
+    pub draft_choice_id: Uuid,
+    #[serde(with = "my_timespan_format")]
+    pub timespan: DieselTimespan,
+    pub pick: Option<Pick>,
 }

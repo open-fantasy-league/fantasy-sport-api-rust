@@ -19,6 +19,7 @@ use std::fmt;
 use crate::WSConnections_;
 use crate::subscriptions::SubType;
 use crate::errors;
+use itertools::Itertools;
 
 #[derive(Debug, Clone)]
 struct NoValidPicksError {
@@ -139,7 +140,7 @@ pub fn generate_drafts(
                     hm
                 });
         // maybe need to fold results
-        let drafts: Result<Vec<_>, _> = draft_map
+        let drafts_r: Result<Vec<Draft>, diesel::result::Error> = draft_map
             .into_iter()
             .map(|(_, teams)| {
                 let drafts: Vec<Draft> = insert!(
@@ -147,7 +148,7 @@ pub fn generate_drafts(
                     schema::drafts::table,
                     vec![Draft::new(period.period_id)]
                 )?;
-                let draft = drafts.first().unwrap();
+                let draft = drafts.into_iter().nth(0).unwrap();
                 let team_drafts: Vec<TeamDraft> = teams
                     .iter()
                     .map(|team| TeamDraft::new(draft.draft_id, team.fantasy_team_id))
@@ -180,18 +181,17 @@ pub fn generate_drafts(
                 // it was due to putting the to_insert expression straight into the macro
                 let to_insert: Vec<DraftChoice> = choices.iter().map(|c| c.clone().into()).collect();
                 let _: Vec<DraftChoice> = insert!(&conn, schema::draft_choices::table, to_insert)?;
-                let out = ApiDraft {
-                    league_id: period.league_id,
-                    draft_id: draft.draft_id,
-                    period_id: period.period_id,
-                    meta: draft.meta.clone(),
-                    choices: choices,
-                };
-                Ok(out)
+                Ok(draft)
             })
             .collect();
-            drafts
+            let drafts = drafts_r?;
+            db::get_full_drafts(&conn, Some(drafts.iter().map(|d|&d.draft_id).collect_vec()))
     })
+}
+
+pub async fn publish_updated_pick(pg_conn: PgConn, ws_conns: &mut WSConnections_, pick: Pick) -> Result<bool, BoxError>{
+    let to_publish: Vec<ApiDraft> = db::get_drafts_for_picks(&pg_conn, vec![pick.pick_id])?;
+    publish::<SubType, ApiDraft>(ws_conns, &to_publish, SubType::Draft, None).await
 }
 
 
@@ -229,6 +229,7 @@ pub async fn draft_handler(
                         match (player_position_cache_opt.as_ref(), player_team_cache_opt.as_ref()){
                             (Some(ref player_position_cache), Some(ref player_team_cache)) => {
                                 let out: Result<(Pick, Option<ActivePick>), BoxError> = pick_from_queue_or_random(
+                                    // TODO safetify these unwraps
                                     pg_pool.get().unwrap(), team_draft.fantasy_team_id, draft_choice, period.timespan, period.period_id,
                                     &league.max_squad_players_same_team, &league.max_squad_players_same_position,
                                     pick_straight_into_team,
@@ -236,18 +237,10 @@ pub async fn draft_handler(
                                 );
                                 match out
                                 {
-                                    Ok((pick, None)) => {
-                                        match publish::<SubType, Pick>(&mut ws_conns, &vec![pick], SubType::Draft, None).await{
-                                            Err(e) => println!("Error publishing draft picks: {:?}", e),
-                                            _ => {}
-                                        }
-                                    },
-                                    Ok((pick, Some(active_pick))) => {
-                                        match publish::<SubType, Pick>(&mut ws_conns, &vec![pick], SubType::Draft, None).await{
-                                            Err(e) => println!("Error publishing draft picks: {:?}", e),
-                                            _ => {}
-                                        };
-                                        match publish::<SubType, ActivePick>(&mut ws_conns, &vec![active_pick], SubType::Draft, None).await{
+                                    Ok((p, _)) => {
+                                        // TODO no way should be doing this on every pick
+                                        // Well maybe the publish part, but not the huge db query to get full hierarchy
+                                        match publish_updated_pick(pg_pool.get().unwrap(), &mut ws_conns, p).await{
                                             Err(e) => println!("Error publishing draft picks: {:?}", e),
                                             _ => {}
                                         }

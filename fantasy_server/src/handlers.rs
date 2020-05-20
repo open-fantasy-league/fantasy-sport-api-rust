@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use tokio::sync::{MutexGuard, Mutex};
 use std::sync::Arc;
 use tokio::runtime::Handle;
+use itertools::Itertools;
 
 
 pub async fn insert_leagues(method: &str, message_id: Uuid, data: Vec<League>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
@@ -23,10 +24,11 @@ pub async fn insert_leagues(method: &str, message_id: Uuid, data: Vec<League>, c
     //let leagues: Vec<League> = db::insert::<League, leagues::table, diesel::insertable::OwnedBatchInsert<diesel::query_builder::ValuesClause<(_, _, _, _, _, _, _, _, _), schema::leagues::table>, schema::leagues::table>>(req, conn, leagues::table)?;
     let leagues: Vec<League> = insert!(&conn, leagues::table, data)?;
     println!("{:?}", &leagues);
-    publish::<SubType, League>(
-        ws_conns, &leagues, SubType::League, None
+    let to_publish = ApiLeague::from_leagues(leagues);
+    publish::<SubType, ApiLeague>(
+        ws_conns, &to_publish, SubType::League, None
     ).await?;
-    let resp_msg = WSMsgOut::resp(message_id, method, leagues);
+    let resp_msg = WSMsgOut::resp(message_id, method, to_publish);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
@@ -36,23 +38,24 @@ pub async fn update_leagues(method: &str, message_id: Uuid, data: Vec<LeagueUpda
         data.iter().map(|c| {
         update!(&conn, leagues, league_id, c)
     }).collect()})?;
-    publish::<SubType, League>(
-        ws_conns, &leagues, SubType::League, None
+    let to_publish = ApiLeague::from_leagues(leagues);
+    publish::<SubType, ApiLeague>(
+        ws_conns, &to_publish, SubType::League, None
     ).await?;
-    println!("{:?}", &leagues);
-    let resp_msg = WSMsgOut::resp(message_id, method, leagues);
+    println!("{:?}", &to_publish);
+    let resp_msg = WSMsgOut::resp(message_id, method, to_publish);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
 pub async fn insert_periods(method: &str, message_id: Uuid, data: Vec<Period>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
     println!("{:#?}", &data);
     let out: Vec<Period> = insert!(&conn, periods::table, data)?;
-    println!("{:#?}", &out);
-    publish::<SubType, Period>(
-        ws_conns, &out,  SubType::League, None
+    let to_publish = db::get_full_leagues(&conn, Some(out.iter().map(|p|&p.league_id).collect_vec()))?;
+    publish::<SubType, ApiLeague>(
+        ws_conns, &to_publish,  SubType::League, None
     ).await?;
     println!("postpublish");
-    let resp_msg = WSMsgOut::resp(message_id, method, out);
+    let resp_msg = WSMsgOut::resp(message_id, method, to_publish);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
@@ -62,22 +65,21 @@ pub async fn update_periods(method: &str, message_id: Uuid, data: Vec<PeriodUpda
         data.iter().map(|c| {
         update!(&conn, periods, period_id, c)
     }).collect()})?;
-    // assume anything upserted the user wants to subscribe to
-    // TODO ideally would return response before awaiting publishing going out
-    //publish_leagues(ws_conns, &leagues).await;
-    publish::<SubType, Period>(
-        ws_conns, &out,  SubType::League, None
+    let to_publish = db::get_full_leagues(&conn, Some(out.iter().map(|p|&p.league_id).collect_vec()))?;
+    publish::<SubType, ApiLeague>(
+        ws_conns, &to_publish,  SubType::League, None
     ).await?;
-    let resp_msg = WSMsgOut::resp(message_id, method, out);
+    let resp_msg = WSMsgOut::resp(message_id, method, to_publish);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
 pub async fn insert_stat_multipliers(method: &str, message_id: Uuid, data: Vec<StatMultiplier>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
     let out: Vec<StatMultiplier> = insert!(&conn, stat_multipliers::table, data)?;
-    publish::<SubType, StatMultiplier>(
-        ws_conns, &out,  SubType::League, None
+    let to_publish = db::get_full_leagues(&conn, Some(out.iter().map(|p|&p.league_id).collect_vec()))?;
+    publish::<SubType, ApiLeague>(
+        ws_conns, &to_publish,  SubType::League, None
     ).await?;
-    let resp_msg = WSMsgOut::resp(message_id, method, out);
+    let resp_msg = WSMsgOut::resp(message_id, method, to_publish);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
@@ -90,10 +92,11 @@ pub async fn update_stat_multipliers(method: &str, message_id: Uuid, data: Vec<S
         // this clone a bit hacky, the macro was originally just doing UUIDs which implement copy (string name doesnt)
         update_2pkey!(&conn, stat_multipliers, league_id, name, c.clone())
     }).collect()})?;
-    publish::<SubType, StatMultiplier>(
-        ws_conns, &out,  SubType::League, None
+    let to_publish = db::get_full_leagues(&conn, Some(out.iter().map(|p|&p.league_id).collect_vec()))?;
+    publish::<SubType, ApiLeague>(
+        ws_conns, &to_publish,  SubType::League, None
     ).await?;
-    let resp_msg = WSMsgOut::resp(message_id, method, out);
+    let resp_msg = WSMsgOut::resp(message_id, method, to_publish);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
@@ -128,6 +131,7 @@ pub async fn update_external_users(method: &str, message_id: Uuid, data: Vec<Ext
 pub async fn insert_draft_queues(method: &str, message_id: Uuid, data: Vec<DraftQueue>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
     let out: Vec<DraftQueue> = insert!(&conn, draft_queues::table, data)?;
     // TODO do draft-queues even want publishing to anyone except caller (person's queue should be private)
+    // 
     //let id_map = db::get_league_ids_for_draft_queues(&conn, &series_ids)?;
     // publish_for_leagues::<DraftQueue>(
     //     ws_conns, &out,
@@ -157,15 +161,16 @@ pub async fn update_draft_choices(method: &str, message_id: Uuid, data: Vec<Draf
         data.iter().map(|c| {
         update!(&conn, draft_choices, draft_choice_id, c)
     }).collect()})?;
+    // TODO publish changes
     let resp_msg = WSMsgOut::resp(message_id, method, out);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
 pub async fn insert_picks(method: &str, message_id: Uuid, data: Vec<Pick>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
     let out: Vec<Pick> = insert!(&conn, picks::table, &data)?;
-    let draft_id_map: HashMap<Uuid, Uuid> = db::get_draft_ids_for_picks(&conn, &data.iter().map(|p|p.pick_id).collect())?.into_iter().collect();
-    publish::<SubType, Pick>(ws_conns, &out, SubType::Draft, Some(draft_id_map)).await?;
-    let resp_msg = WSMsgOut::resp(message_id, method, out);
+    let to_publish: Vec<ApiDraft> = db::get_drafts_for_picks(&conn, out.iter().map(|p|p.pick_id).collect())?;
+    publish::<SubType, ApiDraft>(ws_conns, &to_publish, SubType::Draft, None).await?;
+    let resp_msg = WSMsgOut::resp(message_id, method, to_publish);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
@@ -175,9 +180,9 @@ pub async fn update_picks(method: &str, message_id: Uuid, data: Vec<PickUpdate>,
         data.iter().map(|c| {
         update!(&conn, picks, pick_id, c)
     }).collect()})?;
-    let draft_id_map: HashMap<Uuid, Uuid> = db::get_draft_ids_for_picks(&conn, &data.iter().map(|p|p.pick_id).collect())?.into_iter().collect();
-    publish::<SubType, Pick>(ws_conns, &out, SubType::Draft, Some(draft_id_map)).await?;
-    let resp_msg = WSMsgOut::resp(message_id, method, out);
+    let to_publish: Vec<ApiDraft> = db::get_drafts_for_picks(&conn, out.iter().map(|p|p.pick_id).collect())?;
+    publish::<SubType, ApiDraft>(ws_conns, &to_publish, SubType::Draft, None).await?;
+    let resp_msg = WSMsgOut::resp(message_id, method, to_publish);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
@@ -266,13 +271,9 @@ pub async fn upsert_active_picks(
             _ => {Err(Box::new(errors::CustomError{description: "Player team and position caches not yet populated"}) as BoxError)}
         }?
     })?;
-    let draft_id_map: HashMap<Uuid, Uuid> = db::get_draft_ids_for_picks(&conn, &data.iter().map(|p|p.pick_id).collect())?.into_iter().collect();
-    publish::<SubType, ActivePick>(ws_conns, &data, SubType::Draft, Some(draft_id_map)).await?;
-
-    // publish::<SubType, FantasyTeam>(
-    //     ws_conns, &out, SubType::User, None
-    // ).await?;
-    let resp_msg = WSMsgOut::resp(message_id, method, data);
+    let to_publish: Vec<ApiDraft> = db::get_drafts_for_picks(&conn, data.iter().map(|p|p.pick_id).collect())?;
+    publish::<SubType, ApiDraft>(ws_conns, &to_publish, SubType::Draft, None).await?;
+    let resp_msg = WSMsgOut::resp(message_id, method, to_publish);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 
     // conn.build_transaction().run(|| {
@@ -307,10 +308,11 @@ pub async fn upsert_active_picks(
 pub async fn insert_fantasy_teams(method: &str, message_id: Uuid, data: Vec<FantasyTeam>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
     let out: Vec<FantasyTeam> = insert!(&conn, fantasy_teams::table, data)?;
     // TODO also publish for user?
-    publish::<SubType, FantasyTeam>(
-        ws_conns, &out, SubType::User, None
+    let to_publish = db::get_full_leagues(&conn, Some(out.iter().map(|p|&p.league_id).collect_vec()))?;
+    publish::<SubType, ApiLeague>(
+        ws_conns, &to_publish,  SubType::League, None
     ).await?;
-    let resp_msg = WSMsgOut::resp(message_id, method, out);
+    let resp_msg = WSMsgOut::resp(message_id, method, to_publish);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
@@ -320,11 +322,11 @@ pub async fn update_fantasy_teams(method: &str, message_id: Uuid, data: Vec<Fant
         data.iter().map(|c| {
         update!(&conn, fantasy_teams, fantasy_team_id, c)
     }).collect()})?;
-    publish::<SubType, FantasyTeam>(
-        ws_conns, &out, SubType::User, None
+    let to_publish = db::get_full_leagues(&conn, Some(out.iter().map(|p|&p.league_id).collect_vec()))?;
+    publish::<SubType, ApiLeague>(
+        ws_conns, &to_publish,  SubType::League, None
     ).await?;
-    // TODO what's the subscription for this?
-    let resp_msg = WSMsgOut::resp(message_id, method, out);
+    let resp_msg = WSMsgOut::resp(message_id, method, to_publish);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
@@ -378,6 +380,7 @@ pub async fn sub_drafts(method: &str, message_id: Uuid, data: SubDraft, conn: Pg
     let subscription = ws_user.subscriptions.get_ez(&SubType::Draft);
     let data = match subscription.all{
         true => {
+            // TODO get full-drafts
             db::get_full_drafts(&conn, None)
         },
         false => {

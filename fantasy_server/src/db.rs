@@ -7,7 +7,8 @@ use diesel::ExpressionMethods;
 use diesel::RunQueryDsl;
 use diesel::{sql_query, sql_types};
 use diesel_utils::PgConn;
-use itertools::izip;
+use frunk::labelled::transform_from;
+use itertools::{izip, Itertools};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
@@ -46,10 +47,18 @@ pub fn get_full_leagues(
     }?;
     let periods = Period::belonging_to(&leagues).load::<Period>(conn)?;
     let stats = StatMultiplier::belonging_to(&leagues).load::<StatMultiplier>(conn)?;
+    let fantasy_teams = FantasyTeam::belonging_to(&leagues).load::<FantasyTeam>(conn)?;
     let grouped_periods = periods.grouped_by(&leagues);
     let grouped_stats = stats.grouped_by(&leagues);
+    let grouped_fantasy_teams = fantasy_teams.grouped_by(&leagues);
     Ok(ApiLeague::from_rows(
-        izip!(leagues, grouped_periods, grouped_stats).collect(),
+        izip!(
+            leagues,
+            grouped_periods,
+            grouped_stats,
+            grouped_fantasy_teams
+        )
+        .collect(),
     ))
 }
 
@@ -63,25 +72,6 @@ pub struct ApiDraft {
     pub choices: Vec<ApiDraftChoice>, //pub teams: Vec<ApiTeamDraft>,
 }
 */
-
-pub fn get_full_drafts(
-    conn: &PgConnection,
-    league_ids_filter: Option<Vec<&Uuid>>,
-) -> Result<Vec<ApiLeague>, diesel::result::Error> {
-    let leagues: Vec<League> = match league_ids_filter {
-        Some(league_ids) => leagues::table
-            .filter(leagues::dsl::league_id.eq(any(league_ids)))
-            .load::<League>(conn),
-        None => leagues::table.load(conn),
-    }?;
-    let periods = Period::belonging_to(&leagues).load::<Period>(conn)?;
-    let stats = StatMultiplier::belonging_to(&leagues).load::<StatMultiplier>(conn)?;
-    let grouped_periods = periods.grouped_by(&leagues);
-    let grouped_stats = stats.grouped_by(&leagues);
-    Ok(ApiLeague::from_rows(
-        izip!(leagues, grouped_periods, grouped_stats).collect(),
-    ))
-}
 
 pub fn get_users(
     conn: &PgConnection,
@@ -262,3 +252,249 @@ pub fn get_leagues_for_picks(
         .select(leagues::all_columns)
         .load(conn)
 }
+
+pub fn get_drafts_for_picks(
+    conn: &PgConnection,
+    pick_ids: Vec<Uuid>,
+) -> Result<Vec<ApiDraft>, diesel::result::Error> {
+    let picks: Vec<Pick> = picks::table
+        .filter(picks::pick_id.eq(any(pick_ids)))
+        .load(conn)?;
+    let fantasy_team_ids = picks.iter().map(|p| p.fantasy_team_id).collect_vec();
+    let fantasy_teams: Vec<FantasyTeam> = fantasy_teams::table
+        .filter(fantasy_teams::fantasy_team_id.eq(any(fantasy_team_ids)))
+        .load(conn)?;
+    let team_drafts: Vec<TeamDraft> = TeamDraft::belonging_to(&fantasy_teams).load(conn)?;
+    let draft_choices: Vec<DraftChoice> = DraftChoice::belonging_to(&team_drafts).load(conn)?;
+    let active_picks: Vec<ActivePick> = ActivePick::belonging_to(&picks).load(conn)?;
+    let draft_ids = team_drafts.iter().map(|x| x.draft_id).collect_vec();
+    let drafts: Vec<Draft> = drafts::table
+        .filter(drafts::draft_id.eq(any(draft_ids)))
+        .load(conn)?;
+
+    let grouped_active_picks = active_picks.grouped_by(&picks);
+    let pick_level: Vec<(Pick, Vec<ActivePick>)> =
+        picks.into_iter().zip(grouped_active_picks).collect_vec();
+    let grouped_picks = pick_level.grouped_by(&fantasy_teams);
+    let draft_choices_and_picks: Vec<(DraftChoice, Vec<(Pick, Vec<ActivePick>)>)> =
+        draft_choices.into_iter().zip(grouped_picks).collect();
+    let grouped_draft_choices = draft_choices_and_picks.grouped_by(&team_drafts);
+    let team_drafts_level: Vec<(TeamDraft, Vec<(DraftChoice, Vec<(Pick, Vec<ActivePick>)>)>)> =
+        team_drafts.into_iter().zip(grouped_draft_choices).collect();
+    let grouped_drafts = team_drafts_level.grouped_by(&drafts);
+    let draft_level: Vec<(
+        Draft,
+        Vec<(TeamDraft, Vec<(DraftChoice, Vec<(Pick, Vec<ActivePick>)>)>)>,
+    )> = drafts.into_iter().zip(grouped_drafts).collect();
+    let fantasy_team_map: HashMap<Uuid, FantasyTeam> = fantasy_teams
+        .into_iter()
+        .map(|ft| (ft.fantasy_team_id, ft))
+        .collect();
+    let out: Vec<ApiDraft> = draft_level
+        .into_iter()
+        .map(|(d, v)| {
+            let mut league_id: Option<Uuid> = None;
+            let team_drafts = v
+                .into_iter()
+                .map(|(td, v)| {
+                    let mut total_active_picks: Vec<ApiPick> = vec![];
+                    let ft = fantasy_team_map.get(&td.fantasy_team_id).unwrap();
+                    league_id = Some(ft.league_id);
+                    let draft_choices = v
+                        .into_iter()
+                        .map(|(dc, picks)| {
+                            let pick_opt = picks.into_iter().nth(0);
+                            if let Some((pick, active_picks)) = pick_opt {
+                                total_active_picks.extend(
+                                    active_picks
+                                        .iter()
+                                        .map(|ap| ApiPick {
+                                            pick_id: ap.pick_id,
+                                            player_id: pick.player_id,
+                                            timespan: ap.timespan,
+                                        })
+                                        .collect_vec(),
+                                );
+                                ApiDraftChoice2 {
+                                    draft_choice_id: dc.draft_choice_id,
+                                    timespan: dc.timespan,
+                                    pick: Some(pick),
+                                }
+                            } else {
+                                ApiDraftChoice2 {
+                                    draft_choice_id: dc.draft_choice_id,
+                                    timespan: dc.timespan,
+                                    pick: None,
+                                }
+                            }
+                        })
+                        .collect_vec();
+                    ApiTeamDraft {
+                        team_draft_id: td.team_draft_id,
+                        fantasy_team_id: ft.fantasy_team_id,
+                        name: ft.name.clone(),
+                        external_user_id: ft.external_user_id,
+                        meta: ft.meta.clone(),
+                        draft_choices: Some(draft_choices),
+                        active_picks: Some(total_active_picks),
+                    }
+                })
+                .collect_vec();
+            // I believe it's impossible that team_drafts is empty if we have valid-pick ids
+            // guess could pass invalid pick-ids as bug?
+            ApiDraft {
+                league_id: league_id.unwrap(),
+                draft_id: d.draft_id,
+                period_id: d.period_id,
+                meta: d.meta,
+                team_drafts: Some(team_drafts),
+            }
+        })
+        .collect_vec();
+    Ok(out)
+}
+
+pub fn get_full_drafts(
+    conn: &PgConn,
+    draft_ids_filt: Option<Vec<&Uuid>>,
+) -> Result<Vec<ApiDraft>, diesel::result::Error> {
+    let drafts: Vec<Draft> = match draft_ids_filt {
+        Some(draft_ids) => drafts::table
+            .filter(drafts::draft_id.eq(any(draft_ids)))
+            .load(conn)?,
+        None => drafts::table.load(conn)?,
+    };
+    let team_drafts: Vec<TeamDraft> = TeamDraft::belonging_to(&drafts).load(conn)?;
+    let fantasy_team_ids = team_drafts
+        .iter()
+        .map(|td| td.fantasy_team_id)
+        .collect_vec();
+    let fantasy_teams: Vec<FantasyTeam> = fantasy_teams::table
+        .filter(fantasy_teams::fantasy_team_id.eq(any(fantasy_team_ids)))
+        .load(conn)?;
+    let draft_choices: Vec<DraftChoice> = DraftChoice::belonging_to(&team_drafts).load(conn)?;
+    let picks: Vec<Pick> = Pick::belonging_to(&draft_choices).load(conn)?;
+    let active_picks: Vec<ActivePick> = ActivePick::belonging_to(&picks).load(conn)?;
+    let draft_ids = team_drafts.iter().map(|x| x.draft_id).collect_vec();
+    let drafts: Vec<Draft> = drafts::table
+        .filter(drafts::draft_id.eq(any(draft_ids)))
+        .load(conn)?;
+
+    let grouped_active_picks = active_picks.grouped_by(&picks);
+    let pick_level: Vec<(Pick, Vec<ActivePick>)> =
+        picks.into_iter().zip(grouped_active_picks).collect_vec();
+    let grouped_picks = pick_level.grouped_by(&fantasy_teams);
+    let draft_choices_and_picks: Vec<(DraftChoice, Vec<(Pick, Vec<ActivePick>)>)> =
+        draft_choices.into_iter().zip(grouped_picks).collect();
+    let grouped_draft_choices = draft_choices_and_picks.grouped_by(&team_drafts);
+    let team_drafts_level: Vec<(TeamDraft, Vec<(DraftChoice, Vec<(Pick, Vec<ActivePick>)>)>)> =
+        team_drafts.into_iter().zip(grouped_draft_choices).collect();
+    let grouped_drafts = team_drafts_level.grouped_by(&drafts);
+    let draft_level: Vec<(
+        Draft,
+        Vec<(TeamDraft, Vec<(DraftChoice, Vec<(Pick, Vec<ActivePick>)>)>)>,
+    )> = drafts.into_iter().zip(grouped_drafts).collect();
+    let fantasy_team_map: HashMap<Uuid, FantasyTeam> = fantasy_teams
+        .into_iter()
+        .map(|ft| (ft.fantasy_team_id, ft))
+        .collect();
+    let out: Vec<ApiDraft> = draft_level
+        .into_iter()
+        .map(|(d, v)| {
+            let mut league_id: Option<Uuid> = None;
+            let team_drafts = v
+                .into_iter()
+                .map(|(td, v)| {
+                    let mut total_active_picks: Vec<ApiPick> = vec![];
+                    let ft = fantasy_team_map.get(&td.fantasy_team_id).unwrap();
+                    league_id = Some(ft.league_id);
+                    let draft_choices = v
+                        .into_iter()
+                        .map(|(dc, picks)| {
+                            let pick_opt = picks.into_iter().nth(0);
+                            if let Some((pick, active_picks)) = pick_opt {
+                                total_active_picks.extend(
+                                    active_picks
+                                        .iter()
+                                        .map(|ap| ApiPick {
+                                            pick_id: ap.pick_id,
+                                            player_id: pick.player_id,
+                                            timespan: ap.timespan,
+                                        })
+                                        .collect_vec(),
+                                );
+                                ApiDraftChoice2 {
+                                    draft_choice_id: dc.draft_choice_id,
+                                    timespan: dc.timespan,
+                                    pick: Some(pick),
+                                }
+                            } else {
+                                ApiDraftChoice2 {
+                                    draft_choice_id: dc.draft_choice_id,
+                                    timespan: dc.timespan,
+                                    pick: None,
+                                }
+                            }
+                        })
+                        .collect_vec();
+                    ApiTeamDraft {
+                        team_draft_id: td.team_draft_id,
+                        fantasy_team_id: ft.fantasy_team_id,
+                        name: ft.name.clone(),
+                        external_user_id: ft.external_user_id,
+                        meta: ft.meta.clone(),
+                        draft_choices: Some(draft_choices),
+                        active_picks: Some(total_active_picks),
+                    }
+                })
+                .collect_vec();
+            ApiDraft {
+                league_id: league_id.unwrap(),
+                draft_id: d.draft_id,
+                period_id: d.period_id,
+                meta: d.meta,
+                team_drafts: Some(team_drafts),
+            }
+        })
+        .collect_vec();
+    Ok(out)
+}
+
+//     #[derive(Deserialize, Serialize, Debug)]
+// pub struct ApiTeamDraft {
+//     pub team_draft_id: Uuid,
+//     pub fantasy_team_id: Uuid,
+//     pub name: String,
+//     pub league_id: Uuid,
+//     pub external_user_id: Uuid,
+//     pub meta: serde_json::Value,
+//     #[serde(skip_serializing_if = "Option::is_none")]
+//     pub draft_choices: Option<Vec<ApiDraftChoice2>>,
+//     #[serde(skip_serializing_if = "Option::is_none")]
+//     pub active_picks: Option<Vec<ApiPick>>,
+// }
+
+// #[derive(Deserialize, Serialize, Debug)]
+// pub struct ApiPick {
+//     pub pick_id: Uuid,
+//     pub player_id: Uuid,
+//     #[serde(with = "my_timespan_format")]
+//     pub timespan: DieselTimespan,
+// }
+
+// #[derive(Deserialize, Serialize, Debug, LabelledGeneric)]
+// pub struct ApiDraftChoice2 {
+//     pub draft_choice_id: Uuid,
+//     #[serde(with = "my_timespan_format")]
+//     pub timespan: DieselTimespan,
+//     pub pick: Option<Pick>,
+// }
+
+// ApiDraft {
+//     pub league_id: Uuid,
+//     pub draft_id: Uuid,
+//     pub period_id: Uuid,
+//     pub meta: serde_json::Value,
+//     #[serde(skip_serializing_if = "Option::is_none")]
+//     pub team_drafts: Option<Vec<ApiTeamDraft>>,
+// }
