@@ -10,38 +10,36 @@ WORKDIR /home/rust/leaderboard
 COPY --chown=rust:rust Cargo.toml .
 COPY --chown=rust:rust Cargo.lock .
 # Just to get diesel_utils and warp_ws_server onto container. In future these can be published crates
-RUN git clone https://github.com/open-fantasy-league/fantasy-sport-api-rust.git /home/rust/fantasy-sport-api-rust
+ADD https://api.github.com/repos/open-fantasy-league/fantasy-sport-api-rust/git/refs/heads/master version.json
+RUN git clone -b master https://github.com/open-fantasy-league/fantasy-sport-api-rust.git /home/rust/fantasy-sport-api-rust
 RUN mv /home/rust/fantasy-sport-api-rust/diesel_utils /home/rust/diesel_utils
 RUN mv /home/rust/fantasy-sport-api-rust/ws_server /home/rust/ws_server
 
 RUN echo "fn main() {}" > /home/rust/leaderboard/src/main.rs
-RUN cargo build
+RUN cargo build --release
 
 # We need to touch our real main.rs file or else docker will use
 # the cached one.
 COPY --chown=rust:rust . .
-#RUN chmod +x /home/rust/leaderboard/run.sh
 RUN touch /home/rust/leaderboard/src/main.rs
 
 # RUN cargo test
-#RUN cargo build --release
 # Current diesel_cli compile on rust-musl is borken
+# So Im copying my local already built diesel binary
 #RUN cargo install diesel_cli --no-default-features --features postgres
-RUN cargo build
+RUN cargo build --release
 
 # Size optimization
 #RUN strip target/x86_64-unknown-linux-musl/release/leaderboard_server
 
 # Start building the final image
-# THis doesnt work because need diesel cli to run migrations
-# can actually just copy diesel binary from builder
-# https://github.com/guangie88/diesel-cli/blob/master/Dockerfile
-# FROM scratch
-# WORKDIR /home/rust/leaderboard
-# #COPY --from=builder /home/rust/leaderboard/target/x86_64-unknown-linux-musl/release/leaderboard_server .
-# COPY --from=builder /home/rust/leaderboard/target/x86_64-unknown-linux-musl/debug/leaderboard_server .
-RUN cp /home/rust/leaderboard/target/x86_64-unknown-linux-musl/debug/leaderboard_server .
-# # RUN diesel setup --database-url postgres://fantasy:fantasy@db/leaderboard
-# # RUN diesel migration run --database-url postgres://fantasy:fantasy@db/leaderboard
-# RUN ls -la ./
-ENTRYPOINT ["./run.sh"]
+
+# Scratch is awkward as doesnt have /bash or /sh, so its hard to chain the 3 commands needed on start
+# (Have to wait for pg to be started before running migrations, cant do in the building)
+#FROM scratch
+#WORKDIR /home/rust/leaderboard
+#COPY --from=builder /home/rust/leaderboard/target/x86_64-unknown-linux-musl/debug/leaderboard_server .
+#COPY --from=builder /home/rust/leaderboard/diesel-cli-bin /home/rust/leaderboard/diesel
+RUN cp /home/rust/leaderboard/target/x86_64-unknown-linux-musl/release/leaderboard_server .
+RUN mv diesel-cli-bin diesel
+#ENTRYPOINT ["./run.sh"]

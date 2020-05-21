@@ -1,5 +1,5 @@
 [package]
-name = "result_server"
+name = "fantasy_server"
 version = "0.1.0"
 authors = ["johnnyk"]
 edition = "2018"
@@ -37,3 +37,4 @@ url = "2.0.0"
 
 warp_ws_server = { path = "../ws_server" }
 diesel_utils = { path = "../diesel_utils" }
+openssl = "*"

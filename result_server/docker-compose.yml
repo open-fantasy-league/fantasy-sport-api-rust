@@ -1,0 +1,41 @@
+version: '3.3'
+
+services:
+  api:
+    build: .
+    depends_on:
+      - db
+    environment:
+      STAGE: run
+      DATABASE_URL: postgres://fantasy:fantasy@db/result
+      RESULT_DB: postgres://fantasy:fantasy@db/result
+      RESULT_PORT: 3001
+    networks:
+      - default
+    ports:
+      - 3001:3001
+    restart: always
+    working_dir: /home/rust/result
+    command: /bin/bash -c "./diesel setup && ./diesel migration run && ./result_server"
+
+  db:
+    build:
+      context: .
+      dockerfile: db.Dockerfile
+    environment:
+      POSTGRES_USER: fantasy
+      POSTGRES_PASSWORD: fantasy
+      POSTGRES_DB: result
+    #image: postgres:latest
+    networks:
+      - default
+    ports:
+      - 3101:5432
+    restart: always
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      #- ./scripts:/docker-entrypoint-initdb.d
+volumes:
+  pg_data:
+
+# https://github.com/ghotiphud/rust-web-starter/blob/master/docker-compose.yml

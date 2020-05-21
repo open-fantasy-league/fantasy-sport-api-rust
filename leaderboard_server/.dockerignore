@@ -1,6 +1,4 @@
 target
-Dockerfile*
+*Dockerfile*
 docker-compose.yml
-db.Dockerfile
 .*
-postgres-data

@@ -1,4 +1,5 @@
-
+//https://github.com/emk/rust-musl-builder#making-diesel-work
+extern crate openssl;
 #[macro_use]
 extern crate diesel;
 extern crate dotenv;

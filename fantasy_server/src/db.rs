@@ -257,6 +257,7 @@ pub fn get_drafts_for_picks(
     conn: &PgConnection,
     pick_ids: Vec<Uuid>,
 ) -> Result<Vec<ApiDraft>, diesel::result::Error> {
+    // kill me now.
     let picks: Vec<Pick> = picks::table
         .filter(picks::pick_id.eq(any(pick_ids)))
         .load(conn)?;
@@ -358,6 +359,7 @@ pub fn get_full_drafts(
     conn: &PgConn,
     draft_ids_filt: Option<Vec<&Uuid>>,
 ) -> Result<Vec<ApiDraft>, diesel::result::Error> {
+    // kill me again.
     let drafts: Vec<Draft> = match draft_ids_filt {
         Some(draft_ids) => drafts::table
             .filter(drafts::draft_id.eq(any(draft_ids)))

@@ -24,3 +24,4 @@ futures = "^0.3"
 warp_ws_server = { path = "../ws_server" }
 diesel_utils = { path = "../diesel_utils" }
 async-trait = "0.1.30"
+openssl = "*"

@@ -6,19 +6,17 @@ services:
     depends_on:
       - db
     environment:
-      STAGE: test
-      SQLALCHEMY_DATABASE_URI: postgresql+psycopg2://test:test@db/test
+      STAGE: run
+      DATABASE_URL: postgres://fantasy:fantasy@db/leaderboard
       LEADERBOARD_DB: postgres://fantasy:fantasy@db/leaderboard
       LEADERBOARD_PORT: 3002
     networks:
       - default
     ports:
       - 3002:3002
-    # volumes:
-    #   - ./app:/usr/src/app/app
-    #   - ./migrations:/usr/src/app/migrations
     restart: always
-    command: bash -c "bash ./wait-for-it.sh db:5432 -q -- diesel setup && cargo watch -x run"
+    working_dir: /home/rust/leaderboard
+    command: /bin/bash -c "./diesel setup && ./diesel migration run && ./leaderboard_server"
 
   db:
     build:
@@ -28,7 +26,7 @@ services:
       POSTGRES_USER: fantasy
       POSTGRES_PASSWORD: fantasy
       POSTGRES_DB: leaderboard
-    image: postgres:latest
+    #image: postgres:latest
     networks:
       - default
     ports:
@@ -36,8 +34,6 @@ services:
     restart: always
     volumes:
       - pg_data:/var/lib/postgresql/data
-      #- ./postgres-data:/var/lib/postgresql/data
-      #- ./scripts:/docker-entrypoint-initdb.d
 volumes:
   pg_data:
 
