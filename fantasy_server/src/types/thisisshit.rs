@@ -10,67 +10,55 @@ use uuid::Uuid;
 pub enum ResultMsgs {
     SubTeam {
         message_id: Uuid,
-        data: ApiTeamsAndPlayers,
+        data: Vec<ApiTeamWithPlayersHierarchy>,
         mode: String,
     },
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct ApiTeamsAndPlayers {
-    pub teams: Vec<ApiTeam>,
-    pub players: Vec<ApiPlayer>,
-    pub team_players: Vec<TeamPlayer>,
-}
-#[derive(Deserialize, Serialize, Debug)]
-pub struct TeamPlayer {
-    #[serde(skip_serializing)]
-    team_player_id: Uuid,
+pub struct ApiTeamWithPlayersHierarchy {
     pub team_id: Uuid,
-    pub player_id: Uuid,
-    #[serde(with = "my_timespan_format")]
-    pub timespan: DieselTimespan,
-}
-
-#[derive(Deserialize, Serialize, Debug)]
-pub struct ApiTeamPlayer {
-    pub team_id: Uuid,
-    pub player_id: Uuid,
-    #[serde(with = "my_timespan_format")]
-    pub timespan: DieselTimespan,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ApiTeam {
-    pub team_id: Uuid,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub names: Option<Vec<ApiTeamName>>,
     pub meta: serde_json::Value,
-    pub names: Vec<ApiTeamName>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub players: Option<Vec<ApiTeamPlayerOut>>,
+}
+#[derive(Deserialize, Serialize, Debug)]
+pub struct ApiTeamPlayerOut {
+    pub team_id: Uuid,
+    pub player: ApiPlayer,
+    #[serde(with = "my_timespan_format")]
+    pub timespan: DieselTimespan,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug)]
+pub struct ApiTeamName {
+    pub name: String,
+    #[serde(with = "my_timespan_format")]
+    pub timespan: DieselTimespan,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct ApiPlayer {
     pub player_id: Uuid,
     pub meta: serde_json::Value,
-    pub names: Vec<ApiPlayerName>,
-    pub positions: Vec<ApiPlayerPosition>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub names: Option<Vec<ApiPlayerName>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub positions: Option<Vec<ApiPlayerPosition>>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct ApiPlayerName {
     pub name: String,
     #[serde(with = "my_timespan_format")]
     pub timespan: DieselTimespan,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct ApiPlayerPosition {
     pub position: String,
-    #[serde(with = "my_timespan_format")]
-    pub timespan: DieselTimespan,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct ApiTeamName {
-    pub name: String,
     #[serde(with = "my_timespan_format")]
     pub timespan: DieselTimespan,
 }

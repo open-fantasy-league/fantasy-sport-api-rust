@@ -3,11 +3,12 @@ use futures_util::{StreamExt, SinkExt};
 use url;
 use uuid::Uuid;
 use crate::types::thisisshit::*;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, MutexGuard};
 use std::sync::Arc;
 use warp_ws_server::BoxError;
 use std::collections::HashMap;
 use chrono::{Utc, DateTime};
+use std::ops::RangeBounds;
 // TODO am i using a different library to what warps using?
 // i.e. can dependencies be reduced?
 
@@ -36,13 +37,13 @@ pub async fn listen_pick_results(
         match serde_json::from_str(&msg.to_text()?)?{
             ResultMsgs::SubTeam{message_id, data, mode} => {
                 let now = Utc::now();
-                let (positions, teams) = build_team_and_position_maps(
-                    &data, now
-                );
                 let mut player_position_cache = player_position_cache_mut.lock().await;
                 let mut player_team_cache = player_team_cache_mut.lock().await;
-                *player_position_cache = Some(positions);
-                *player_team_cache = Some(teams);
+                update_team_and_position_maps(
+                    &data, now, player_position_cache, player_team_cache
+                );
+                // *player_position_cache = Some(positions);
+                // *player_team_cache = Some(teams);
                 println!("Built player position and team maps")
             }
         }
@@ -53,24 +54,37 @@ pub async fn listen_pick_results(
     Ok(())
 }
 
-fn build_team_and_position_maps(teams_and_players: &ApiTeamsAndPlayers, time: DateTime<Utc>) -> (HashMap<Uuid, String>, HashMap<Uuid, Uuid>){
+fn update_team_and_position_maps(
+    teams_and_players: &Vec<ApiTeamWithPlayersHierarchy>,
+    time: DateTime<Utc>,
+    mut position_map_mut: MutexGuard<Option<HashMap<Uuid, String>>>, mut team_map_mut: MutexGuard<Option<HashMap<Uuid, Uuid>>>
+){
     //TODO could probably do fancy and build as iterate. no inserts
-    let mut positions: HashMap<Uuid, String> = HashMap::new();
-    let mut teams: HashMap<Uuid, Uuid> = HashMap::new();
+    if let None = *position_map_mut{
+        *position_map_mut = Some(HashMap::new());
+    }
+    if let None = *team_map_mut{
+        *team_map_mut = Some(HashMap::new());
+    }
     // We only care about the latest team/position
     // (That might not technically be true, i.e. if a future transfer is confirmed, next team might already be in db)
-    use std::ops::RangeBounds;
-    teams_and_players.team_players.iter().for_each(|tp|{
-        if tp.timespan.contains(&time){
-            teams.insert(tp.player_id, tp.team_id);
+    // TODO needs to handle updates, not just overwrite whole thing
+    teams_and_players.into_iter().for_each(|t|{
+        let team_id = t.team_id;
+        if let Some(players) = &t.players{
+            players.iter().for_each(|tp|{
+                if tp.timespan.contains(&time){
+                    // could `map` rather than as_mut.unwrap
+                    (*team_map_mut).as_mut().unwrap().insert(tp.player.player_id, team_id);
+                };
+                if let Some(positions) = &tp.player.positions{
+                    positions.iter().for_each(|pos|{
+                        if pos.timespan.contains(&time){
+                            (*position_map_mut).as_mut().unwrap().insert(tp.player.player_id, pos.position.clone());
+                        }
+                    })
+                }
+            });
         }
     });
-    teams_and_players.players.iter().for_each(|player| {
-        player.positions.iter().for_each(|p|{
-            if p.timespan.contains(&time){
-                positions.insert(player.player_id, p.position.clone());
-            }
-        })
-    });
-    (positions, teams)
 }
