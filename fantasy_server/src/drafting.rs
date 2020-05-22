@@ -201,7 +201,7 @@ pub async fn draft_handler(
     player_team_cache_mut: Arc<Mutex<Option<HashMap<Uuid, Uuid>>>>, 
     mut ws_conns: WSConnections_
 ) {
-    println!("In draft builder");
+    println!("In draft handler");
     let notify = Arc::new(Notify::new());
     let notify2 = notify.clone();
     // TODO handle error

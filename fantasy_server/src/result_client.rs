@@ -13,14 +13,14 @@ use chrono::{Utc, DateTime};
 
 
 pub async fn listen_pick_results(
-    result_port: u16, player_position_cache_mut: Arc<Mutex<Option<HashMap<Uuid, String>>>>, player_team_cache_mut: Arc<Mutex<Option<HashMap<Uuid, Uuid>>>>
+    result_addr: String, result_port: u16, player_position_cache_mut: Arc<Mutex<Option<HashMap<Uuid, String>>>>, player_team_cache_mut: Arc<Mutex<Option<HashMap<Uuid, Uuid>>>>
 ) -> Result<(), BoxError>{
     // connect to websocket on port
     // subscribe to teams/players.
     //build a map of players teams/positions
     // update map with new messages
     // use arc to share map with draft-thread
-    let url = url::Url::parse(&format!("ws://localhost:{}", result_port)).unwrap();
+    let url = url::Url::parse(&format!("ws://{}:{}", result_addr, result_port)).unwrap();
 
     //let (stdin_tx, stdin_rx) = futures_channel::mpsc::unbounded();
     //tokio::spawn(read_stdin(stdin_tx));
@@ -29,7 +29,7 @@ pub async fn listen_pick_results(
     println!("WebSocket handshake has been successfully completed");
 
     //let (write, read) = ws_stream.split();
-    let sub_teams_msg = format!("{{\"Method\": \"SubTeam\", \"data\": {{\"toggle\": true}}, \"message_id\": {}}}", Uuid::new_v4());
+    let sub_teams_msg = format!("{{\"Method\": \"SubTeam\", \"data\": {{\"toggle\": true}}, \"message_id\": \"{}\"}}", Uuid::new_v4());
     ws_stream.send(Message::text(sub_teams_msg)).await?;
     while let Some(msg) = ws_stream.next().await {
         let msg = msg?;

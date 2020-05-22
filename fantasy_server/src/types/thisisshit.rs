@@ -5,7 +5,7 @@ use uuid::Uuid;
 //TODO how to "import" these from other crates?
 // Dont think can use intermediate/3rd crate, because need the insertable/queryable diesel stuff
 // which wont work without importing the schema.
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(tag = "method")]
 pub enum ResultMsgs {
     SubTeam {

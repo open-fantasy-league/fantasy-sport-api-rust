@@ -73,10 +73,12 @@ impl WSHandler<subscriptions::SubType, Caches> for MyWsHandler{
 
 #[tokio::main]
 async fn main() {
+    println!("Starting fantasy server");
     dotenv().ok();
     let db_url = env::var("FANTASY_DB").expect("DATABASE_URL env var must be set");
     let port: u16 = env::var("FANTASY_PORT").expect("FANTASY_PORT env var must be set").parse().expect("Port must be a number you lemming.");
     let result_port: u16 = env::var("RESULT_PORT").expect("RESULT_PORT env var must be set").parse().expect("Port must be a number you lemming.");
+    let result_addr: String = env::var("RESULT_ADDR").unwrap_or("localhost".to_string());
 
     //let teams_and_players_mut: Arc<Mutex<Option<ApiTeamsAndPlayers>>> = Arc::new(Mutex::new(None));
     let player_position_cache: Arc<Mutex<Option<HashMap<Uuid, String>>>> = Arc::new(Mutex::new(None));
@@ -114,7 +116,7 @@ async fn main() {
     //let server = warp::serve(ws_router).run(([127, 0, 0, 1], 3030));
     //draft_handler.await.map_err(|e|println!("{}", e.to_string()));
     join!(
-        listen_pick_results(result_port, mapper_listener_player_position_cache, mapper_listener_player_team_cache),
+        listen_pick_results(result_addr, result_port, mapper_listener_player_position_cache, mapper_listener_player_team_cache),
         drafting::draft_handler(draft_handler_pool, draft_handler_player_position_cache, draft_handler_player_team_cache, draft_handler_ws_conns),
         draft_builder,
         warp::serve(ws_router).run(([0, 0, 0, 0], port)));

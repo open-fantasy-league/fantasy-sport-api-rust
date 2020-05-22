@@ -11,6 +11,7 @@ services:
       FANTASY_DB: postgres://fantasy:fantasy@db/fantasy
       FANTASY_PORT: 3003
       RESULT_PORT: 3001
+      RESULT_ADDR: result_api
     networks:
       - default
     ports:

@@ -1,0 +1,114 @@
+version: '3.3'
+
+services:
+  result_api:
+    build:
+      context: ./result_server
+    depends_on:
+      - result_db
+    environment:
+      STAGE: run
+      DATABASE_URL: postgres://fantasy:fantasy@result_db/result
+      RESULT_DB: postgres://fantasy:fantasy@result_db/result
+      RESULT_PORT: 3001
+    networks:
+      - default
+    ports:
+      - 3001:3001
+    restart: always
+    working_dir: /home/rust/result
+    command: /bin/bash -c "./diesel setup && ./diesel migration run && ./result_server"
+
+  result_db:
+    build:
+      context: ./result_server
+      dockerfile: db.Dockerfile
+    environment:
+      POSTGRES_USER: fantasy
+      POSTGRES_PASSWORD: fantasy
+      POSTGRES_DB: result
+    networks:
+      - default
+    ports:
+      - 3101:5432
+    restart: always
+    volumes:
+      - result_pg_data:/var/lib/postgresql/data
+
+  fantasy_api:
+    build:
+      context: ./fantasy_server
+    depends_on:
+      - fantasy_db
+#      - result_api
+    environment:
+      STAGE: run
+      DATABASE_URL: postgres://fantasy:fantasy@fantasy_db/fantasy
+      FANTASY_DB: postgres://fantasy:fantasy@fantasy_db/fantasy
+      FANTASY_PORT: 3003
+      RESULT_PORT: 3001
+      RESULT_ADDR: result_api
+    networks:
+      - default
+    ports:
+      - 3003:3003
+    restart: always
+    working_dir: /home/rust/fantasy
+    command: /bin/bash -c "./diesel setup && ./diesel migration run && sleep 10 && ./fantasy_server"
+
+  fantasy_db:
+    build:
+      context: ./fantasy_server
+      dockerfile: db.Dockerfile
+    environment:
+      POSTGRES_USER: fantasy
+      POSTGRES_PASSWORD: fantasy
+      POSTGRES_DB: fantasy
+    networks:
+      - default
+    ports:
+      - 3103:5432
+    restart: always
+    volumes:
+      - fantasy_pg_data:/var/lib/postgresql/data
+
+
+  leaderboard_api:
+    build:
+      context: ./leaderboard_server
+    depends_on:
+      - leaderboard_db
+    environment:
+      STAGE: run
+      DATABASE_URL: postgres://fantasy:fantasy@leaderboard_db/leaderboard
+      LEADERBOARD_DB: postgres://fantasy:fantasy@leaderboard_db/leaderboard
+      LEADERBOARD_PORT: 3002
+    networks:
+      - default
+    ports:
+      - 3002:3002
+    restart: always
+    working_dir: /home/rust/leaderboard
+    command: /bin/bash -c "./diesel setup && ./diesel migration run && ./leaderboard_server"
+
+  leaderboard_db:
+    build:
+      context: ./leaderboard_server
+      dockerfile: db.Dockerfile
+    environment:
+      POSTGRES_USER: fantasy
+      POSTGRES_PASSWORD: fantasy
+      POSTGRES_DB: leaderboard
+    networks:
+      - default
+    ports:
+      - 3102:5432
+    restart: always
+    volumes:
+      - leaderboard_pg_data:/var/lib/postgresql/data
+volumes:
+  fantasy_pg_data:
+  result_pg_data:
+  leaderboard_pg_data:
+
+# https://github.com/ghotiphud/rust-web-starter/blob/master/docker-compose.yml
