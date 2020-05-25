@@ -2,7 +2,8 @@
 Core fantasy sports api in rust
 
 # Running
-Just go into any server folder and `reset && cargo run`
+`sudo docker-compose up --build --remove-orphans`
+Without docker, just go into any server folder and `reset && cargo run`
 
 # Notes
 Have "master" api for users, which routes between separate
