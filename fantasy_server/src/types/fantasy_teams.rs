@@ -1,4 +1,4 @@
-use super::{leagues::*, drafts::*};
+use super::{drafts::*, leagues::*};
 use crate::schema::*;
 use diesel_utils::{my_timespan_format, DieselTimespan};
 use serde::{Deserialize, Serialize};

@@ -15,7 +15,8 @@ pub struct ApiCompetition{
     pub meta: serde_json::Value,
     #[serde(with = "my_timespan_format")]
     pub timespan: DieselTimespan,
-    pub series: Vec<ApiSeries>
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub series: Option<Vec<ApiSeries>>
 }
 
 #[derive(Queryable, Serialize, Debug, Identifiable, Associations, Insertable, LabelledGeneric)]
@@ -42,40 +43,42 @@ pub struct CompetitionUpdate {
 
 pub type CompetitionHierarchy = Vec<(
     Competition,
-    Vec<(
+    Option<Vec<(
         Series,
         Vec<TeamSeriesResult>,
         Vec<(Match, Vec<PlayerResult>, Vec<TeamMatchResult>)>,
-    )>,
+    )>>,
 )>;
 
 pub type CompetitionHierarchyOptyRow = (
     Competition,
-    Vec<(
+    Option<Vec<(
         Series,
         Option<Vec<TeamSeriesResult>>,
         Option<Vec<(Match, Option<Vec<PlayerResult>>, Option<Vec<TeamMatchResult>>)>>,
-    )>,
+    )>>,
 );
 
 impl ApiCompetition{
     // TODO could commonise this better
     // Vec<(Competition, Vec<(Series, Vec<TeamSeriesResult>, Vec<(Match, Vec<PlayerResult>, Vec<TeamMatchResult>)>)>)>
     pub fn from_rows(rows: CompetitionHierarchy) -> Vec<Self>{
-        rows.into_iter().map(|(c, v)| {
+        rows.into_iter().map(|(c, v_opt)| {
             Self{
                 competition_id: c.competition_id, name: c.name, meta: c.meta, timespan: c.timespan,
-                series: v.into_iter().map(|(s, tr, v)|{
-                    ApiSeries{
-                        series_id: s.series_id, name: s.name, meta: s.meta, timespan: s.timespan,
-                        team_results: Some(tr), matches: Some(v.into_iter().map(|(m, pr, tr)|{
-                            ApiMatch{
-                                match_id: m.match_id, name: m.name, meta: m.meta, timespan: m.timespan,
-                                player_results: Some(pr), team_results: Some(tr)
-                            }
-                        }).collect_vec())
-                    }
-                }).collect_vec()
+                series: v_opt.map(|v|{
+                    v.into_iter().map(|(s, tr, v)|{
+                        ApiSeries{
+                            series_id: s.series_id, name: s.name, meta: s.meta, timespan: s.timespan,
+                            team_results: Some(tr), matches: Some(v.into_iter().map(|(m, pr, tr)|{
+                                ApiMatch{
+                                    match_id: m.match_id, name: m.name, meta: m.meta, timespan: m.timespan,
+                                    player_results: Some(pr), team_results: Some(tr)
+                                }
+                            }).collect_vec())
+                        }
+                    }).collect_vec()
+                })
             }
         }).collect_vec()
     }
@@ -84,7 +87,7 @@ impl ApiCompetition{
         rows.into_iter().map(|(c, v)| {
             Self{
                 competition_id: c.competition_id, name: c.name, meta: c.meta, timespan: c.timespan,
-                series: v.into_iter().map(|(s, v)|{
+                series: Some(v.into_iter().map(|(s, v)|{
                     ApiSeries{
                         series_id: s.series_id, name: s.name, meta: s.meta, timespan: s.timespan,
                         team_results: None, matches: Some(v.into_iter().map(|(m, pr, tr)|{
@@ -94,27 +97,29 @@ impl ApiCompetition{
                             }
                         }).collect_vec())
                     }
-                }).collect_vec()
+                }).collect_vec())
             }
         }).collect_vec()
     }
 
     pub fn from_opty_rows(rows: Vec<CompetitionHierarchyOptyRow>) -> Vec<Self>{
-        rows.into_iter().map(|(c, v)| {
+        rows.into_iter().map(|(c, v_opt)| {
             Self{
                 competition_id: c.competition_id, name: c.name, meta: c.meta, timespan: c.timespan,
-                series: v.into_iter().map(|(s, series_results, v)|{
-                    ApiSeries{
-                        series_id: s.series_id, name: s.name, meta: s.meta, timespan: s.timespan,
-                        team_results: series_results, matches: v.map(|v_inner| {
-                            v_inner.into_iter().map(|(m, pr, tr)|{
-                                ApiMatch{
-                                    match_id: m.match_id, name: m.name, meta: m.meta, timespan: m.timespan,
-                                    player_results: pr, team_results: tr
-                                }
-                        }).collect_vec()})
-                    }
-                }).collect_vec()
+                series: v_opt.map(|v|{
+                        v.into_iter().map(|(s, series_results, v)|{
+                        ApiSeries{
+                            series_id: s.series_id, name: s.name, meta: s.meta, timespan: s.timespan,
+                            team_results: series_results, matches: v.map(|v_inner| {
+                                v_inner.into_iter().map(|(m, pr, tr)|{
+                                    ApiMatch{
+                                        match_id: m.match_id, name: m.name, meta: m.meta, timespan: m.timespan,
+                                        player_results: pr, team_results: tr
+                                    }
+                            }).collect_vec()})
+                        }
+                    }).collect_vec()
+                })
             }
         }).collect_vec()
     }
@@ -146,18 +151,20 @@ impl ApiCompetition{
         ) = (vec![], vec![], vec![], vec![], vec![]);
         let raw_comps: Vec<Competition> = comps.into_iter().map(|c|{
             let competition_id = c.competition_id;
-            let mut new_series = c.series.into_iter().map(|s| {
-                let (
-                    s2, mut new_matches, mut new_player_res, mut new_team_match_res,
-                    mut new_team_results
-                ) = s.insertable(competition_id);
-                matches.append(&mut new_matches);
-                team_results.append(&mut new_team_results);
-                player_results.append(&mut new_player_res);
-                team_match_results.append(&mut new_team_match_res);
-                s2
-            }).collect_vec();
-            series.append(&mut new_series);
+            c.series.map(|s_vec|{
+                let mut new_series = s_vec.into_iter().map(|s| {
+                    let (
+                        s2, mut new_matches, mut new_player_res, mut new_team_match_res,
+                        mut new_team_results
+                    ) = s.insertable(competition_id);
+                    matches.append(&mut new_matches);
+                    team_results.append(&mut new_team_results);
+                    player_results.append(&mut new_player_res);
+                    team_match_results.append(&mut new_team_match_res);
+                    s2
+                }).collect_vec();
+                series.append(&mut new_series);
+            });
             Competition{competition_id, meta: c.meta, name: c.name, timespan: c.timespan}
         }).collect_vec();
         //let raw_comps: Vec<Competition> = comps.into_iter().map(transform_from).collect_vec();

@@ -277,7 +277,7 @@ pub fn get_full_competitions(
         matches_and_match_results
     )
     .grouped_by(&comps);
-    let everything: CompetitionHierarchy = comps.into_iter().zip(series_lvl).collect();
+    let everything: CompetitionHierarchy = comps.into_iter().zip(series_lvl.into_iter().map(Some).collect_vec()).collect();
     Ok(everything)
 }
 
@@ -299,7 +299,7 @@ pub fn get_publishable_series(
     let comp_ids: Vec<Uuid> = data.iter().map(|x| x.0.competition_id).collect();
     let comps = schema::competitions::table.filter(schema::competitions::competition_id.eq(any(comp_ids))).load::<Competition>(conn)?;
     let grouped = data.grouped_by(&comps);
-    Ok(comps.into_iter().zip(grouped).collect())
+    Ok(comps.into_iter().zip(grouped.into_iter().map(Some).collect_vec()).collect())
 }
 
 pub fn get_publishable_team_series_results(conn: &PgConnection, data: Vec<TeamSeriesResult>) -> Result<CompetitionHierarchy, diesel::result::Error>{
@@ -311,7 +311,7 @@ pub fn get_publishable_team_series_results(conn: &PgConnection, data: Vec<TeamSe
     let series_level: Vec<(Series, Vec<TeamSeriesResult>, Vec<(Match, Vec<PlayerResult>, Vec<TeamMatchResult>)>)> = izip!(
         series, grouped_by_series, None
     ).collect();
-    let grouped_comps = series_level.grouped_by(&comps);
+    let grouped_comps = series_level.grouped_by(&comps).into_iter().map(Some).collect_vec();
     Ok(comps.into_iter().zip(grouped_comps).collect())
 }
 
@@ -334,7 +334,7 @@ pub fn get_publishable_team_match_results(conn: &PgConnection, data: Vec<TeamMat
     let series_level: Vec<(Series, Option<Vec<TeamSeriesResult>>, Option<Vec<(Match, Option<Vec<PlayerResult>>, Option<Vec<TeamMatchResult>>)>>)> = izip!(
         series, vec![None; series_len], grouped_by_series.into_iter().map(Some).collect_vec()
     ).collect();
-    let grouped_comps = series_level.grouped_by(&comps);
+    let grouped_comps = series_level.grouped_by(&comps).into_iter().map(Some).collect_vec();
     Ok(comps.into_iter().zip(grouped_comps).collect())
 }
 
@@ -356,7 +356,7 @@ pub fn get_publishable_player_results(conn: &PgConnection, data: Vec<PlayerResul
     let series_level: Vec<(Series, Option<Vec<TeamSeriesResult>>, Option<Vec<(Match, Option<Vec<PlayerResult>>, Option<Vec<TeamMatchResult>>)>>)> = izip!(
         series, vec![None; series_len], grouped_by_series.into_iter().map(Some).collect_vec()
     ).collect();
-    let grouped_comps = series_level.grouped_by(&comps);
+    let grouped_comps = series_level.grouped_by(&comps).into_iter().map(Some).collect_vec();
     Ok(comps.into_iter().zip(grouped_comps).collect())
 }
 
