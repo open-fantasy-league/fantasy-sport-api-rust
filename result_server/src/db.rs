@@ -140,7 +140,7 @@ pub fn insert_team_names(
 ) -> Result<Vec<TeamName>, diesel::result::Error> {
     use crate::schema::team_names;
     // trim_timespans(conn, "team_name", t.team_id, new_timespan)
-    let trimmed: Vec<_> = trim_timespans_team_name(conn, "team_name", &new)?;
+    let _: Vec<_> = trim_timespans_team_name(conn, "team_name", &new)?;
     //let trimmed: Vec<TeamName> = trim_timespans_many::<ApiTeamNameNew, TeamName>(conn, "team_name", new)?;
     let inserted: Vec<TeamName> = insert!(conn, team_names::table, new)?;
     //inserted.append(&mut trimmed);
@@ -153,8 +153,7 @@ pub fn insert_player_names(
 ) -> Result<Vec<PlayerName>, diesel::result::Error> {
     use crate::schema::player_names;
     // trim_timespans(conn, "team_name", t.team_id, new_timespan)
-    let num_entries = new.len();
-    let trimmed: Vec<_> = trim_timespans_player_name(conn, "player_name", new)?;
+    let _: Vec<_> = trim_timespans_player_name(conn, "player_name", new)?;
     let inserted: Vec<PlayerName> = insert!(conn, player_names::table, new)?;
     //inserted.append(&mut trimmed);
     Ok(inserted)
@@ -166,8 +165,7 @@ pub fn insert_player_positions(
 ) -> Result<Vec<PlayerPosition>, diesel::result::Error> {
     use crate::schema::player_positions;
     // trim_timespans(conn, "team_name", t.team_id, new_timespan)
-    let num_entries = new.len();
-    let trimmed: Vec<_> = trim_timespans_player_position(conn, "player_position", new)?;
+    let _: Vec<_> = trim_timespans_player_position(conn, "player_position", new)?;
     let inserted: Vec<PlayerPosition> = insert!(conn, player_positions::table, new)?;
     //inserted.append(&mut trimmed);
     Ok(inserted)
@@ -179,77 +177,76 @@ pub fn insert_team_players(
 ) -> Result<Vec<TeamPlayer>, diesel::result::Error> {
     use crate::schema::team_players;
     // trim_timespans(conn, "team_name", t.team_id, new_timespan)
-    let num_entries = new.len();
-    let trimmed: Vec<_> = trim_timespans_team_player(conn, "team_player", new)?;
+    let _: Vec<_> = trim_timespans_team_player(conn, "team_player", new)?;
     let inserted: Vec<TeamPlayer> = insert!(conn, team_players::table, new)?;
     //inserted.append(&mut trimmed);
     Ok(inserted)
 }
 
-pub fn get_competition_ids_for_series(
-    conn: &PgConnection,
-    series_ids: &Vec<Uuid>,
-) -> Result<Vec<(Uuid, Uuid)>, diesel::result::Error> {
-    use crate::schema::competitions;
-    use crate::schema::series::dsl;
+// pub fn get_competition_ids_for_series(
+//     conn: &PgConnection,
+//     series_ids: &Vec<Uuid>,
+// ) -> Result<Vec<(Uuid, Uuid)>, diesel::result::Error> {
+//     use crate::schema::competitions;
+//     use crate::schema::series::dsl;
 
-    dsl::series
-        .select((dsl::series_id, dsl::competition_id))
-        .filter(dsl::series_id.eq(any(series_ids)))
-        .left_join(competitions::table)
-        .load(conn)
-}
+//     dsl::series
+//         .select((dsl::series_id, dsl::competition_id))
+//         .filter(dsl::series_id.eq(any(series_ids)))
+//         .left_join(competitions::table)
+//         .load(conn)
+// }
 
-pub fn get_competition_ids_for_matches(
-    conn: &PgConnection,
-    match_ids: &Vec<Uuid>,
-) -> Result<Vec<(Uuid, Uuid)>, diesel::result::Error> {
-    use crate::schema::matches;
-    use crate::schema::series;
-    // matches::table.inner_join(series::table).load(conn)
-    // TODO https://github.com/diesel-rs/diesel/issues/1129#issuecomment-324965108
-    matches::table
-        .inner_join(series::table)
-        .select((matches::match_id, series::competition_id))
-        .filter(matches::dsl::match_id.eq(any(match_ids)))
-        .load(conn)
-}
+// pub fn get_competition_ids_for_matches(
+//     conn: &PgConnection,
+//     match_ids: &Vec<Uuid>,
+// ) -> Result<Vec<(Uuid, Uuid)>, diesel::result::Error> {
+//     use crate::schema::matches;
+//     use crate::schema::series;
+//     // matches::table.inner_join(series::table).load(conn)
+//     // TODO https://github.com/diesel-rs/diesel/issues/1129#issuecomment-324965108
+//     matches::table
+//         .inner_join(series::table)
+//         .select((matches::match_id, series::competition_id))
+//         .filter(matches::dsl::match_id.eq(any(match_ids)))
+//         .load(conn)
+// }
 
-pub fn get_player_ids_to_team_ids(
-    conn: &PgConnection,
-    player_ids: &Vec<Uuid>,
-) -> Result<Vec<(Uuid, Uuid)>, diesel::result::Error> {
-    use crate::schema::team_players;
+// pub fn get_player_ids_to_team_ids(
+//     conn: &PgConnection,
+//     player_ids: &Vec<Uuid>,
+// ) -> Result<Vec<(Uuid, Uuid)>, diesel::result::Error> {
+//     use crate::schema::team_players;
 
-    team_players::table
-        .select((team_players::player_id, team_players::team_id))
-        .filter(team_players::player_id.eq(any(player_ids)))
-        .load(conn)
-}
+//     team_players::table
+//         .select((team_players::player_id, team_players::team_id))
+//         .filter(team_players::player_id.eq(any(player_ids)))
+//         .load(conn)
+// }
 
-pub fn get_all_teams(conn: &PgConnection) -> Result<Vec<(Team, TeamName)>, diesel::result::Error> {
-    use crate::schema::{team_names, teams};
-    teams::table.inner_join(team_names::table).load(conn)
-}
+// pub fn get_all_teams(conn: &PgConnection) -> Result<Vec<(Team, TeamName)>, diesel::result::Error> {
+//     use crate::schema::{team_names, teams};
+//     teams::table.inner_join(team_names::table).load(conn)
+// }
 
-pub fn get_all_players(
-    conn: &PgConnection,
-) -> Result<Vec<(Player, PlayerName, PlayerPosition)>, diesel::result::Error> {
-    use crate::schema::{player_names, players, player_positions};
-    players::table.inner_join(player_names::table).inner_join(player_positions::table).load(conn)
-}
+// pub fn get_all_players(
+//     conn: &PgConnection,
+// ) -> Result<Vec<(Player, PlayerName, PlayerPosition)>, diesel::result::Error> {
+//     use crate::schema::{player_names, players, player_positions};
+//     players::table.inner_join(player_names::table).inner_join(player_positions::table).load(conn)
+// }
 
-pub fn get_all_team_players(conn: &PgConnection) -> Result<Vec<TeamPlayer>, diesel::result::Error> {
-    use crate::schema::team_players;
-    team_players::table.load(conn)
-}
+// pub fn get_all_team_players(conn: &PgConnection) -> Result<Vec<TeamPlayer>, diesel::result::Error> {
+//     use crate::schema::team_players;
+//     team_players::table.load(conn)
+// }
 
-pub fn get_all_competitions(
-    conn: &PgConnection,
-) -> Result<Vec<Competition>, diesel::result::Error> {
-    use crate::schema::competitions;
-    competitions::table.load(conn)
-}
+// pub fn get_all_competitions(
+//     conn: &PgConnection,
+// ) -> Result<Vec<Competition>, diesel::result::Error> {
+//     use crate::schema::competitions;
+//     competitions::table.load(conn)
+// }
 
 pub fn get_full_competitions(
     conn: &PgConnection,
@@ -318,16 +315,6 @@ pub fn get_publishable_team_series_results(conn: &PgConnection, data: Vec<TeamSe
     Ok(comps.into_iter().zip(grouped_comps).collect())
 }
 
-/*
-pub type CompetitionHierarchy = Vec<(
-    Competition,
-    Vec<(
-        Series,
-        Vec<TeamSeriesResult>,
-        Vec<(Match, Vec<PlayerResult>, Vec<TeamMatchResult>)>,
-    )>,
-)>;
-*/
 // TODO commonise this stuff
 pub fn get_publishable_team_match_results(conn: &PgConnection, data: Vec<TeamMatchResult>) -> Result<Vec<CompetitionHierarchyOptyRow>, diesel::result::Error>{
     let inserted_ids: Vec<Uuid> = data.iter().map(|x| x.match_id).collect();
@@ -395,15 +382,21 @@ pub fn get_publishable_player_results(conn: &PgConnection, data: Vec<PlayerResul
 //     Ok(comps.into_iter().zip(grouped_comps).collect())
 // }
 
-pub fn get_teams_from_players(conn: &PgConn, player_ids: Vec<Uuid>)-> Result<Vec<ApiTeamWithPlayersHierarchy>, diesel::result::Error>{
+pub fn get_teams_from_players(conn: &PgConn, player_ids_filt: Option<Vec<Uuid>>)-> Result<Vec<ApiTeamWithPlayersHierarchy>, diesel::result::Error>{
     // let rows: Vec<(Player, TeamPlayer, Team, PlayerName, PlayerPosition)> = schema::players::table.filter(schema::players::player_id.eq(any(player_ids)))
     //    .inner_join(schema::team_players::table.inner_join(schema::teams::table))
     //    .inner_join(schema::player_names::table)
     //    .inner_join(schema::player_positions::table)
     //    .load(conn)?;
-    let team_players: Vec<TeamPlayer> = schema::team_players::table.filter(schema::team_players::player_id.eq(any(&player_ids))).load(conn)?;
+    let team_players: Vec<TeamPlayer> = match player_ids_filt{
+        Some(ref player_ids) => schema::team_players::table.filter(schema::team_players::player_id.eq(any(&player_ids))).load(conn),
+        None => schema::team_players::table.load(conn)
+    }?;
     //let players: Vec<Player> = Player::belonging_to(&team_players).load::<Player>(conn)?;
-    let players: Vec<Player> = schema::players::table.filter(schema::players::player_id.eq(any(&player_ids))).load(conn)?;
+    let players: Vec<Player> = match player_ids_filt{
+        Some(player_ids) => schema::players::table.filter(schema::players::player_id.eq(any(&player_ids))).load(conn),
+        None => schema::players::table.load(conn)
+    }?;
     //let team_players: Vec<TeamPlayer> = TeamPlayer::belonging_to(&players).load::<TeamPlayer>(conn)?;
     let player_names = PlayerName::belonging_to(&players).load::<PlayerName>(conn)?;
     let player_positions = PlayerPosition::belonging_to(&players).load::<PlayerPosition>(conn)?;

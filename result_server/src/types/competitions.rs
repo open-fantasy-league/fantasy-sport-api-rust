@@ -4,12 +4,9 @@ use crate::schema::{self, *};
 use uuid::Uuid;
 use serde_json;
 use frunk::LabelledGeneric;
-use frunk::labelled::transform_from;
 use super::{series::*, matches::*, results::*};
 use itertools::Itertools;
 use crate::diesel::RunQueryDsl;  // imported here so that can run db macros
-use crate::diesel::ExpressionMethods;
-use std::collections::HashMap;
 
 #[derive(Deserialize, Serialize, Debug, LabelledGeneric, Clone)]
 pub struct ApiCompetition{

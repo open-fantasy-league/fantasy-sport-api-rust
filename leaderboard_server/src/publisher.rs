@@ -90,7 +90,7 @@ impl Publishable<SubType> for ApiStat {
         publishables: &'b Vec<Self>,
         sub: &mut Subscription,
         sub_type: &SubType,
-        id_map_opt: &Option<HashMap<Uuid, Uuid>>,
+        _: &Option<HashMap<Uuid, Uuid>>,
     ) -> Vec<&'b Self> {
         match sub_type {
             SubType::League => publishables

@@ -1,11 +1,8 @@
-use crate::db;
 use crate::subscriptions::SubType;
-use crate::types::{competitions::*, series::*, teams::*, matches::*, results::*, players::*};
-use diesel_utils::PgConn;
+use crate::types::{competitions::*, teams::*};
 use std::collections::HashMap;
 use uuid::Uuid;
 use warp_ws_server::*;
-use itertools::Itertools;
 
 impl Publishable<SubType> for Competition {
     fn message_type<'a>() -> &'a str {
@@ -58,7 +55,7 @@ impl Publishable<SubType> for ApiTeamWithPlayersHierarchy{
         publishables: &'b Vec<Self>,
         sub: &mut Subscription,
         sub_type: &SubType,
-        id_map_opt: &Option<HashMap<Uuid, Uuid>>,
+        _: &Option<HashMap<Uuid, Uuid>>,
     ) -> Vec<&'b Self> {
         match sub_type {
             SubType::Team => {

@@ -30,15 +30,18 @@ pub async fn listen_pick_results(
     println!("WebSocket handshake has been successfully completed");
 
     //let (write, read) = ws_stream.split();
-    let sub_teams_msg = format!("{{\"Method\": \"SubTeam\", \"data\": {{\"toggle\": true}}, \"message_id\": \"{}\"}}", Uuid::new_v4());
+    let sub_teams_msg = format!("{{\"method\": \"SubTeam\", \"data\": {{\"toggle\": true}}, \"message_id\": \"{}\"}}", Uuid::new_v4());
     ws_stream.send(Message::text(sub_teams_msg)).await?;
     while let Some(msg) = ws_stream.next().await {
         let msg = msg?;
+        println!("msg erm: {:?}", msg);
         match serde_json::from_str(&msg.to_text()?)?{
-            ResultMsgs::SubTeam{message_id, data, mode} => {
+            ResultMsgs::SubTeam{message_id: _, data, mode: _} => {
                 let now = Utc::now();
-                let mut player_position_cache = player_position_cache_mut.lock().await;
-                let mut player_team_cache = player_team_cache_mut.lock().await;
+                println!("pre lock acquire");
+                let player_position_cache = player_position_cache_mut.lock().await;
+                let player_team_cache = player_team_cache_mut.lock().await;
+                println!("pre update_team_and_position_maps");
                 update_team_and_position_maps(
                     &data, now, player_position_cache, player_team_cache
                 );
@@ -47,10 +50,12 @@ pub async fn listen_pick_results(
                 println!("Built player position and team maps")
             }
         }
+        println!("hello");
         // if msg.is_text() || msg.is_binary() {
         //     ws_stream.send(msg).await?;
         // }
     }
+    println!("Unexpectedly ended listen-pick-results loop");
     Ok(())
 }
 

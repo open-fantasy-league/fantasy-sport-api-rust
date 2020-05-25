@@ -1,5 +1,5 @@
 use crate::subscriptions::{Subscription, GetEz};
-use crate::{BoxError, PgConn, WSMsgOut, WSConnections};
+use crate::{BoxError, WSMsgOut, WSConnections};
 use serde::Serialize;
 use warp::ws;
 use uuid::Uuid;

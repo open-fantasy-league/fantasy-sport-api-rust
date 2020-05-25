@@ -16,7 +16,7 @@ RUN mv /home/rust/fantasy-sport-api-rust/diesel_utils /home/rust/diesel_utils
 RUN mv /home/rust/fantasy-sport-api-rust/ws_server /home/rust/ws_server
 
 RUN echo "fn main() {}" > /home/rust/result/src/main.rs
-RUN cargo build --release
+RUN cargo build
 
 # We need to touch our real main.rs file or else docker will use
 # the cached one.
@@ -27,7 +27,7 @@ RUN touch /home/rust/result/src/main.rs
 # Current diesel_cli compile on rust-musl is borken
 # So Im copying my local already built diesel binary
 #RUN cargo install diesel_cli --no-default-features --features postgres
-RUN cargo build --release
+RUN cargo build
 
 # Size optimization
 #RUN strip target/x86_64-unknown-linux-musl/release/result_server
@@ -40,6 +40,6 @@ RUN cargo build --release
 #WORKDIR /home/rust/result
 #COPY --from=builder /home/rust/result/target/x86_64-unknown-linux-musl/debug/result_server .
 #COPY --from=builder /home/rust/result/diesel-cli-bin /home/rust/result/diesel
-RUN cp /home/rust/result/target/x86_64-unknown-linux-musl/release/result_server .
+RUN cp /home/rust/result/target/x86_64-unknown-linux-musl/debug/result_server .
 RUN mv diesel-cli-bin diesel
 #ENTRYPOINT ["./run.sh"]

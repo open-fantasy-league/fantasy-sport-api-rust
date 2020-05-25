@@ -115,9 +115,11 @@ async fn main() {
         });
     //let server = warp::serve(ws_router).run(([127, 0, 0, 1], 3030));
     //draft_handler.await.map_err(|e|println!("{}", e.to_string()));
-    join!(
+    let (r0, _, r2, _) = join!(
         listen_pick_results(result_addr, result_port, mapper_listener_player_position_cache, mapper_listener_player_team_cache),
         drafting::draft_handler(draft_handler_pool, draft_handler_player_position_cache, draft_handler_player_team_cache, draft_handler_ws_conns),
         draft_builder,
         warp::serve(ws_router).run(([0, 0, 0, 0], port)));
+    r0.expect("Join failure for listen pick results");
+    r2.expect("Join failure for draft_builder");
 }

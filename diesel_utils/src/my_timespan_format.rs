@@ -3,7 +3,7 @@ use crate::{new_dieseltimespan, DieselTimespan};
 use chrono::{DateTime, Utc};
 use serde::ser::SerializeSeq;
 use serde::{self, de, Deserialize, Deserializer, Serializer};
-use std::collections::Bound::{self, Excluded, Included};
+use std::collections::Bound::{Excluded, Included};
 
 pub fn deserialize<'de, D>(deserializer: D) -> Result<DieselTimespan, D::Error>
 where

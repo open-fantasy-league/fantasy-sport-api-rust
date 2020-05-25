@@ -6,7 +6,7 @@ use uuid::Uuid;
 // Dont think can use intermediate/3rd crate, because need the insertable/queryable diesel stuff
 // which wont work without importing the schema.
 #[derive(Deserialize, Serialize)]
-#[serde(tag = "method")]
+#[serde(tag = "message_type")]
 pub enum ResultMsgs {
     SubTeam {
         message_id: Uuid,

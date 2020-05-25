@@ -96,12 +96,6 @@ pub async fn update_leaderboards(method: &str, message_id: Uuid, data: Vec<Leade
 
 pub async fn insert_stats(method: &str, message_id: Uuid, data: Vec<Stat>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
     let out: Vec<Stat> = insert!(&conn, stats::table, &data)?;
-    let id_map: HashMap<Uuid, Uuid> = db::get_league_ids_to_leaderboard_ids(
-        &conn,
-        data.iter().map(|s| s.leaderboard_id).collect(),
-    )?
-    .into_iter()
-    .collect();
 
     let id_map: HashMap<Uuid, Uuid> = db::get_league_ids_to_leaderboard_ids(
         &conn,

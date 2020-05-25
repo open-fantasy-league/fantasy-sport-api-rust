@@ -1,5 +1,5 @@
 use crate::schema::{self, *};
-use crate::types::{drafts::*, fantasy_teams::*, leagues::*, users::*, valid_players::*};
+use crate::types::{drafts::*, fantasy_teams::*, leagues::*, users::*};
 use diesel::pg::expression::dsl::any;
 use diesel::pg::upsert::excluded;
 use diesel::prelude::*;
@@ -7,10 +7,8 @@ use diesel::ExpressionMethods;
 use diesel::RunQueryDsl;
 use diesel::{sql_query, sql_types};
 use diesel_utils::PgConn;
-use frunk::labelled::transform_from;
 use itertools::{izip, Itertools};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use uuid::Uuid;
 // use diesel_utils::PgConn;
 // use warp_ws_server::WSReq;
@@ -62,17 +60,6 @@ pub fn get_full_leagues(
     ))
 }
 
-/*
-#[derive(Serialize, Debug)]
-pub struct ApiDraft {
-    pub league_id: Uuid,
-    pub draft_id: Uuid,
-    pub period_id: Uuid,
-    pub meta: serde_json::Value,
-    pub choices: Vec<ApiDraftChoice>, //pub teams: Vec<ApiTeamDraft>,
-}
-*/
-
 pub fn get_users(
     conn: &PgConnection,
 ) -> Result<(Vec<ExternalUser>, Vec<Commissioner>), diesel::result::Error> {
@@ -82,17 +69,17 @@ pub fn get_users(
     Ok((external_users, commissioners))
 }
 
-pub fn get_draft_ids_for_picks(
-    conn: &PgConnection,
-    pick_ids: &Vec<Uuid>,
-) -> Result<Vec<(Uuid, Uuid)>, diesel::result::Error> {
-    picks::table
-        // important to inner_join between draft-choices and team-drafts (cant do innerjoin().innerjoin(), as that tries joining picks)
-        .inner_join(draft_choices::table.inner_join(team_drafts::table))
-        .select((picks::pick_id, team_drafts::draft_id))
-        .filter(picks::dsl::pick_id.eq(any(pick_ids)))
-        .load(conn)
-}
+// pub fn get_draft_ids_for_picks(
+//     conn: &PgConnection,
+//     pick_ids: &Vec<Uuid>,
+// ) -> Result<Vec<(Uuid, Uuid)>, diesel::result::Error> {
+//     picks::table
+//         // important to inner_join between draft-choices and team-drafts (cant do innerjoin().innerjoin(), as that tries joining picks)
+//         .inner_join(draft_choices::table.inner_join(team_drafts::table))
+//         .select((picks::pick_id, team_drafts::draft_id))
+//         .filter(picks::dsl::pick_id.eq(any(pick_ids)))
+//         .load(conn)
+// }
 
 pub fn get_undrafted_periods(conn: PgConn) -> Result<Vec<Period>, diesel::result::Error> {
     periods::table
@@ -461,42 +448,3 @@ pub fn get_full_drafts(
         .collect_vec();
     Ok(out)
 }
-
-//     #[derive(Deserialize, Serialize, Debug)]
-// pub struct ApiTeamDraft {
-//     pub team_draft_id: Uuid,
-//     pub fantasy_team_id: Uuid,
-//     pub name: String,
-//     pub league_id: Uuid,
-//     pub external_user_id: Uuid,
-//     pub meta: serde_json::Value,
-//     #[serde(skip_serializing_if = "Option::is_none")]
-//     pub draft_choices: Option<Vec<ApiDraftChoice2>>,
-//     #[serde(skip_serializing_if = "Option::is_none")]
-//     pub active_picks: Option<Vec<ApiPick>>,
-// }
-
-// #[derive(Deserialize, Serialize, Debug)]
-// pub struct ApiPick {
-//     pub pick_id: Uuid,
-//     pub player_id: Uuid,
-//     #[serde(with = "my_timespan_format")]
-//     pub timespan: DieselTimespan,
-// }
-
-// #[derive(Deserialize, Serialize, Debug, LabelledGeneric)]
-// pub struct ApiDraftChoice2 {
-//     pub draft_choice_id: Uuid,
-//     #[serde(with = "my_timespan_format")]
-//     pub timespan: DieselTimespan,
-//     pub pick: Option<Pick>,
-// }
-
-// ApiDraft {
-//     pub league_id: Uuid,
-//     pub draft_id: Uuid,
-//     pub period_id: Uuid,
-//     pub meta: serde_json::Value,
-//     #[serde(skip_serializing_if = "Option::is_none")]
-//     pub team_drafts: Option<Vec<ApiTeamDraft>>,
-// }

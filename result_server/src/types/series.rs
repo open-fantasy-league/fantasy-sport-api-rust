@@ -4,9 +4,8 @@ use crate::schema::*;
 use uuid::Uuid;
 use serde_json;
 use frunk::LabelledGeneric;
-use super::{competitions::*, matches::*, results::*, teams::*};
+use super::{competitions::*, matches::*, results::*};
 use crate::diesel::RunQueryDsl;  // imported here so that can run db macros
-use crate::diesel::ExpressionMethods;
 use frunk::labelled::transform_from;
 use itertools::{izip, Itertools};
 use diesel::prelude::*;

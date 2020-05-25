@@ -144,7 +144,9 @@ pub struct ApiLeague {
 }
 
 impl ApiLeague {
-    pub fn from_rows(rows: Vec<(League, Vec<Period>, Vec<StatMultiplier>, Vec<FantasyTeam>)>) -> Vec<Self> {
+    pub fn from_rows(
+        rows: Vec<(League, Vec<Period>, Vec<StatMultiplier>, Vec<FantasyTeam>)>,
+    ) -> Vec<Self> {
         rows.into_iter()
             .map(|(l, periods, stats, fantasy_teams)| Self {
                 periods: Some(periods),

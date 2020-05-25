@@ -2,7 +2,6 @@ use crate::messages::*;
 use warp_ws_server::{WSMsgOut, BoxError, publish, sub, unsub, sub_all, GetEz};
 use crate::{db, WSConnections_};
 use uuid::Uuid;
-#[macro_use]
 use diesel_utils::*;
 use crate::schema::{self,*};
 use crate::diesel::RunQueryDsl;  // imported here so that can run db macros
@@ -128,7 +127,7 @@ pub async fn update_external_users(method: &str, message_id: Uuid, data: Vec<Ext
 }
 
 // TODO this should really be upsert
-pub async fn insert_draft_queues(method: &str, message_id: Uuid, data: Vec<DraftQueue>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
+pub async fn insert_draft_queues(method: &str, message_id: Uuid, data: Vec<DraftQueue>, conn: PgConn, _: &mut WSConnections_) -> Result<String, BoxError>{
     let out: Vec<DraftQueue> = insert!(&conn, draft_queues::table, data)?;
     // TODO do draft-queues even want publishing to anyone except caller (person's queue should be private)
     // 
@@ -141,21 +140,21 @@ pub async fn insert_draft_queues(method: &str, message_id: Uuid, data: Vec<Draft
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
-pub async fn update_draft_queues(method: &str, message_id: Uuid, data: Vec<DraftQueue>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
-    println!("{:?}", &data);
-    let out: Vec<DraftQueue> = conn.build_transaction().run(|| {
-        data.iter().map(|c| {
-        update!(&conn, draft_queues, fantasy_team_id, c)
-    }).collect()})?;
-    let resp_msg = WSMsgOut::resp(message_id, method, out);
-    serde_json::to_string(&resp_msg).map_err(|e| e.into())
-}
+// pub async fn update_draft_queues(method: &str, message_id: Uuid, data: Vec<DraftQueue>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
+//     println!("{:?}", &data);
+//     let out: Vec<DraftQueue> = conn.build_transaction().run(|| {
+//         data.iter().map(|c| {
+//         update!(&conn, draft_queues, fantasy_team_id, c)
+//     }).collect()})?;
+//     let resp_msg = WSMsgOut::resp(message_id, method, out);
+//     serde_json::to_string(&resp_msg).map_err(|e| e.into())
+// }
 
 // Deliberate no insert_draft_choice as system creates
 // We just update when pick has been made
 // TODO hmmm shouldnt draft-queue also be system-generated?
 //actually remove this? draft-choice should be updated by pick
-pub async fn update_draft_choices(method: &str, message_id: Uuid, data: Vec<DraftChoiceUpdate>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
+pub async fn update_draft_choices(method: &str, message_id: Uuid, data: Vec<DraftChoiceUpdate>, conn: PgConn, _: &mut WSConnections_) -> Result<String, BoxError>{
     println!("{:?}", &data);
     let out: Vec<DraftChoice> = conn.build_transaction().run(|| {
         data.iter().map(|c| {

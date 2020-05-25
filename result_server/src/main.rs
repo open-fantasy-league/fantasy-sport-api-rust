@@ -3,7 +3,7 @@ extern crate openssl;
 #[macro_use]
 extern crate diesel;
 extern crate dotenv;
-#[macro_use] extern crate frunk;
+extern crate frunk;
 use dotenv::dotenv;
 use std::env;
 use warp_ws_server;

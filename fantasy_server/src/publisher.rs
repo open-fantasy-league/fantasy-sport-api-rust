@@ -1,5 +1,5 @@
 use crate::subscriptions::SubType;
-use crate::types::{drafts::*, fantasy_teams::*, leagues::*, users::*};
+use crate::types::{drafts::*, leagues::*, users::*};
 use std::collections::HashMap;
 use uuid::Uuid;
 use warp_ws_server::*;
@@ -82,7 +82,6 @@ impl Publishable<SubType> for ApiDraft {
         }
     }
 }
-
 
 impl Publishable<SubType> for ExternalUser {
     fn message_type<'a>() -> &'a str {

@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use diesel_utils::{PgConn, DieselTimespan, my_timespan_format, my_timespan_format_opt};
+use diesel_utils::{PgConn, DieselTimespan, my_timespan_format};
 use crate::schema::*;
 use uuid::Uuid;
 use serde_json;
@@ -7,9 +7,7 @@ use frunk::LabelledGeneric;
 use frunk::labelled::transform_from;
 use std::collections::HashMap;
 use crate::diesel::RunQueryDsl;  // imported here so that can run db macros
-use crate::diesel::ExpressionMethods;
 use itertools::Itertools;
-use crate::db;
 
 #[derive(Insertable, Deserialize, LabelledGeneric, Queryable, Serialize, Debug, Identifiable)]
 #[table_name = "players"]

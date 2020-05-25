@@ -3,8 +3,6 @@ use crate::schema::*;
 use uuid::Uuid;
 use serde_json;
 use super::{matches::Match, series::Series};
-use diesel_utils::PgConn;
-use crate::types::competitions::ApiCompetition;
 
 #[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations, Clone)]
 #[primary_key(match_id, team_id)]

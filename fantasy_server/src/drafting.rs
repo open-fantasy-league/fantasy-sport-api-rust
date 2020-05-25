@@ -57,11 +57,11 @@ pub async fn draft_builder(pg_pool: PgPool, mut ws_conns: WSConnections_) {
             // maybe it should just be a separate service/binary.
             // separate binary makes sense
             Err(e) => {
-                println!("db::get_undrafted_periods(&conn) went wrong");
+                println!("db::get_undrafted_periods(&conn) went wrong: {:?}", e);
                 continue
             },
             Ok(all_undrafted) => {
-                'inner: for undrafted in all_undrafted.into_iter(){
+                for undrafted in all_undrafted.into_iter(){
                     let time_to_draft_gen = undrafted.draft_lockdown - Utc::now();
                     if (time_to_draft_gen) < chrono::Duration::zero(){
                         match generate_drafts(pg_pool.get().unwrap(), undrafted){
@@ -107,7 +107,10 @@ pub async fn draft_builder(pg_pool: PgPool, mut ws_conns: WSConnections_) {
         };
         let waity_waity = || notify2.notified();
         println!("pre join!(waity_waity(), wait_task)");
-        join!(waity_waity(), wait_task);
+        let (_, err) = join!(waity_waity(), wait_task);
+        if let Err(_) = err{
+            println!("Unexpected task join error in draft builder")
+        };
         println!("post join!(waity_waity(), wait_task)");
     }
 }
@@ -214,11 +217,11 @@ pub async fn draft_handler(
             // maybe it should just be a separate service/binary.
             // separate binary makes sense
             Err(e) => {
-                println!("db::get_unchosen_draft_choices(&conn) went wrong");
+                println!("db::get_unchosen_draft_choices(&conn) went wrong: {:?}", e);
                 continue
             },
             Ok(all_unchosen) => {
-                'inner: for unchosen in all_unchosen.into_iter(){
+                for unchosen in all_unchosen.into_iter(){
                     let (draft_choice, period, team_draft, league) = unchosen;
                     let raw_time = DieselTimespan::upper(draft_choice.timespan);
                     let time_to_unchosen = raw_time - Utc::now();
@@ -288,7 +291,10 @@ pub async fn draft_handler(
         };
         let waity_waity = || notify2.notified();
         println!("pre join!(waity_waity(), wait_task)");
-        join!(waity_waity(), wait_task);
+        let (_, err) = join!(waity_waity(), wait_task);
+        if let Err(_) = err{
+            println!("Unexpected task join error in draft handler")
+        };
         println!("post join!(waity_waity(), wait_task)");
     }
     
@@ -314,26 +320,25 @@ pub fn pick_from_queue_or_random(
         // use vec and set, because want fast-lookup when looping through draft queue,
         // but also need access random element if !picked
         //teams_and_players_mut
-        let valid_remaining_picks: Vec<Uuid> = db::get_valid_picks(&conn, period_id)?;
+        let valid_remaining_players: Vec<Uuid> = db::get_valid_picks(&conn, period_id)?;
         let (positions, teams) = (player_position_cache, player_team_cache);
         let current_squad = db::get_current_picks(&conn, fantasy_team_id, period_id)?;
-        let (mut position_counts, mut team_counts): (HashMap<String, i32>, HashMap<Uuid, i32>) = (HashMap::new(), HashMap::new());
         // TODO rust defaultdict?
         let (position_counts, team_counts) = position_team_counts(
             current_squad, player_position_cache, player_team_cache
         );
         let banned_teams: HashSet<Uuid> = team_counts.into_iter().filter(|(_, count)| count > max_squad_players_same_team).map(|(team, _)| team).collect();
         let banned_positions: HashSet<String> = position_counts.into_iter().filter(|(_, count)| count > max_squad_players_same_position).map(|(pos, _)| pos).collect();
-        let valid_remaining_picks_hash: HashSet<&Uuid> = valid_remaining_picks.iter().collect();
+        let valid_remaining_players_hash: HashSet<&Uuid> = valid_remaining_players.iter().collect();
         // TODO do dumb then tidy
         let mut new_pick: Option<Pick> = None;
         for pick_id in draft_queue{
-            if let Some(valid_pick_id) = valid_remaining_picks_hash.get(&pick_id) 
+            if let Some(_) = valid_remaining_players_hash.get(&pick_id) 
             {
                 if (banned_positions.get(positions.get(&pick_id).unwrap()).is_none())
                 && (banned_teams.get(teams.get(&pick_id).unwrap()).is_none())
                 {
-                    let new_pick = Some(Pick{
+                    new_pick = Some(Pick{
                         pick_id: Uuid::new_v4(), fantasy_team_id: fantasy_team_id, draft_choice_id,
                         player_id: pick_id, timespan: belongs_to_team_for
                     });
@@ -343,7 +348,7 @@ pub fn pick_from_queue_or_random(
             }
         }
         if new_pick.is_none(){
-            if let Some(random_choice) = valid_remaining_picks.choose(&mut rand::thread_rng()){
+            if let Some(random_choice) = valid_remaining_players.choose(&mut rand::thread_rng()){
                 new_pick = Some(Pick{
                     pick_id: Uuid::new_v4(), fantasy_team_id: fantasy_team_id, draft_choice_id,
                     player_id: *random_choice, timespan: belongs_to_team_for
