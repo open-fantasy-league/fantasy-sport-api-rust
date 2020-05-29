@@ -196,7 +196,7 @@ async fn handle_ws_msg<CustomSubType: std::cmp::Eq + std::hash::Hash, U: WSHandl
     else if msg.is_ping(){
         // currently no pong method? https://docs.rs/warp/0.2.2/warp/filters/ws/struct.Message.html#method.ping
         // should I add?
-        ws::Message::text("{'mode': 'pong'}")
+        ws::Message::text(r#"{"mode": "pong"}"#)
     }
     else{
         ws_error_resp(String::from("Unexpected message type received"), Uuid::new_v4())
