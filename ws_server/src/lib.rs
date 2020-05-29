@@ -4,12 +4,15 @@ use futures::{FutureExt, StreamExt};
 use std::sync::Arc;
 use std::collections::{HashMap};
 use warp::ws;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use async_trait::async_trait;
 mod subscriptions;
 pub use subscriptions::*;
 mod publisher;
 pub use publisher::*;
+#[macro_use]
+extern crate lazy_static;
+use regex::Regex;
 
 
 
@@ -64,8 +67,8 @@ impl<'a, T: Serialize> WSMsgOut<'a, T>{
         return Self{message_id: Uuid::new_v4(), message_type: message_type, mode: "push", data: data}
     }
 
-    pub fn error(data: T) -> Self{
-        return Self{message_id: Uuid::new_v4(), message_type: "unknown", mode: "error", data: data}
+    pub fn error(data: T, message_id: Uuid) -> Self{
+        return Self{message_id, message_type: "unknown", mode: "error", data}
     }
 }
 
@@ -88,10 +91,10 @@ impl<'a, T: Serialize> WSMsgOut<'a, T>{
 //     }
 // }
 
-pub fn ws_error_resp(error_msg: String) -> ws::Message{
+pub fn ws_error_resp(error_msg: String, message_id: Uuid) -> ws::Message{
     ws::Message::text(
         serde_json::to_string(
-            &WSMsgOut::error(error_msg)
+            &WSMsgOut::error(error_msg, message_id)
         ).unwrap_or("Error serializing error message!".to_string())
     )
 }
@@ -128,7 +131,7 @@ pub async fn handle_ws_conn<CustomSubType: std::cmp::Eq + std::hash::Hash, T: Su
                 Ok(conn) => handle_ws_msg::<CustomSubType, U, CachesType>(
                     msg, conn, &mut ws_conns, ws_id, caches.clone()
                 ).await,
-                Err(e) => ws_error_resp(e.to_string())
+                Err(e) => ws_error_resp(e.to_string(), Uuid::new_v4())
             },
             Err(e) => {
                 eprintln!("websocket error(uid=): {}", e);
@@ -153,6 +156,11 @@ pub async fn handle_ws_conn<CustomSubType: std::cmp::Eq + std::hash::Hash, T: Su
         }
     }
 }
+#[derive(Serialize, Deserialize, Debug)]
+struct Fudge{
+    message_id: Uuid,
+    data: serde_json::Value
+}
 
 async fn handle_ws_msg<CustomSubType: std::cmp::Eq + std::hash::Hash, U: WSHandler<CustomSubType, CachesType>, CachesType>(
     msg: ws::Message, conn: PgConn, ws_conns: &mut WSConnections<CustomSubType>, user_ws_id: Uuid, caches: CachesType
@@ -161,24 +169,37 @@ async fn handle_ws_msg<CustomSubType: std::cmp::Eq + std::hash::Hash, U: WSHandl
     if msg.is_text(){
         match msg.to_str(){
             // Can't get await inside `and_then`/`map` function chains to work properly
-            Ok(msg_str) => match U::ws_req_resp(msg_str.to_string(), conn, ws_conns, user_ws_id, caches).await{
-                Ok(text) => ws::Message::text(text),
-                Err(e) => {
-                    dbg!(&e);
-                    println!("{:?}", e.source());
-                    ws_error_resp(e.to_string())
+            Ok(msg_str) => 
+            {
+                match U::ws_req_resp(msg_str.to_string(), conn, ws_conns, user_ws_id, caches).await{
+                    Ok(text) => ws::Message::text(text),
+                    Err(e) => {
+                        dbg!(&e);
+                        println!("{:?}", e.source());
+                        // Might be better to return message-id attached to the error. but thats harder
+                        lazy_static! {
+                            static ref RE: Regex = Regex::new(r#".*?"message_id":"([^"]+)""#).unwrap();
+                        }
+                        let re_match = RE.find(msg_str).map(|x|x.as_str());
+                        let message_id = match re_match{
+                            Some(msg_id_str) => Uuid::parse_str(msg_id_str).unwrap(),
+                            None => Uuid::new_v4()
+                        };
+                        ws_error_resp(e.to_string(), message_id)
+                    }
                 }
-            },
-            Err(_) => ws_error_resp(String::from("wtf. How does msg.to_str fail?"))
+            }
+            ,
+            Err(_) => ws_error_resp(String::from("wtf. How does msg.to_str fail?"), Uuid::new_v4())
         }
     }
     else if msg.is_ping(){
         // currently no pong method? https://docs.rs/warp/0.2.2/warp/filters/ws/struct.Message.html#method.ping
         // should I add?
-        ws::Message::text("pong")
+        ws::Message::text("{'mode': 'pong'}")
     }
     else{
-        ws_error_resp(String::from("Unexpected message type received"))
+        ws_error_resp(String::from("Unexpected message type received"), Uuid::new_v4())
     }
 }
 

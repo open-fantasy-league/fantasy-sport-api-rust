@@ -35,7 +35,7 @@ pub struct Stat {
 #[table_name = "leaderboards"]
 pub struct LeaderboardUpdate {
     pub leaderboard_id: Uuid,
-    pub league_id: Uuid,
+    pub league_id: Option<Uuid>,
     pub name: Option<String>,
     pub meta: Option<serde_json::Value>,
     #[serde(with = "my_timespan_format_opt")]
