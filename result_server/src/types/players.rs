@@ -156,9 +156,9 @@ impl ApiPlayer{
                 None => vec![]
             }
         }).collect();
-        insert_exec!(conn, player_names::table, names)?;
         let raw_players: Vec<Player> = players.into_iter().map(transform_from).collect();
         insert_exec!(conn, players::table, raw_players)?;
+        insert_exec!(conn, player_names::table, names)?;
         Ok(true)
     }
 }
