@@ -45,7 +45,6 @@ pub async fn draft_builder(pg_pool: PgPool, mut ws_conns: WSConnections_) {
     // https://docs.rs/tokio/0.2.20/tokio/sync/struct.Notify.html
     println!("In draft builder");
     let notify = Arc::new(Notify::new());
-    let notify2 = notify.clone();
     // TODO handle error
     let mut timeout: Option<chrono::Duration> = None;
 
@@ -76,10 +75,11 @@ pub async fn draft_builder(pg_pool: PgPool, mut ws_conns: WSConnections_) {
                         };
                     } else{
                         timeout = Some(time_to_draft_gen);
-                        continue 'outer;  // If we didnt use up all drafts, dont want to re-set timeout to None below.
+                        break;
+                        //continue 'outer;  // If we didnt use up all drafts, dont want to re-set timeout to None below.
                     }
                 };
-                timeout = None;
+                //timeout = None;
             }
         }
         // If we get an external notify in this wait time,
@@ -89,11 +89,11 @@ pub async fn draft_builder(pg_pool: PgPool, mut ws_conns: WSConnections_) {
         let wait_task = match timeout{
             // std::time::Duration
             Some(t) => {
-                let notify3 = notify.clone();
+                let notify = notify.clone();
                 tokio::task::spawn_local(async move {
                     println!("delay_for");
                     delay_for(t.to_std().expect("Time conversion borkled!")).await;
-                    notify3.notify();
+                    notify.notify();
                 })
                 //Timeout::new(t.to_std().expect("Wrong timeline!"), &||notify2.notify());
             },
@@ -105,13 +105,14 @@ pub async fn draft_builder(pg_pool: PgPool, mut ws_conns: WSConnections_) {
                 })
             }
         };
-        let waity_waity = || notify2.notified();
+        let waity_waity = || notify.notified();
         println!("pre join!(waity_waity(), wait_task)");
         let (_, err) = join!(waity_waity(), wait_task);
         if let Err(_) = err{
             println!("Unexpected task join error in draft builder")
         };
         println!("post join!(waity_waity(), wait_task)");
+        timeout = None;
     }
 }
 
@@ -206,7 +207,6 @@ pub async fn draft_handler(
 ) {
     println!("In draft handler");
     let notify = Arc::new(Notify::new());
-    let notify2 = notify.clone();
     // TODO handle error
     let mut timeout: Option<chrono::Duration> = None;
 
@@ -260,10 +260,10 @@ pub async fn draft_handler(
                         }
                     } else{
                         timeout = Some(time_to_unchosen);
-                        continue 'outer;  // If we didnt use up all drafts, dont want to re-set timeout to None below.
+                        break;
+                        //continue 'outer;  // If we didnt use up all drafts, dont want to re-set timeout to None below.
                     }
                 };
-                timeout = None;
             }
         }
         // If we get an external notify in this wait time,
@@ -273,11 +273,11 @@ pub async fn draft_handler(
         let wait_task = match timeout{
             // std::time::Duration
             Some(t) => {
-                let notify3 = notify.clone();
+                let notify = notify.clone();
                 tokio::task::spawn_local(async move {
                     println!("delay_for");
                     delay_for(t.to_std().expect("Time conversion borkled!")).await;
-                    notify3.notify();
+                    notify.notify();
                 })
                 //Timeout::new(t.to_std().expect("Wrong timeline!"), &||notify2.notify());
             },
@@ -289,13 +289,14 @@ pub async fn draft_handler(
                 })
             }
         };
-        let waity_waity = || notify2.notified();
+        let waity_waity = || notify.notified();
         println!("pre join!(waity_waity(), wait_task)");
         let (_, err) = join!(waity_waity(), wait_task);
         if let Err(_) = err{
             println!("Unexpected task join error in draft handler")
         };
         println!("post join!(waity_waity(), wait_task)");
+        timeout = None;
     }
     
 }
