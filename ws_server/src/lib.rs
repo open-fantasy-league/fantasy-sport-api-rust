@@ -179,10 +179,15 @@ async fn handle_ws_msg<CustomSubType: std::cmp::Eq + std::hash::Hash, U: WSHandl
                         lazy_static! {
                             static ref RE: Regex = Regex::new(r#".*?"message_id":\s?"([^"]+)""#).unwrap();
                         }
-                        let re_match = RE.find(msg_str).map(|x|x.as_str());
+                        let re_match = RE.captures(msg_str).map(|x|x.get(1).unwrap().as_str());
                         println!("re_match: {:?}", re_match);
                         let message_id = match re_match{
-                            Some(msg_id_str) => Uuid::parse_str(msg_id_str).unwrap(),
+                            Some(msg_id_str) => {
+                                Uuid::parse_str(msg_id_str).unwrap_or({
+                                    println!("parse_str of uuid failed {}", msg_id_str);
+                                    Uuid::new_v4()
+                                })
+                            },
                             None => Uuid::new_v4()
                         };
                         ws_error_resp(e.to_string(), message_id)
