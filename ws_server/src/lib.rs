@@ -183,10 +183,13 @@ async fn handle_ws_msg<CustomSubType: std::cmp::Eq + std::hash::Hash, U: WSHandl
                         println!("re_match: {:?}", re_match);
                         let message_id = match re_match{
                             Some(msg_id_str) => {
-                                Uuid::parse_str(msg_id_str).unwrap_or({
-                                    println!("parse_str of uuid failed {}", msg_id_str);
-                                    Uuid::new_v4()
-                                })
+                                match Uuid::parse_str(msg_id_str){
+                                    Ok(parsed_uuid) => parsed_uuid,
+                                    Err(e) => {
+                                        println!("parse_str of uuid failed {}. {:?}", msg_id_str, e);
+                                        Uuid::new_v4()
+                                    }
+                                }
                             },
                             None => Uuid::new_v4()
                         };

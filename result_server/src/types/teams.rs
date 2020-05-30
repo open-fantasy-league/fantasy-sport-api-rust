@@ -170,9 +170,9 @@ impl ApiTeam{
                 }
             }).collect_vec()
         }).collect();
-        insert_exec!(&conn, team_names::table, names)?;
         let raw_teams: Vec<Team> = teams.into_iter().map(transform_from).collect();
         insert_exec!(&conn, teams::table, raw_teams)?;
+        insert_exec!(&conn, team_names::table, names)?;
         Ok(true)
     }
 }
