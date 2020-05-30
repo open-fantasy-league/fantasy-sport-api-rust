@@ -67,6 +67,8 @@ impl WSHandler<subscriptions::SubType, Caches> for MyWsHandler{
                 "ActivePick", message_id, data, conn, ws_conns, caches.0, caches.1
             ).await,
             WSReq::DraftChoiceUpdate{message_id, data} => update_draft_choices("DraftChoiceUpdate", message_id, data, conn, ws_conns).await,
+            WSReq::ValidPlayer{message_id, data} => insert_valid_players("ValidPlayer", message_id, data, conn, ws_conns).await,
+            WSReq::ValidPlayerDelete{message_id, data} => delete_valid_players("ValidPlayerDelete", message_id, data, conn, ws_conns).await,
         }
     }
 }

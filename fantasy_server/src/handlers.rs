@@ -6,7 +6,7 @@ use diesel_utils::*;
 use crate::schema::{self,*};
 use crate::diesel::RunQueryDsl;  // imported here so that can run db macros
 use crate::diesel::ExpressionMethods;
-use crate::types::{leagues::*, users::*, drafts::*, fantasy_teams::*};
+use crate::types::{leagues::*, users::*, drafts::*, fantasy_teams::*, valid_players::*};
 use crate::subscriptions::SubType;
 use crate::drafting;
 use crate::errors;
@@ -326,6 +326,28 @@ pub async fn update_fantasy_teams(method: &str, message_id: Uuid, data: Vec<Fant
         ws_conns, &to_publish,  SubType::League, None
     ).await?;
     let resp_msg = WSMsgOut::resp(message_id, method, to_publish);
+    serde_json::to_string(&resp_msg).map_err(|e| e.into())
+}
+
+pub async fn insert_valid_players(method: &str, message_id: Uuid, data: Vec<ValidPlayer>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
+    let out: Vec<ValidPlayer> = insert!(&conn, valid_players::table, &data)?;
+    //let to_publish: Vec<ApiDraft> = db::get_drafts_for_picks(&conn, out.iter().map(|p|p.pick_id).collect())?;
+    //publish::<SubType, ApiDraft>(ws_conns, &to_publish, SubType::Draft, None).await?;
+    let resp_msg = WSMsgOut::resp(message_id, method, data);
+    serde_json::to_string(&resp_msg).map_err(|e| e.into())
+}
+
+pub async fn delete_valid_players(method: &str, message_id: Uuid, data: Vec<ValidPlayer>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
+    // TODO work out how bulk delete
+    // also put this in db
+    use crate::diesel::QueryDsl;
+    use crate::diesel::BoolExpressionMethods;
+    for vp in &data{
+        diesel::delete(schema::valid_players::dsl::valid_players.filter(valid_players::period_id.eq(vp.period_id).and(valid_players::player_id.eq(vp.player_id)))).execute(&conn)?;
+    };
+    //let to_publish: Vec<ApiDraft> = db::get_drafts_for_picks(&conn, out.iter().map(|p|p.pick_id).collect())?;
+    //publish::<SubType, ApiDraft>(ws_conns, &to_publish, SubType::Draft, None).await?;
+    let resp_msg = WSMsgOut::resp(message_id, method, data);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 

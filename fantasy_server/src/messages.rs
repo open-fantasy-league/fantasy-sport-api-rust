@@ -8,7 +8,7 @@
 //     // SO want to do a second from_string on the data
 //     pub data: serde_json::Value
 // }
-use crate::types::{drafts::*, fantasy_teams::*, leagues::*, users::*};
+use crate::types::{drafts::*, fantasy_teams::*, leagues::*, users::*, valid_players::*};
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -93,6 +93,14 @@ pub enum WSReq {
     FantasyTeamUpdate {
         message_id: Uuid,
         data: Vec<FantasyTeamUpdate>,
+    },
+    ValidPlayer {
+        message_id: Uuid,
+        data: Vec<ValidPlayer>,
+    },
+    ValidPlayerDelete {
+        message_id: Uuid,
+        data: Vec<ValidPlayer>,
     },
     SubLeague {
         message_id: Uuid,
