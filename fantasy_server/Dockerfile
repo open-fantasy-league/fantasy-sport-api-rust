@@ -10,7 +10,7 @@ WORKDIR /home/rust/fantasy
 COPY --chown=rust:rust Cargo.toml .
 COPY --chown=rust:rust Cargo.lock .
 # Just to get diesel_utils and warp_ws_server onto container. In future these can be published crates
-#ADD https://api.github.com/repos/open-fantasy-league/fantasy-sport-api-rust/git/refs/heads/master version.json
+ADD https://api.github.com/repos/open-fantasy-league/fantasy-sport-api-rust/git/refs/heads/master version.json
 RUN git clone -b master https://github.com/open-fantasy-league/fantasy-sport-api-rust.git /home/rust/fantasy-sport-api-rust
 RUN mv /home/rust/fantasy-sport-api-rust/diesel_utils /home/rust/diesel_utils
 RUN mv /home/rust/fantasy-sport-api-rust/ws_server /home/rust/ws_server
