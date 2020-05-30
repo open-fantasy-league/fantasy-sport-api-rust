@@ -1,5 +1,6 @@
 use crate::schema::*;
 use chrono::{DateTime, Utc};
+use diesel::sql_types;
 use diesel_utils::{my_timespan_format, my_timespan_format_opt, DieselTimespan};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -90,7 +91,26 @@ impl ApiLeaderboard {
             league_id: leaderboard.league_id,
             name: leaderboard.name,
             meta: leaderboard.meta,
-            stats: stats,
+            stats,
         }
     }
+}
+
+#[derive(Serialize, Debug)]
+pub struct ApiLeaderboardLatest {
+    pub leaderboard_id: Uuid,
+    pub league_id: Uuid,
+    pub name: String,
+    pub meta: serde_json::Value,
+    pub leaderboard: Vec<ApiLatestStat>,
+}
+
+#[derive(Deserialize, QueryableByName, Queryable, Serialize, Debug)]
+pub struct ApiLatestStat {
+    #[sql_type = "sql_types::Uuid"]
+    pub player_id: Uuid,
+    #[sql_type = "sql_types::Uuid"]
+    pub leaderboard_id: Uuid,
+    #[sql_type = "sql_types::Float"]
+    pub points: f32,
 }

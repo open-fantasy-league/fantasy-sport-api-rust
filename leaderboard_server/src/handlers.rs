@@ -119,3 +119,9 @@ pub async fn insert_stats(method: &str, message_id: Uuid, data: Vec<Stat>, conn:
     let resp_msg = WSMsgOut::resp(message_id, method, out);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
+
+pub async fn get_latest_leaderboards(method: &str, message_id: Uuid, data: Vec<Uuid>, conn: PgConn, _: &mut WSConnections_) -> Result<String, BoxError>{
+    let out: Vec<ApiLeaderboardLatest> = db::latest_leaderboards(&conn, data)?;
+    let resp_msg = WSMsgOut::resp(message_id, method, out);
+    serde_json::to_string(&resp_msg).map_err(|e| e.into())
+}

@@ -4,7 +4,11 @@ use diesel::associations::*;
 use diesel::pg::expression::dsl::any;
 use diesel::prelude::*;
 use diesel::ExpressionMethods;
+use diesel::RunQueryDsl;
+use diesel::{sql_query, sql_types};
 use diesel_utils::PgConn;
+use itertools::Itertools;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 // TODO diesel lets you filter quite elegantly I think. Should probably look it up and use it
@@ -61,4 +65,43 @@ pub fn get_stat_with_ids(
     let grouped: Vec<Vec<Stat>> = data.grouped_by(&leagues);
     let out = leagues.into_iter().zip(grouped).collect();
     Ok(out)
+}
+
+pub fn latest_leaderboards(
+    conn: &PgConn,
+    leaderboard_ids: Vec<Uuid>,
+) -> Result<Vec<ApiLeaderboardLatest>, diesel::result::Error> {
+    let leaderboards: Vec<Leaderboard> = schema::leaderboards::table
+        .filter(schema::leaderboards::leaderboard_id.eq(any(&leaderboard_ids)))
+        .load(conn)?;
+    let sql = "
+        SELECT player_id, leaderboard_id, (MAX(ARRAY[EXTRACT('EPOCH' FROM timestamp)::float, points]))[2] AS current_points 
+        FROM stats WHERE leaderboard_id = ANY($1) 
+        GROUP BY player_id, leaderboard_id
+        ORDER BY current_points
+    ";
+    let stats: Vec<ApiLatestStat> = sql_query(sql)
+        .bind::<sql_types::Array<sql_types::Uuid>, _>(leaderboard_ids)
+        .load::<ApiLatestStat>(conn)?;
+    let mut grouped_stats: HashMap<Uuid, (Leaderboard, Vec<ApiLatestStat>)> = leaderboards
+        .into_iter()
+        .map(|x| (x.leaderboard_id, (x, vec![])))
+        .collect();
+    for stat in stats {
+        grouped_stats
+            .get_mut(&stat.leaderboard_id)
+            .unwrap()
+            .1
+            .push(stat);
+    }
+    Ok(grouped_stats
+        .into_iter()
+        .map(|(_, (leaderboard, stats))| ApiLeaderboardLatest {
+            leaderboard_id: leaderboard.leaderboard_id,
+            league_id: leaderboard.league_id,
+            name: leaderboard.name,
+            meta: leaderboard.meta,
+            leaderboard: stats,
+        })
+        .collect_vec())
 }

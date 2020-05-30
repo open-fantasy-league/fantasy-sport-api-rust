@@ -27,6 +27,10 @@ pub enum WSReq {
         message_id: Uuid,
         data: Vec<LeaderboardUpdate>,
     },
+    LeaderboardGet {
+        message_id: Uuid,
+        data: Vec<Uuid>,
+    },
     Stat {
         message_id: Uuid,
         data: Vec<Stat>,

@@ -42,8 +42,9 @@ impl WSHandler<subscriptions::SubType, Caches> for MyWsHandler{
         match req{
             WSReq::SubLeaderboard{message_id, data} => sub_leaderboards("SubLeaderboard", message_id, data, conn, ws_conns, user_ws_id).await,
             WSReq::SubLeague{message_id, data} => sub_leagues("SubLeague", message_id, data, conn, ws_conns, user_ws_id).await,
-            WSReq::Leaderboard{message_id, data} => insert_leaderboards("Competition", message_id, data, conn, ws_conns).await,
-            WSReq::LeaderboardUpdate{message_id, data} => update_leaderboards("CompetitionUpdate", message_id, data, conn, ws_conns).await,
+            WSReq::Leaderboard{message_id, data} => insert_leaderboards("Leaderboard", message_id, data, conn, ws_conns).await,
+            WSReq::LeaderboardUpdate{message_id, data} => update_leaderboards("LeaderboardUpdate", message_id, data, conn, ws_conns).await,
+            WSReq::LeaderboardGet{message_id, data} => get_latest_leaderboards("LeaderboardGet", message_id, data, conn, ws_conns).await,
             WSReq::Stat{message_id, data} => insert_stats("Stat", message_id, data, conn, ws_conns).await,
         }
     }
