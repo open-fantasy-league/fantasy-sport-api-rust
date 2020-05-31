@@ -23,8 +23,8 @@ use handlers::*;
 use messages::WSReq;
 use async_trait::async_trait;
 use futures::join;
-use result_client::listen_pick_results;
-use tokio::sync::Mutex;
+use result_client::listen_team_updates;
+use tokio::sync::{Mutex, Notify};
 use std::sync::Arc;
 use std::collections::HashMap;
 
@@ -32,7 +32,7 @@ use std::collections::HashMap;
 pub type WSConnections_ = warp_ws_server::WSConnections<subscriptions::SubType>;
 pub type WSConnection_ = warp_ws_server::WSConnection<subscriptions::SubType>;
 
-type Caches = (Arc<Mutex<Option<HashMap<Uuid, String>>>>, Arc<Mutex<Option<HashMap<Uuid, Uuid>>>>);
+type Caches = (Arc<Mutex<Option<HashMap<Uuid, String>>>>, Arc<Mutex<Option<HashMap<Uuid, Uuid>>>>, Arc<Notify>);
 
 struct MyWsHandler{
 }
@@ -51,7 +51,7 @@ impl WSHandler<subscriptions::SubType, Caches> for MyWsHandler{
             WSReq::SubUser{message_id, data} => sub_external_users("SubUsers", message_id, data, conn, ws_conns, user_ws_id).await,
             WSReq::League{message_id, data} => insert_leagues("League", message_id, data, conn, ws_conns).await,
             WSReq::LeagueUpdate{message_id, data} => update_leagues("LeagueUpdate", message_id, data, conn, ws_conns).await,
-            WSReq::Period{message_id, data} => insert_periods("Period", message_id, data, conn, ws_conns).await,
+            WSReq::Period{message_id, data} => insert_periods("Period", message_id, data, conn, ws_conns, caches.2).await,
             WSReq::PeriodUpdate{message_id, data} => update_periods("PeriodUpdate", message_id, data, conn, ws_conns).await,
             WSReq::StatMultiplier{message_id, data} => insert_stat_multipliers("StatMultiplier", message_id, data, conn, ws_conns).await,
             WSReq::StatMultiplierUpdate{message_id, data} => update_stat_multipliers("StatMultiplierUpdate", message_id, data, conn, ws_conns).await,
@@ -96,10 +96,15 @@ async fn main() {
     let draft_pgpool = pool.clone();
     let draft_handler_pool = pool.clone();
 
+    let new_draft_notifier = Arc::new(Notify::new());
+    let new_draft_notifier_1 = new_draft_notifier.clone();
+    let new_draft_choices_notifier = Arc::new(Notify::new());
+    let new_draft_choices_notifier_1 = new_draft_choices_notifier.clone();
+
     let draft_builder_ws_conns = ws_conns.clone();
     let draft_handler_ws_conns = ws_conns.clone();
     let draft_builder = tokio::task::spawn(async move {
-        drafting::draft_builder(draft_pgpool, draft_builder_ws_conns).await
+        drafting::draft_builder(draft_pgpool, draft_builder_ws_conns, new_draft_notifier_1, new_draft_choices_notifier_1).await
     });
     // let draft_handler = tokio::task::spawn(async move {
     //     drafting::draft_builder(draft_pgpool).await
@@ -110,7 +115,7 @@ async fn main() {
     let ws_router = warp::any().and(warp::ws()).and(ws_conns_filt)
         .map(move |ws: warp::ws::Ws, ws_conns|{
             let pool = pool.clone();
-            let caches = (player_position_cache.clone(), player_team_cache.clone());
+            let caches = (player_position_cache.clone(), player_team_cache.clone(), new_draft_notifier.clone());
             ws.on_upgrade(move |socket| warp_ws_server::handle_ws_conn::<subscriptions::SubType, subscriptions::MySubHandler, MyWsHandler, Caches>(
                 socket, pool, ws_conns, caches
             ))
@@ -118,8 +123,8 @@ async fn main() {
     //let server = warp::serve(ws_router).run(([127, 0, 0, 1], 3030));
     //draft_handler.await.map_err(|e|println!("{}", e.to_string()));
     let (r0, _, r2, _) = join!(
-        listen_pick_results(result_addr, result_port, mapper_listener_player_position_cache, mapper_listener_player_team_cache),
-        drafting::draft_handler(draft_handler_pool, draft_handler_player_position_cache, draft_handler_player_team_cache, draft_handler_ws_conns),
+        listen_team_updates(result_addr, result_port, mapper_listener_player_position_cache, mapper_listener_player_team_cache),
+        drafting::draft_handler(draft_handler_pool, draft_handler_player_position_cache, draft_handler_player_team_cache, draft_handler_ws_conns, new_draft_choices_notifier),
         draft_builder,
         warp::serve(ws_router).run(([0, 0, 0, 0], port)));
     r0.expect("Join failure for listen pick results");

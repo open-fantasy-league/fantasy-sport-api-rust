@@ -383,6 +383,7 @@ pub fn get_publishable_player_results(conn: &PgConnection, data: Vec<PlayerResul
 // }
 
 pub fn get_teams_from_players(conn: &PgConn, player_ids_filt: Option<Vec<Uuid>>)-> Result<Vec<ApiTeamWithPlayersHierarchy>, diesel::result::Error>{
+    println!("In get_teams_from_players");
     // let rows: Vec<(Player, TeamPlayer, Team, PlayerName, PlayerPosition)> = schema::players::table.filter(schema::players::player_id.eq(any(player_ids)))
     //    .inner_join(schema::team_players::table.inner_join(schema::teams::table))
     //    .inner_join(schema::player_names::table)
@@ -405,7 +406,13 @@ pub fn get_teams_from_players(conn: &PgConn, player_ids_filt: Option<Vec<Uuid>>)
     let grouped_players: Vec<(Player, Vec<PlayerName>, Vec<PlayerPosition>)> = izip!(players, grouped_player_names, grouped_player_positions).collect();
     let api_players = ApiPlayer::from_diesel_rows(grouped_players);
     let team_ids = team_players.iter().map(|tp| tp.team_id).dedup().collect_vec();
-    let teams: Vec<Team> = schema::teams::table.filter(schema::teams::team_id.eq(any(team_ids))).load(conn)?;
+    let teams: Vec<Team> = schema::teams::table.filter(schema::teams::team_id.eq(any(&team_ids))).load(conn)?;
+    //use diesel::debug_query;
+    //use diesel::pg::Pg;
+    //let q = schema::teams::table.filter(schema::teams::team_id.eq(any(&team_ids)));
+    //let debug = debug_query::<Pg, _>(&q);
+    //println!("{}", debug);
+    dbg!(&teams);
     let mut teams_to_team_players: HashMap<Uuid, Vec<TeamPlayer>> = team_players.into_iter().fold(HashMap::new(), |mut hm, tp| {
         match hm.get_mut(&tp.team_id) {
             Some(v) => {

@@ -331,8 +331,7 @@ pub async fn sub_teams(method: &str, message_id: Uuid, data: SubTeam, conn: PgCo
     // if let Some(competition_ids) = data.unsub_competition_ids{
     //     unsub(&SubType::Team, ws_user, competition_ids.iter()).await;
     // }
-    let subscription = ws_user.subscriptions.get_ez(&SubType::Competition);
-    let data = match subscription.all{
+    let data = match data.toggle{
         true => {
             db::get_teams_from_players(&conn, None)
         },

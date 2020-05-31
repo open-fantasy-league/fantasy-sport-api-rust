@@ -156,9 +156,23 @@ impl ApiPlayer{
                 None => vec![]
             }
         }).collect();
+        let positions: Vec<PlayerPosition> = players.clone().into_iter().flat_map(|t| {
+            let player_id = t.player_id;
+            match t.positions{
+                Some(positions) => {
+                    positions.into_iter().map(|p| {
+                        PlayerPosition{
+                            player_position_id: Uuid::new_v4(), player_id, position: p.position, timespan: p.timespan
+                        }
+                        }).collect_vec()
+                },
+                None => vec![]
+            }
+        }).collect();
         let raw_players: Vec<Player> = players.into_iter().map(transform_from).collect();
         insert_exec!(conn, players::table, raw_players)?;
         insert_exec!(conn, player_names::table, names)?;
+        insert_exec!(conn, player_positions::table, positions)?;
         Ok(true)
     }
 }

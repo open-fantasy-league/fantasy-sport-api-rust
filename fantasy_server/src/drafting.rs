@@ -38,18 +38,16 @@ impl std::error::Error for NoValidPicksError {
     }
 }
 
-pub async fn draft_builder(pg_pool: PgPool, mut ws_conns: WSConnections_) {
+pub async fn draft_builder(pg_pool: PgPool, mut ws_conns: WSConnections_, new_draft_notifier: Arc<Notify>, draft_choices_notifier: Arc<Notify>) {
     // https://docs.rs/tokio-core/0.1.17/tokio_core/reactor/struct.Timeout.html
     // https://doc.rust-lang.org/stable/rust-by-example/std_misc/channels.html
     //https://medium.com/@polyglot_factotum/rust-concurrency-patterns-communicate-by-sharing-your-sender-11a496ce7791
     // https://docs.rs/tokio/0.2.20/tokio/sync/struct.Notify.html
     println!("In draft builder");
-    let notify = Arc::new(Notify::new());
     // TODO handle error
     let mut timeout: Option<chrono::Duration> = None;
 
     'outer: loop {
-        println!("timeout: {:?}", timeout);
         //let conn = pg_pool.clone().get().unwrap();
         match db::get_undrafted_periods(pg_pool.get().unwrap()){
             // Want this to be resilient/not bring down whole service.....
@@ -70,6 +68,7 @@ pub async fn draft_builder(pg_pool: PgPool, mut ws_conns: WSConnections_) {
                                     Err(e) => println!("Error publishing drafts: {:?}", e),
                                     _ => {}
                                 }
+                                draft_choices_notifier.notify();
                             },
                             Err(e) => println!("{:?}", e)
                         };
@@ -86,14 +85,15 @@ pub async fn draft_builder(pg_pool: PgPool, mut ws_conns: WSConnections_) {
         // the timeout will still trigger, so we'll do an extra pass.
         // I think that's ok though, as it'll just be one, and it'll be the time when we should we processing the next draft anyway.
         // Overall logic handles accidental wakeups fine, it just realises too early, sets the timeout, and waits next loop.
+        println!("Draft: generator timeout: {:?}", timeout);
         let wait_task = match timeout{
             // std::time::Duration
             Some(t) => {
-                let notify = notify.clone();
-                tokio::task::spawn_local(async move {
+                let new_draft_notifier = new_draft_notifier.clone();
+                tokio::task::spawn(async move {
                     println!("delay_for");
                     delay_for(t.to_std().expect("Time conversion borkled!")).await;
-                    notify.notify();
+                    new_draft_notifier.notify();
                 })
                 //Timeout::new(t.to_std().expect("Wrong timeline!"), &||notify2.notify());
             },
@@ -105,13 +105,13 @@ pub async fn draft_builder(pg_pool: PgPool, mut ws_conns: WSConnections_) {
                 })
             }
         };
-        let waity_waity = || notify.notified();
-        println!("pre join!(waity_waity(), wait_task)");
+        let waity_waity = || new_draft_notifier.notified();
+        println!("Draft: generator pre join!(waity_waity(), wait_task)");
         let (_, err) = join!(waity_waity(), wait_task);
         if let Err(_) = err{
             println!("Unexpected task join error in draft builder")
         };
-        println!("post join!(waity_waity(), wait_task)");
+        println!("Draft: generator post join!(waity_waity(), wait_task)");
         timeout = None;
     }
 }
@@ -205,16 +205,17 @@ pub async fn draft_handler(
     pg_pool: PgPool, 
     player_position_cache_mut: Arc<Mutex<Option<HashMap<Uuid, String>>>>, 
     player_team_cache_mut: Arc<Mutex<Option<HashMap<Uuid, Uuid>>>>, 
-    mut ws_conns: WSConnections_
+    mut ws_conns: WSConnections_,
+    draft_choices_notifier: Arc<Notify>
 ) {
     println!("In draft handler");
-    let notify = Arc::new(Notify::new());
     // TODO handle error
     let mut timeout: Option<chrono::Duration> = None;
 
     'outer: loop {
-        println!("timeout: {:?}", timeout);
-        match db::get_unchosen_draft_choices(pg_pool.get().unwrap()){
+        let unchosen = db::get_unchosen_draft_choices(pg_pool.get().unwrap());
+        println!("Draft: length unchosen picks: {:?}", &unchosen.as_ref().map(|x|x.iter().map(|y|y.0.team_draft_id).collect_vec().len()));
+        match unchosen{
             // Want this to be resilient/not bring down whole service.....
             // maybe it should just be a separate service/binary.
             // separate binary makes sense
@@ -227,12 +228,14 @@ pub async fn draft_handler(
                     let (draft_choice, period, team_draft, league) = unchosen;
                     let raw_time = DieselTimespan::upper(draft_choice.timespan);
                     let time_to_unchosen = raw_time - Utc::now();
+                    println!("Time for next choice: {:?}", time_to_unchosen);
                     if (time_to_unchosen) < chrono::Duration::zero(){
                         let pick_straight_into_team = league.team_size == league.squad_size;
                         let player_position_cache_opt = player_position_cache_mut.lock().await;
                         let player_team_cache_opt = player_team_cache_mut.lock().await;
                         match (player_position_cache_opt.as_ref(), player_team_cache_opt.as_ref()){
                             (Some(ref player_position_cache), Some(ref player_team_cache)) => {
+                                println!("Draft: Doing an auto-pick");
                                 let out: Result<(Pick, Option<ActivePick>), BoxError> = pick_from_queue_or_random(
                                     // TODO safetify these unwraps
                                     pg_pool.get().unwrap(), team_draft.fantasy_team_id, draft_choice, period.timespan, period.period_id,
@@ -272,32 +275,33 @@ pub async fn draft_handler(
         // the timeout will still trigger, so we'll do an extra pass.
         // I think that's ok though, as it'll just be one, and it'll be the time when we should we processing the next draft anyway.
         // Overall logic handles accidental wakeups fine, it just realises too early, sets the timeout, and waits next loop.
+        println!("Draft: handler timeout: {:?}", timeout);
         let wait_task = match timeout{
             // std::time::Duration
             Some(t) => {
-                let notify = notify.clone();
-                tokio::task::spawn_local(async move {
+                let draft_choices_notifier = draft_choices_notifier.clone();
+                tokio::task::spawn(async move {
                     println!("delay_for");
                     delay_for(t.to_std().expect("Time conversion borkled!")).await;
-                    notify.notify();
+                    draft_choices_notifier.notify();
                 })
                 //Timeout::new(t.to_std().expect("Wrong timeline!"), &||notify2.notify());
             },
             None => {
-                // TODO dumb placeholder. Really want to `cancel` this task if other thing notified.
+                // TODO dumb placeholder. Really want to `cancel` above task if other thing notified.
                 tokio::spawn(async move {
-                    println!("in dummy");
+                    println!("Draft: in dummy (i.e. timeout None) sleep");
                     delay_for(std::time::Duration::from_millis(1)).await;
                 })
             }
         };
-        let waity_waity = || notify.notified();
-        println!("pre join!(waity_waity(), wait_task)");
+        let waity_waity = || draft_choices_notifier.notified();
+        println!("Draft: handler pre join!(waity_waity(), wait_task)");
         let (_, err) = join!(waity_waity(), wait_task);
         if let Err(_) = err{
             println!("Unexpected task join error in draft handler")
         };
-        println!("post join!(waity_waity(), wait_task)");
+        println!("Draft: handler post join!(waity_waity(), wait_task)");
         timeout = None;
     }
     
@@ -338,8 +342,21 @@ pub fn pick_from_queue_or_random(
         for pick_id in draft_queue{
             if let Some(_) = valid_remaining_players_hash.get(&pick_id) 
             {
-                if (banned_positions.get(positions.get(&pick_id).unwrap()).is_none())
-                && (banned_teams.get(teams.get(&pick_id).unwrap()).is_none())
+                let (position, team) = match (positions.get(&pick_id), teams.get(&pick_id)){
+                    (None, _) => {
+                        println!("Draft: Could not find player {:?} in player_position_cache", pick_id);
+                        dbg!(player_position_cache);
+                        continue;
+                    },
+                    (_, None) => {
+                        println!("Draft: Could not find player {:?} in player_team_cache", pick_id);
+                        dbg!(player_team_cache);
+                        continue;
+                    },
+                    (Some(pos), Some(team)) => (pos, team)
+                };
+                if (banned_positions.get(position).is_none())
+                && (banned_teams.get(team).is_none())
                 {
                     new_pick = Some(Pick{
                         pick_id: Uuid::new_v4(), fantasy_team_id: fantasy_team_id, draft_choice_id,

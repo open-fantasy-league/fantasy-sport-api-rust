@@ -13,7 +13,7 @@ use std::ops::RangeBounds;
 // i.e. can dependencies be reduced?
 
 
-pub async fn listen_pick_results(
+pub async fn listen_team_updates(
     result_addr: String, result_port: u16, player_position_cache_mut: Arc<Mutex<Option<HashMap<Uuid, String>>>>, player_team_cache_mut: Arc<Mutex<Option<HashMap<Uuid, Uuid>>>>
 ) -> Result<(), BoxError>{
     // connect to websocket on port
@@ -34,7 +34,7 @@ pub async fn listen_pick_results(
     ws_stream.send(Message::text(sub_teams_msg)).await?;
     while let Some(msg) = ws_stream.next().await {
         let msg = msg?;
-        println!("msg erm: {:?}", msg);
+        println!("Msg from result server: {:?}", msg);
         match serde_json::from_str(&msg.to_text()?)?{
             ResultMsgs::SubTeam{message_id: _, data, mode: _} => {
                 let now = Utc::now();
@@ -48,9 +48,22 @@ pub async fn listen_pick_results(
                 // *player_position_cache = Some(positions);
                 // *player_team_cache = Some(teams);
                 println!("Built player position and team maps")
+            },
+            // TODO can probably commonise this
+            ResultMsgs::team_and_players{message_id: _, data, mode: _} => {
+                let now = Utc::now();
+                println!("pre lock acquire");
+                let player_position_cache = player_position_cache_mut.lock().await;
+                let player_team_cache = player_team_cache_mut.lock().await;
+                println!("pre update_team_and_position_maps");
+                update_team_and_position_maps(
+                    &data, now, player_position_cache, player_team_cache
+                );
+                // *player_position_cache = Some(positions);
+                // *player_team_cache = Some(teams);
+                println!("Built player position and team maps")
             }
         }
-        println!("hello");
         // if msg.is_text() || msg.is_binary() {
         //     ws_stream.send(msg).await?;
         // }
@@ -73,7 +86,6 @@ fn update_team_and_position_maps(
     }
     // We only care about the latest team/position
     // (That might not technically be true, i.e. if a future transfer is confirmed, next team might already be in db)
-    // TODO needs to handle updates, not just overwrite whole thing
     teams_and_players.into_iter().for_each(|t|{
         let team_id = t.team_id;
         if let Some(players) = &t.players{

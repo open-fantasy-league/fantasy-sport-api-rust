@@ -110,7 +110,7 @@ pub fn get_unchosen_draft_choices(
     // TODO this is way too heavyweight for being called every draft-choice
     // really once draft is fixed, the max_per_blah settings shouldnt be changing. Same for period timespan.
     // When fantasy-teams/users are locked in for draft, then settings should lock as well, and be pulled into memory
-
+    sql_function!(fn upper(x: sql_types::Range<sql_types::Timestamptz>) -> sql_types::Timestamptz);
     draft_choices::table
         .left_join(picks::table)
         .filter(picks::pick_id.is_null())
@@ -124,6 +124,7 @@ pub fn get_unchosen_draft_choices(
             team_drafts::all_columns,
             leagues::all_columns,
         ))
+        .order(upper(draft_choices::timespan))
         .load(&conn)
 }
 

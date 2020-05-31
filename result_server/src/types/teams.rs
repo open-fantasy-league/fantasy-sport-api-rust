@@ -112,8 +112,8 @@ impl ApiTeamWithPlayersHierarchy{
 pub struct TeamPlayer {
     #[serde(skip_serializing)]
     pub team_player_id: Uuid,
-    pub team_id: Uuid,
     pub player_id: Uuid,
+    pub team_id: Uuid,
     #[serde(with = "my_timespan_format")]
     pub timespan: DieselTimespan,
 }
@@ -121,8 +121,8 @@ pub struct TeamPlayer {
 #[derive(Queryable, Insertable, LabelledGeneric, Deserialize, Serialize, Debug, Clone)]
 #[table_name = "team_players"]
 pub struct ApiTeamPlayer {
-    pub team_id: Uuid,
     pub player_id: Uuid,
+    pub team_id: Uuid,
     #[serde(with = "my_timespan_format")]
     pub timespan: DieselTimespan,
 }

@@ -11,7 +11,7 @@ use crate::subscriptions::SubType;
 use crate::drafting;
 use crate::errors;
 use std::collections::HashMap;
-use tokio::sync::{MutexGuard, Mutex};
+use tokio::sync::{MutexGuard, Mutex, Notify};
 use std::sync::Arc;
 use tokio::runtime::Handle;
 use itertools::Itertools;
@@ -46,7 +46,9 @@ pub async fn update_leagues(method: &str, message_id: Uuid, data: Vec<LeagueUpda
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
-pub async fn insert_periods(method: &str, message_id: Uuid, data: Vec<Period>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
+pub async fn insert_periods(
+    method: &str, message_id: Uuid, data: Vec<Period>, conn: PgConn, ws_conns: &mut WSConnections_, draft_notifier: Arc<Notify>
+) -> Result<String, BoxError>{
     println!("{:#?}", &data);
     let out: Vec<Period> = insert!(&conn, periods::table, data)?;
     let to_publish = db::get_full_leagues(&conn, Some(out.iter().map(|p|&p.league_id).collect_vec()))?;
@@ -54,6 +56,8 @@ pub async fn insert_periods(method: &str, message_id: Uuid, data: Vec<Period>, c
         ws_conns, &to_publish,  SubType::League, None
     ).await?;
     println!("postpublish");
+    draft_notifier.notify();
+    println!("Handler: Notified drafting that might have new draft");
     let resp_msg = WSMsgOut::resp(message_id, method, to_publish);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
