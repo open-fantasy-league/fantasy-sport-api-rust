@@ -193,9 +193,11 @@ pub fn generate_drafts(
     })
 }
 
-pub async fn publish_updated_pick(pg_conn: PgConn, ws_conns: &mut WSConnections_, pick: Pick) -> Result<bool, BoxError>{
-    let to_publish: Vec<ApiDraft> = db::get_drafts_for_picks(&pg_conn, vec![pick.pick_id])?;
-    publish::<SubType, ApiDraft>(ws_conns, &to_publish, SubType::Draft, None).await
+pub async fn publish_updated_pick(pg_conn: PgConn, ws_conns: &mut WSConnections_, pick: Pick, draft_id: Uuid) -> Result<bool, BoxError>{
+    let to_publish: Vec<ApiPick> = vec![ApiPick{
+        pick_id: pick.pick_id, player_id: pick.player_id, timespan: pick.timespan, fantasy_team_id: Some(pick.fantasy_team_id), draft_id: Some(draft_id)
+    }];
+    publish::<SubType, ApiPick>(ws_conns, &to_publish, SubType::Draft, None).await
 }
 
 
@@ -243,7 +245,7 @@ pub async fn draft_handler(
                                     Ok((p, _)) => {
                                         // TODO no way should be doing this on every pick
                                         // Well maybe the publish part, but not the huge db query to get full hierarchy
-                                        match publish_updated_pick(pg_pool.get().unwrap(), &mut ws_conns, p).await{
+                                        match publish_updated_pick(pg_pool.get().unwrap(), &mut ws_conns, p, team_draft.draft_id).await{
                                             Err(e) => println!("Error publishing draft picks: {:?}", e),
                                             _ => {}
                                         }

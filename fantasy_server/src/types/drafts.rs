@@ -202,6 +202,9 @@ pub struct ApiPick {
     pub player_id: Uuid,
     #[serde(with = "my_timespan_format")]
     pub timespan: DieselTimespan,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub draft_id: Option<Uuid>,
+    pub fantasy_team_id: Option<Uuid>,
 }
 
 #[derive(Deserialize, Serialize, Debug, LabelledGeneric)]

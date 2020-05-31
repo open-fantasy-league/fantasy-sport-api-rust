@@ -83,6 +83,32 @@ impl Publishable<SubType> for ApiDraft {
     }
 }
 
+impl Publishable<SubType> for ApiPick {
+    fn message_type<'a>() -> &'a str {
+        "pick"
+    }
+
+    fn partial_subscribed_publishables<'b>(
+        publishables: &'b Vec<Self>,
+        sub: &mut Subscription,
+        sub_type: &SubType,
+        _: &Option<HashMap<Uuid, Uuid>>,
+    ) -> Vec<&'b Self> {
+        match sub_type {
+            SubType::League => {
+                warp_ws_server::this_should_never_happen(publishables, "Draft published for League")
+            }
+            SubType::Draft => publishables
+                .iter()
+                .filter(|x| sub.ids.contains(&x.draft_id.unwrap()))
+                .collect(),
+            SubType::User => {
+                warp_ws_server::this_should_never_happen(publishables, "Draft published for User")
+            }
+        }
+    }
+}
+
 impl Publishable<SubType> for ExternalUser {
     fn message_type<'a>() -> &'a str {
         "user"

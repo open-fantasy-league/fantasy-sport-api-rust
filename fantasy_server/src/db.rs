@@ -300,6 +300,8 @@ pub fn get_drafts_for_picks(
                                             pick_id: ap.pick_id,
                                             player_id: pick.player_id,
                                             timespan: ap.timespan,
+                                            draft_id: None,
+                                            fantasy_team_id: None,
                                         })
                                         .collect_vec(),
                                 );
@@ -409,6 +411,8 @@ pub fn get_full_drafts(
                                             pick_id: ap.pick_id,
                                             player_id: pick.player_id,
                                             timespan: ap.timespan,
+                                            draft_id: None,
+                                            fantasy_team_id: None,
                                         })
                                         .collect_vec(),
                                 );
