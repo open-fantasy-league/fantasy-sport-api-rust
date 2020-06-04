@@ -54,6 +54,9 @@ impl WSHandler<subscriptions::SubType, Caches> for MyWsHandler{
             WSReq::Period{message_id, data} => insert_periods("Period", message_id, data, conn, ws_conns, caches.2).await,
             WSReq::PeriodUpdate{message_id, data} => update_periods("PeriodUpdate", message_id, data, conn, ws_conns).await,
             WSReq::StatMultiplier{message_id, data} => insert_stat_multipliers("StatMultiplier", message_id, data, conn, ws_conns).await,
+            WSReq::MaxPlayersPerPosition{message_id, data} => insert_max_players_per_position(
+                "MaxPlayersPerPosition", message_id, data, conn, ws_conns
+            ).await,
             WSReq::StatMultiplierUpdate{message_id, data} => update_stat_multipliers("StatMultiplierUpdate", message_id, data, conn, ws_conns).await,
             WSReq::ExternalUser{message_id, data} => insert_external_users("ExternalUser", message_id, data, conn, ws_conns).await,
             WSReq::ExternalUserUpdate{message_id, data} => update_external_users("ExternalUserUpdate", message_id, data, conn, ws_conns).await,

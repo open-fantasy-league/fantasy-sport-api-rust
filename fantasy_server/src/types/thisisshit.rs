@@ -13,11 +13,11 @@ pub enum ResultMsgs {
         data: Vec<ApiTeamWithPlayersHierarchy>,
         mode: String,
     },
-    team_and_players{
+    team_and_players {
         message_id: Uuid,
         data: Vec<ApiTeamWithPlayersHierarchy>,
         mode: String,
-    }
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug)]

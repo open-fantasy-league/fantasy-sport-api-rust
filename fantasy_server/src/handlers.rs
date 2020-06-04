@@ -103,6 +103,18 @@ pub async fn update_stat_multipliers(method: &str, message_id: Uuid, data: Vec<S
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
+pub async fn insert_max_players_per_position(
+    method: &str, message_id: Uuid, data: Vec<MaxPlayersPerPosition>, conn: PgConn, ws_conns: &mut WSConnections_
+) -> Result<String, BoxError>{
+    let out: Vec<MaxPlayersPerPosition> = insert!(&conn, max_players_per_positions::table, data)?;
+    let to_publish = db::get_full_leagues(&conn, Some(out.iter().map(|p|&p.league_id).collect_vec()))?;
+    publish::<SubType, ApiLeague>(
+        ws_conns, &to_publish,  SubType::League, None
+    ).await?;
+    let resp_msg = WSMsgOut::resp(message_id, method, to_publish);
+    serde_json::to_string(&resp_msg).map_err(|e| e.into())
+}
+
 pub async fn insert_external_users(method: &str, message_id: Uuid, data: Vec<ExternalUser>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
     println!("{:?}", &data);
     // TODO reduce the ridiculousness of the Values type
@@ -262,11 +274,14 @@ pub async fn upsert_active_picks(
         );
         match (player_position_cache_opt.as_ref(), player_team_cache_opt.as_ref()){
             (Some(ref player_position_cache), Some(ref player_team_cache)) => {
+                let mut max_positions: HashMap<String, i32> = HashMap::new();
+                let max_pos_vec = db::get_max_per_position(&conn, league.league_id).unwrap();
+                let max_positions: HashMap<String, i32> = max_pos_vec.into_iter().map(|x| (x.position, x.squad_max)).collect();
                 let verified_teams = drafting::verify_teams(
                     all_teams, player_position_cache,
                     player_team_cache,
                     &league.max_team_players_same_team,
-                    &league.max_team_players_same_position,
+                    &max_positions,
                     &league.team_size
                 );
                 Ok(verified_teams)

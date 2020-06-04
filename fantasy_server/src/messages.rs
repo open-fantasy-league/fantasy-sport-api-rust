@@ -58,6 +58,10 @@ pub enum WSReq {
         message_id: Uuid,
         data: Vec<StatMultiplierUpdate>,
     },
+    MaxPlayersPerPosition {
+        message_id: Uuid,
+        data: Vec<MaxPlayersPerPosition>,
+    },
     ExternalUser {
         message_id: Uuid,
         data: Vec<ExternalUser>,

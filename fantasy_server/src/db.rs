@@ -45,15 +45,19 @@ pub fn get_full_leagues(
     }?;
     let periods = Period::belonging_to(&leagues).load::<Period>(conn)?;
     let stats = StatMultiplier::belonging_to(&leagues).load::<StatMultiplier>(conn)?;
+    let max_players_per_position =
+        MaxPlayersPerPosition::belonging_to(&leagues).load::<MaxPlayersPerPosition>(conn)?;
     let fantasy_teams = FantasyTeam::belonging_to(&leagues).load::<FantasyTeam>(conn)?;
     let grouped_periods = periods.grouped_by(&leagues);
     let grouped_stats = stats.grouped_by(&leagues);
+    let grouped_max_players_per_position = max_players_per_position.grouped_by(&leagues);
     let grouped_fantasy_teams = fantasy_teams.grouped_by(&leagues);
     Ok(ApiLeague::from_rows(
         izip!(
             leagues,
             grouped_periods,
             grouped_stats,
+            grouped_max_players_per_position,
             grouped_fantasy_teams
         )
         .collect(),
@@ -102,7 +106,7 @@ pub fn get_valid_picks(
 }
 
 pub fn get_unchosen_draft_choices(
-    conn: PgConn,
+    conn: &PgConn,
 ) -> Result<Vec<(DraftChoice, Period, TeamDraft, League)>, diesel::result::Error> {
     // So this would join every row, including old rows, then filter most of them out.
     // Should check postgresql optimises nicely.
@@ -125,7 +129,16 @@ pub fn get_unchosen_draft_choices(
             leagues::all_columns,
         ))
         .order(upper(draft_choices::timespan))
-        .load(&conn)
+        .load(conn)
+}
+
+pub fn get_max_per_position(
+    conn: &PgConn,
+    league_id: Uuid,
+) -> Result<Vec<MaxPlayersPerPosition>, diesel::result::Error> {
+    max_players_per_positions::table
+        .filter(max_players_per_positions::league_id.eq(league_id))
+        .load(conn)
 }
 
 pub fn get_randomised_teams_for_league(

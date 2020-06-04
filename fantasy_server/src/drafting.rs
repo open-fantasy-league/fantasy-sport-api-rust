@@ -213,7 +213,9 @@ pub async fn draft_handler(
     let mut timeout: Option<chrono::Duration> = None;
 
     'outer: loop {
-        let unchosen = db::get_unchosen_draft_choices(pg_pool.get().unwrap());
+        // TODO do i need both unwraps? and two pools
+        let conn = pg_pool.get().unwrap();
+        let unchosen = db::get_unchosen_draft_choices(&conn);
         println!("Draft: length unchosen picks: {:?}", &unchosen.as_ref().map(|x|x.iter().map(|y|y.0.team_draft_id).collect_vec().len()));
         match unchosen{
             // Want this to be resilient/not bring down whole service.....
@@ -224,6 +226,12 @@ pub async fn draft_handler(
                 continue
             },
             Ok(all_unchosen) => {
+                // TODO handle this less terribly
+                let mut league_to_max_per_position: HashMap<Uuid, HashMap<String, i32>> = HashMap::new();
+                all_unchosen.iter().map(|t| t.3.league_id).dedup().for_each(|lid|{
+                    let max_pos_vec = db::get_max_per_position(&conn, lid).unwrap();
+                    league_to_max_per_position.insert(lid, max_pos_vec.into_iter().map(|x| (x.position, x.squad_max)).collect());
+                }); 
                 for unchosen in all_unchosen.into_iter(){
                     let (draft_choice, period, team_draft, league) = unchosen;
                     let raw_time = DieselTimespan::upper(draft_choice.timespan);
@@ -239,7 +247,7 @@ pub async fn draft_handler(
                                 let out: Result<(Pick, Option<ActivePick>), BoxError> = pick_from_queue_or_random(
                                     // TODO safetify these unwraps
                                     pg_pool.get().unwrap(), team_draft.fantasy_team_id, draft_choice, period.timespan, period.period_id,
-                                    &league.max_squad_players_same_team, &league.max_squad_players_same_position,
+                                    &league.max_squad_players_same_team, league_to_max_per_position.get(&league.league_id).unwrap(),
                                     pick_straight_into_team,
                                     player_position_cache, player_team_cache
                                 );
@@ -314,7 +322,7 @@ pub fn pick_from_queue_or_random(
     belongs_to_team_for: DieselTimespan,
     period_id: Uuid,
     max_squad_players_same_team: &i32,
-    max_squad_players_same_position: &i32,
+    max_squad_players_same_position: &HashMap<String, i32>,
     pick_straight_into_team: bool,
     player_position_cache: &HashMap<Uuid, String>,
     player_team_cache: &HashMap<Uuid, Uuid>
@@ -335,7 +343,9 @@ pub fn pick_from_queue_or_random(
             current_squad, player_position_cache, player_team_cache
         );
         let banned_teams: HashSet<Uuid> = team_counts.into_iter().filter(|(_, count)| count > max_squad_players_same_team).map(|(team, _)| team).collect();
-        let banned_positions: HashSet<String> = position_counts.into_iter().filter(|(_, count)| count > max_squad_players_same_position).map(|(pos, _)| pos).collect();
+        // TODO properly handle a missed position, not just assume a high max
+        let banned_positions: HashSet<String> = position_counts.into_iter()
+            .filter(|(pos, count)| count > max_squad_players_same_position.get(pos).unwrap_or(&99i32)).map(|(pos, _)| pos).collect();
         let valid_remaining_players_hash: HashSet<&Uuid> = valid_remaining_players.iter().collect();
         // TODO do dumb then tidy
         let mut new_pick: Option<Pick> = None;
@@ -432,7 +442,7 @@ pub fn verify_teams(
     player_position_cache: &HashMap<Uuid, String>,
     player_team_cache: &HashMap<Uuid, Uuid>,
     max_team_players_same_team: &i32,
-    max_team_players_same_position: &i32,
+    max_team_players_same_position: &HashMap<String, i32>,
     max_team_size: &i32
 ) -> Result<bool, BoxError>{
     for team in all_teams{
@@ -443,8 +453,11 @@ pub fn verify_teams(
         if &team_len > max_team_size {
             return Err(Box::new(errors::InvalidTeamError{description: format!("Team cannot be larger than {}", max_team_size)}) as BoxError)
         }
-        if position_counts.values().max().unwrap_or(&0i32) > max_team_players_same_position{
-            return Err(Box::new(errors::InvalidTeamError{description: format!("Team cannot have more than {} players from same position", max_team_players_same_position)}) as BoxError)
+        for (pos, count) in position_counts{
+            let max = max_team_players_same_position.get(&pos).unwrap_or(&99i32);
+            if &count > max{
+                return Err(Box::new(errors::InvalidTeamError{description: format!("Team cannot have more than {} players for position {}", max, pos)}) as BoxError)
+            }
         }
         if team_counts.values().max().unwrap_or(&0i32) > max_team_players_same_team {
             return Err(Box::new(errors::InvalidTeamError{description: format!("Team cannot have more than {} players from same team", max_team_players_same_team)}) as BoxError)

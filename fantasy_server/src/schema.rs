@@ -112,6 +112,15 @@ table! {
 }
 
 table! {
+    max_players_per_positions (league_id, position) {
+        league_id -> Uuid,
+        position -> Text,
+        team_max -> Int4,
+        squad_max -> Int4,
+    }
+}
+
+table! {
     team_drafts (team_draft_id) {
         team_draft_id -> Uuid,
         draft_id -> Uuid,
@@ -138,6 +147,7 @@ joinable!(periods -> leagues (league_id));
 joinable!(picks -> draft_choices (draft_choice_id));
 joinable!(picks -> fantasy_teams (fantasy_team_id));
 joinable!(stat_multipliers -> leagues (league_id));
+joinable!(max_players_per_positions -> leagues (league_id));
 joinable!(team_drafts -> drafts (draft_id));
 joinable!(team_drafts -> fantasy_teams (fantasy_team_id));
 joinable!(valid_players -> periods (period_id));
@@ -157,4 +167,5 @@ allow_tables_to_appear_in_same_query!(
     stat_multipliers,
     team_drafts,
     valid_players,
+    max_players_per_positions,
 );

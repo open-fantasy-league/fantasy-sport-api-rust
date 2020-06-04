@@ -54,7 +54,7 @@ services:
       - 3003:3003
     restart: always
     working_dir: /home/rust/fantasy
-    command: /bin/bash -c "./diesel setup && ./diesel migration run && sleep 10 && ./fantasy_server"
+    command: /bin/bash -c "./diesel setup && ./diesel migration run && ./fantasy_server"
 
   fantasy_db:
     build:

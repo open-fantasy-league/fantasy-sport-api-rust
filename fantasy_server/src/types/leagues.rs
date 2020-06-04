@@ -47,9 +47,20 @@ pub struct LeagueUpdate {
     // sending in "arg": null in json doesnt null it in db. It deserializes to None, rather than Some(None)
     // simpler to just make default a big number anyway. Then zero null-handling
     pub max_squad_players_same_team: Option<i32>,
-    pub max_squad_players_same_position: Option<i32>,
+    //pub max_squad_players_same_position: Option<i32>,
     pub max_team_players_same_team: Option<i32>,
-    pub max_team_players_same_position: Option<i32>,
+    //pub max_team_players_same_position: Option<i32>,
+}
+
+#[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations)]
+#[belongs_to(League)]
+#[table_name = "max_players_per_positions"]
+#[primary_key(league_id, position)]
+pub struct MaxPlayersPerPosition {
+    pub league_id: Uuid,
+    pub position: String,
+    pub team_max: i32,
+    pub squad_max: i32,
 }
 
 #[derive(Insertable, Deserialize, Queryable, Serialize, Debug, Identifiable, Associations)]
@@ -133,36 +144,44 @@ pub struct ApiLeague {
     pub competition_id: Uuid,
     pub meta: serde_json::Value,
     pub max_squad_players_same_team: i32,
-    pub max_squad_players_same_position: i32,
     pub max_team_players_same_team: i32,
-    pub max_team_players_same_position: i32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub periods: Option<Vec<Period>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stat_multipliers: Option<Vec<StatMultiplier>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub fantasy_teams: Option<Vec<FantasyTeam>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_players_per_position: Option<Vec<MaxPlayersPerPosition>>,
 }
 
 impl ApiLeague {
     pub fn from_rows(
-        rows: Vec<(League, Vec<Period>, Vec<StatMultiplier>, Vec<FantasyTeam>)>,
+        rows: Vec<(
+            League,
+            Vec<Period>,
+            Vec<StatMultiplier>,
+            Vec<MaxPlayersPerPosition>,
+            Vec<FantasyTeam>,
+        )>,
     ) -> Vec<Self> {
         rows.into_iter()
-            .map(|(l, periods, stats, fantasy_teams)| Self {
-                periods: Some(periods),
-                stat_multipliers: Some(stats),
-                fantasy_teams: Some(fantasy_teams),
-                league_id: l.league_id,
-                name: l.name,
-                team_size: l.team_size,
-                squad_size: l.squad_size,
-                competition_id: l.competition_id,
-                meta: l.meta,
-                max_squad_players_same_team: l.max_squad_players_same_team,
-                max_squad_players_same_position: l.max_squad_players_same_position,
-                max_team_players_same_team: l.max_team_players_same_team,
-                max_team_players_same_position: l.max_team_players_same_position,
-            })
+            .map(
+                |(l, periods, stats, max_players_per_position, fantasy_teams)| Self {
+                    periods: Some(periods),
+                    stat_multipliers: Some(stats),
+                    fantasy_teams: Some(fantasy_teams),
+                    max_players_per_position: Some(max_players_per_position),
+                    league_id: l.league_id,
+                    name: l.name,
+                    team_size: l.team_size,
+                    squad_size: l.squad_size,
+                    competition_id: l.competition_id,
+                    meta: l.meta,
+                    max_squad_players_same_team: l.max_squad_players_same_team,
+                    max_team_players_same_team: l.max_team_players_same_team,
+                },
+            )
             .collect()
     }
 
@@ -173,6 +192,7 @@ impl ApiLeague {
                 fantasy_teams: None,
                 periods: None,
                 stat_multipliers: None,
+                max_players_per_position: None,
                 league_id: l.league_id,
                 name: l.name,
                 team_size: l.team_size,
@@ -180,9 +200,7 @@ impl ApiLeague {
                 competition_id: l.competition_id,
                 meta: l.meta,
                 max_squad_players_same_team: l.max_squad_players_same_team,
-                max_squad_players_same_position: l.max_squad_players_same_position,
                 max_team_players_same_team: l.max_team_players_same_team,
-                max_team_players_same_position: l.max_team_players_same_position,
             })
             .collect()
     }

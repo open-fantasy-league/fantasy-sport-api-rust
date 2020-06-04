@@ -99,10 +99,18 @@ CREATE TABLE draft_queues(
 
 CREATE TABLE stat_multipliers(
     league_id UUID NOT NULL REFERENCES leagues,
-    name TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
     multiplier REAL NOT NULL,
     meta JSONB NOT NULL DEFAULT '{}',
     PRIMARY KEY(league_id, name)
+);
+
+CREATE TABLE max_players_per_positions(
+    league_id UUID NOT NULL REFERENCES leagues,
+    position TEXT NOT NULL,
+    team_max INT NOT NULL,
+    squad_max INT NOT NULL,
+    PRIMARY KEY(league_id, position)
 );
 
 CREATE INDEX fantasy_team_league_idx on fantasy_teams(league_id);
