@@ -274,7 +274,6 @@ pub async fn upsert_active_picks(
         );
         match (player_position_cache_opt.as_ref(), player_team_cache_opt.as_ref()){
             (Some(ref player_position_cache), Some(ref player_team_cache)) => {
-                let mut max_positions: HashMap<String, i32> = HashMap::new();
                 let max_pos_vec = db::get_max_per_position(&conn, league.league_id).unwrap();
                 let max_positions: HashMap<String, i32> = max_pos_vec.into_iter().map(|x| (x.position, x.squad_max)).collect();
                 let verified_teams = drafting::verify_teams(
@@ -348,15 +347,16 @@ pub async fn update_fantasy_teams(method: &str, message_id: Uuid, data: Vec<Fant
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
-pub async fn insert_valid_players(method: &str, message_id: Uuid, data: Vec<ValidPlayer>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
-    let out: Vec<ValidPlayer> = insert!(&conn, valid_players::table, &data)?;
+// TODO this should publish
+pub async fn insert_valid_players(method: &str, message_id: Uuid, data: Vec<ValidPlayer>, conn: PgConn, _: &mut WSConnections_) -> Result<String, BoxError>{
+    let _: Vec<ValidPlayer> = insert!(&conn, valid_players::table, &data)?;
     //let to_publish: Vec<ApiDraft> = db::get_drafts_for_picks(&conn, out.iter().map(|p|p.pick_id).collect())?;
     //publish::<SubType, ApiDraft>(ws_conns, &to_publish, SubType::Draft, None).await?;
     let resp_msg = WSMsgOut::resp(message_id, method, data);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
-pub async fn delete_valid_players(method: &str, message_id: Uuid, data: Vec<ValidPlayer>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
+pub async fn delete_valid_players(method: &str, message_id: Uuid, data: Vec<ValidPlayer>, conn: PgConn, _: &mut WSConnections_) -> Result<String, BoxError>{
     // TODO work out how bulk delete
     // also put this in db
     use crate::diesel::QueryDsl;

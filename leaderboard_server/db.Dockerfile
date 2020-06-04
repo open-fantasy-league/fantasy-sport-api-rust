@@ -1,2 +1,2 @@
 FROM timescale/timescaledb:latest-pg12
-COPY scripts/extensions.sh /docker-entrypoint-initdb.d/
+COPY scripts/extensions.sql /docker-entrypoint-initdb.d/

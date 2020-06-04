@@ -47,7 +47,7 @@ pub async fn draft_builder(pg_pool: PgPool, mut ws_conns: WSConnections_, new_dr
     // TODO handle error
     let mut timeout: Option<chrono::Duration> = None;
 
-    'outer: loop {
+    loop {
         //let conn = pg_pool.clone().get().unwrap();
         match db::get_undrafted_periods(pg_pool.get().unwrap()){
             // Want this to be resilient/not bring down whole service.....
@@ -193,7 +193,7 @@ pub fn generate_drafts(
     })
 }
 
-pub async fn publish_updated_pick(pg_conn: PgConn, ws_conns: &mut WSConnections_, pick: Pick, draft_id: Uuid) -> Result<bool, BoxError>{
+pub async fn publish_updated_pick(ws_conns: &mut WSConnections_, pick: Pick, draft_id: Uuid) -> Result<bool, BoxError>{
     let to_publish: Vec<ApiPick> = vec![ApiPick{
         pick_id: pick.pick_id, player_id: pick.player_id, timespan: pick.timespan, fantasy_team_id: Some(pick.fantasy_team_id), draft_id: Some(draft_id)
     }];
@@ -212,7 +212,7 @@ pub async fn draft_handler(
     // TODO handle error
     let mut timeout: Option<chrono::Duration> = None;
 
-    'outer: loop {
+    loop {
         // TODO do i need both unwraps? and two pools
         let conn = pg_pool.get().unwrap();
         let unchosen = db::get_unchosen_draft_choices(&conn);
@@ -256,7 +256,7 @@ pub async fn draft_handler(
                                     Ok((p, _)) => {
                                         // TODO no way should be doing this on every pick
                                         // Well maybe the publish part, but not the huge db query to get full hierarchy
-                                        match publish_updated_pick(pg_pool.get().unwrap(), &mut ws_conns, p, team_draft.draft_id).await{
+                                        match publish_updated_pick(&mut ws_conns, p, team_draft.draft_id).await{
                                             Err(e) => println!("Error publishing draft picks: {:?}", e),
                                             _ => {}
                                         }
