@@ -126,7 +126,7 @@ pub fn generate_drafts(
         let teams = db::get_randomised_teams_for_league(&conn, period.league_id)?;
         let squad_size = db::get_league_squad_size(&conn, period.league_id)? as usize;
         let num_teams = teams.len();
-        let num_drafts = period.teams_per_draft as usize / teams.len() as usize + 1;
+        let num_drafts = ((num_teams - 1 ) / period.teams_per_draft as usize) + 1;
         let draft_map: HashMap<usize, Vec<FantasyTeam>> =
             teams
                 .into_iter()
