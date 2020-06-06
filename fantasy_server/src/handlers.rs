@@ -183,9 +183,55 @@ pub async fn update_draft_choices(method: &str, message_id: Uuid, data: Vec<Draf
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
-pub async fn insert_picks(method: &str, message_id: Uuid, data: Vec<Pick>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
-    let out: Vec<Pick> = insert!(&conn, picks::table, &data)?;
-    let to_publish: Vec<ApiDraft> = db::get_drafts_for_picks(&conn, out.iter().map(|p|p.pick_id).collect())?;
+pub async fn insert_picks(
+    method: &str, message_id: Uuid, data: Vec<Pick>, conn: PgConn, ws_conns: &mut WSConnections_, 
+    player_position_cache_mut: Arc<Mutex<Option<HashMap<Uuid, String>>>>, 
+    player_team_cache_mut: Arc<Mutex<Option<HashMap<Uuid, Uuid>>>>
+) -> Result<String, BoxError>{
+    let pick_ids = conn.build_transaction().run(|| {
+        // let (player_position_cache, player_team_cache, all_teams, league) = inner(
+        //     conn, data, player_position_cache_mut, player_team_cache_mut
+        // ).await?;
+        let picks: Vec<Pick> = insert!(&conn, picks::table, &data)?;
+        // TODO this needs changing for when have squads and not just teams
+        let active_picks = picks.iter().map(|p| ActivePick{active_pick_id: Uuid::new_v4(), pick_id: p.pick_id, timespan: p.timespan}).collect_vec();
+        let _ = db::upsert_active_picks(&conn, &active_picks)?;
+        let pick_ids = active_picks.iter().map(|ap|ap.pick_id).collect();
+        let all_teams = db::get_all_updated_teams(&conn, &pick_ids)?;
+        let leagues = db::get_leagues_for_picks(&conn, &pick_ids)?;
+        if leagues.len() > 1{
+            return Err(Box::new(errors::InvalidInputError{description: "Active picks specified are from more than one league"}) as BoxError)
+        }
+        let league = match leagues.first(){
+            Some(league) => league,
+            None => {return Err(Box::new(errors::InvalidInputError{description: "Could not find a league for active picks"}) as BoxError)}
+        };
+        // let player_position_cache_opt = player_position_cache_mut.lock().await;
+        // let player_team_cache_opt = player_team_cache_mut.lock().await;
+        // https://stackoverflow.com/a/52521592/3920439
+        // This essentially forces an async func, into a synchronous context.
+        // Diesel doesnt support async in transactions yet.
+        // https://docs.rs/tokio/0.2.21/tokio/runtime/struct.Handle.html#method.current
+        let (player_position_cache_opt, player_team_cache_opt) = Handle::current().block_on(
+            get_cache_mutexs(&player_position_cache_mut, &player_team_cache_mut)
+        );
+        match (player_position_cache_opt.as_ref(), player_team_cache_opt.as_ref()){
+            (Some(ref player_position_cache), Some(ref player_team_cache)) => {
+                let max_pos_vec = db::get_max_per_position(&conn, league.league_id).unwrap();
+                let max_positions: HashMap<String, i32> = max_pos_vec.into_iter().map(|x| (x.position, x.squad_max)).collect();
+                drafting::verify_teams(
+                    all_teams, player_position_cache,
+                    player_team_cache,
+                    &league.max_team_players_same_team,
+                    &max_positions,
+                    &league.team_size
+                )
+            },
+            _ => {Err(Box::new(errors::CustomError{description: "Player team and position caches not yet populated"}) as BoxError)}
+        }?;
+        Ok(pick_ids)
+    })?;
+    let to_publish: Vec<ApiDraft> = db::get_drafts_for_picks(&conn, pick_ids)?;
     publish::<SubType, ApiDraft>(ws_conns, &to_publish, SubType::Draft, None).await?;
     let resp_msg = WSMsgOut::resp(message_id, method, to_publish);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
@@ -278,50 +324,21 @@ pub async fn upsert_active_picks(
             (Some(ref player_position_cache), Some(ref player_team_cache)) => {
                 let max_pos_vec = db::get_max_per_position(&conn, league.league_id).unwrap();
                 let max_positions: HashMap<String, i32> = max_pos_vec.into_iter().map(|x| (x.position, x.squad_max)).collect();
-                let verified_teams = drafting::verify_teams(
+                drafting::verify_teams(
                     all_teams, player_position_cache,
                     player_team_cache,
                     &league.max_team_players_same_team,
                     &max_positions,
                     &league.team_size
-                );
-                Ok(verified_teams)
+                )
             },
             _ => {Err(Box::new(errors::CustomError{description: "Player team and position caches not yet populated"}) as BoxError)}
-        }?
+        }
     })?;
     let to_publish: Vec<ApiDraft> = db::get_drafts_for_picks(&conn, data.iter().map(|p|p.pick_id).collect())?;
     publish::<SubType, ApiDraft>(ws_conns, &to_publish, SubType::Draft, None).await?;
     let resp_msg = WSMsgOut::resp(message_id, method, to_publish);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
-
-    // conn.build_transaction().run(|| {
-    //     let upserted = db::upsert_active_picks(&conn, &data);
-    //     let pick_ids = data.iter().map(|ap|ap.pick_id).collect();
-    //     let all_teams = db::get_all_updated_teams(&conn, pick_ids)?;
-    //     let leagues = db::get_leagues_for_picks(&conn, pick_ids)?;
-    //     if leagues.len() > 1{
-    //         return Err(Box::new(errors::InvalidInputError{description: "Active picks specified are from more than one league"}) as BoxError)
-    //     }
-    //     let league = match leagues.first(){
-    //         Some(league) => league,
-    //         None => {return Err(Box::new(errors::InvalidInputError{description: "Could not find a league for active picks"}) as BoxError)}
-    //     };
-    //     let player_position_cache_opt = player_position_cache_mut.lock().await;
-    //     let player_team_cache_opt = player_team_cache_mut.lock().await;
-    //     match (*player_position_cache_opt, *player_team_cache_opt){
-    //         (Some(ref player_position_cache), Some(ref player_team_cache)) => {
-    //             let verified_teams = drafting::verify_teams(
-    //                 all_teams, player_position_cache,
-    //                 player_team_cache,
-    //                 &league.max_team_players_same_team,
-    //                 &league.max_team_players_same_position,
-    //                 &league.team_size);
-    //                 Ok(verified_teams)
-    //             },
-    //         _ => {Err(Box::new(errors::CustomError{description: "Player team and position caches not yet populated"}) as BoxError)}
-    //     }?
-    // });
 }
 
 pub async fn insert_fantasy_teams(method: &str, message_id: Uuid, data: Vec<FantasyTeam>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
