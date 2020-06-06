@@ -62,7 +62,7 @@ pub async fn insert_periods(
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
-pub async fn update_periods(method: &str, message_id: Uuid, data: Vec<PeriodUpdate>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
+pub async fn update_periods(method: &str, message_id: Uuid, data: Vec<PeriodUpdate>, conn: PgConn, ws_conns: &mut WSConnections_, draft_notifier: Arc<Notify>) -> Result<String, BoxError>{
     println!("{:?}", &data);
     let out: Vec<Period> = conn.build_transaction().run(|| {
         data.iter().map(|c| {
@@ -72,6 +72,8 @@ pub async fn update_periods(method: &str, message_id: Uuid, data: Vec<PeriodUpda
     publish::<SubType, ApiLeague>(
         ws_conns, &to_publish,  SubType::League, None
     ).await?;
+    draft_notifier.notify();
+    println!("Handler: Notified drafting that might have updated draft");
     let resp_msg = WSMsgOut::resp(message_id, method, to_publish);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }

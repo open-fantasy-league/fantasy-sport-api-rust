@@ -52,7 +52,7 @@ impl WSHandler<subscriptions::SubType, Caches> for MyWsHandler{
             WSReq::League{message_id, data} => insert_leagues("League", message_id, data, conn, ws_conns).await,
             WSReq::LeagueUpdate{message_id, data} => update_leagues("LeagueUpdate", message_id, data, conn, ws_conns).await,
             WSReq::Period{message_id, data} => insert_periods("Period", message_id, data, conn, ws_conns, caches.2).await,
-            WSReq::PeriodUpdate{message_id, data} => update_periods("PeriodUpdate", message_id, data, conn, ws_conns).await,
+            WSReq::PeriodUpdate{message_id, data} => update_periods("PeriodUpdate", message_id, data, conn, ws_conns, caches.2).await,
             WSReq::StatMultiplier{message_id, data} => insert_stat_multipliers("StatMultiplier", message_id, data, conn, ws_conns).await,
             WSReq::MaxPlayersPerPosition{message_id, data} => insert_max_players_per_position(
                 "MaxPlayersPerPosition", message_id, data, conn, ws_conns
