@@ -471,27 +471,37 @@ pub fn get_full_drafts(
     Ok(out)
 }
 
+#[derive(QueryableByName)]
+pub struct Count {
+    #[sql_type = "sql_types::BigInt"]
+    pub inner: i64,
+}
+
 pub fn num_invalid_timed_picks(
     conn: &PgConnection,
     draft_choice_ids: &Vec<Uuid>,
 ) -> Result<i64, diesel::result::Error> {
-    diesel_infix_operator!(Contains, " @> ");
+    let sql = "select count(*) from draft_choices WHERE draft_choice_id = ANY($1) AND NOT timespan @> now();";
+    sql_query(sql)
+        .bind::<sql_types::Array<sql_types::Uuid>, _>(draft_choice_ids)
+        .get_result::<Count>(conn).map(|x|x.inner)
+    // diesel_infix_operator!(Contains, " @> ");
 
-    use diesel::expression::AsExpression;
+    // use diesel::expression::AsExpression;
 
-    // Normally you would put this on a trait instead
-    fn contains<T, U>(left: T, right: U) -> Contains<T, U>
-    where
-        T: Expression,
-        U: Expression,
-    {
-        Contains::new(left, right)
-    }
+    // // Normally you would put this on a trait instead
+    // fn contains<T, U>(left: T, right: U) -> Contains<T, U>
+    // where
+    //     T: Expression,
+    //     U: Expression,
+    // {
+    //     Contains::new(left, right)
+    // }
 
-    draft_choices::table
-        .count()
-        .filter(draft_choices::draft_choice_id.eq(any(draft_choice_ids)))
-        //.filter(not(contains(draft_choices::timespan, now())))
-        .filter(not(contains(draft_choices::timespan, Utc::now())))
-        .get_result(conn)
+    // draft_choices::table
+    //     .count()
+    //     .filter(draft_choices::draft_choice_id.eq(any(draft_choice_ids)))
+    //     //.filter(not(contains(draft_choices::timespan, now())))
+    //     .filter(not(contains(draft_choices::timespan, Utc::now())))
+    //     .get_result(conn)
 }
