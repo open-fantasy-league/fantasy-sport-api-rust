@@ -7,7 +7,7 @@ WORKDIR /home/rust/result
 
 # Avoid having to install/build all dependencies by copying
 # the Cargo files and making a dummy src/main.rs
-COPY --chown=rust:rust Cargo.toml Cargo.lock ./
+COPY --chown=rust:rust Cargo.* ./
 # Just to get diesel_utils and warp_ws_server onto container. In future these can be published crates
 ADD https://api.github.com/repos/open-fantasy-league/fantasy-sport-api-rust/git/refs/heads/master version.json
 RUN git clone -b master https://github.com/open-fantasy-league/fantasy-sport-api-rust.git /home/rust/fantasy-sport-api-rust
