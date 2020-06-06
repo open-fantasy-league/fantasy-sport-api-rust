@@ -192,6 +192,10 @@ pub async fn insert_picks(
         // let (player_position_cache, player_team_cache, all_teams, league) = inner(
         //     conn, data, player_position_cache_mut, player_team_cache_mut
         // ).await?;
+        match db::num_invalid_timed_picks(&conn, &data.iter().map(|p| p.draft_choice_id).collect_vec())?{
+            0 => {},
+            _ => return Err(Box::new(errors::InvalidInputError{description: "Pick not within valid timespan"}) as BoxError)
+        };
         let picks: Vec<Pick> = insert!(&conn, picks::table, &data)?;
         // TODO this needs changing for when have squads and not just teams
         let active_picks = picks.iter().map(|p| ActivePick{active_pick_id: Uuid::new_v4(), pick_id: p.pick_id, timespan: p.timespan}).collect_vec();

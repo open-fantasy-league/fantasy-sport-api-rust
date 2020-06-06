@@ -1,9 +1,13 @@
 use crate::schema::{self, *};
 use crate::types::{drafts::*, fantasy_teams::*, leagues::*, users::*};
+use chrono::Utc;
+use diesel::dsl::{count, not, now};
+//use diesel::expression_methods::PgRangeExpressionMethods;
 use diesel::pg::expression::dsl::any;
 use diesel::pg::upsert::excluded;
 use diesel::prelude::*;
 use diesel::ExpressionMethods;
+use diesel::PgArrayExpressionMethods;
 use diesel::RunQueryDsl;
 use diesel::{sql_query, sql_types};
 use diesel_utils::PgConn;
@@ -465,4 +469,29 @@ pub fn get_full_drafts(
         })
         .collect_vec();
     Ok(out)
+}
+
+pub fn num_invalid_timed_picks(
+    conn: &PgConnection,
+    draft_choice_ids: &Vec<Uuid>,
+) -> Result<i64, diesel::result::Error> {
+    diesel_infix_operator!(Contains, " @> ");
+
+    use diesel::expression::AsExpression;
+
+    // Normally you would put this on a trait instead
+    fn contains<T, U>(left: T, right: U) -> Contains<T, U>
+    where
+        T: Expression,
+        U: Expression,
+    {
+        Contains::new(left, right)
+    }
+
+    draft_choices::table
+        .count()
+        .filter(draft_choices::draft_choice_id.eq(any(draft_choice_ids)))
+        //.filter(not(contains(draft_choices::timespan, now())))
+        .filter(not(contains(draft_choices::timespan, Utc::now())))
+        .get_result(conn)
 }
