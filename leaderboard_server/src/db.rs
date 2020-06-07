@@ -39,18 +39,18 @@ pub fn get_full_leagues(
         .collect())
 }
 
-pub fn get_league_ids_to_leaderboard_ids(
-    conn: &PgConn,
-    leaderboard_ids: Vec<Uuid>,
-) -> Result<Vec<(Uuid, Uuid)>, diesel::result::Error> {
-    schema::leaderboards::table
-        .select((
-            schema::leaderboards::leaderboard_id,
-            schema::leaderboards::league_id,
-        ))
-        .filter(schema::leaderboards::leaderboard_id.eq(any(leaderboard_ids)))
-        .load(conn)
-}
+// pub fn get_league_ids_to_leaderboard_ids(
+//     conn: &PgConn,
+//     leaderboard_ids: Vec<Uuid>,
+// ) -> Result<Vec<(Uuid, Uuid)>, diesel::result::Error> {
+//     schema::leaderboards::table
+//         .select((
+//             schema::leaderboards::leaderboard_id,
+//             schema::leaderboards::league_id,
+//         ))
+//         .filter(schema::leaderboards::leaderboard_id.eq(any(leaderboard_ids)))
+//         .load(conn)
+// }
 
 // Would be great to do a join when inserting and can do a clever returning,
 // However don't think diesel supports fancy enough behaviour.

@@ -45,6 +45,17 @@ pub struct Pick {
     pub timespan: DieselTimespan,
 }
 
+// It's a bit foolish to ask client to specify which draft-choice this pick is for...clearly it's for the next one.
+// Really this should be what the api-gateway/server is for.
+// To take a client friendly request (i.e. pick this guy), and translate it into simple CRUD for fantasy_server
+// (as well as maybe coordinate valid-player-id handling)
+#[derive(Deserialize, Serialize, Debug)]
+pub struct DraftPick {
+    pub player_id: Uuid,
+    pub fantasy_team_id: Uuid,
+    pub draft_id: Uuid,
+}
+
 #[derive(AsChangeset, Deserialize, Debug)]
 #[primary_key(pick_id)]
 #[table_name = "picks"]

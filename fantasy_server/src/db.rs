@@ -10,7 +10,7 @@ use diesel::ExpressionMethods;
 use diesel::PgArrayExpressionMethods;
 use diesel::RunQueryDsl;
 use diesel::{sql_query, sql_types};
-use diesel_utils::PgConn;
+use diesel_utils::{PgConn, DieselTimespan};
 use itertools::{izip, Itertools};
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -477,6 +477,12 @@ pub struct Count {
     pub inner: i64,
 }
 
+#[derive(QueryableByName)]
+pub struct Exists {
+    #[sql_type = "sql_types::Bool"]
+    pub inner: bool,
+}
+
 pub fn num_invalid_timed_picks(
     conn: &PgConnection,
     draft_choice_ids: &Vec<Uuid>,
@@ -484,7 +490,8 @@ pub fn num_invalid_timed_picks(
     let sql = "select count(*) from draft_choices WHERE draft_choice_id = ANY($1) AND NOT timespan @> now();";
     sql_query(sql)
         .bind::<sql_types::Array<sql_types::Uuid>, _>(draft_choice_ids)
-        .get_result::<Count>(conn).map(|x|x.inner)
+        .get_result::<Count>(conn)
+        .map(|x| x.inner)
     // diesel_infix_operator!(Contains, " @> ");
 
     // use diesel::expression::AsExpression;
@@ -504,4 +511,44 @@ pub fn num_invalid_timed_picks(
     //     //.filter(not(contains(draft_choices::timespan, now())))
     //     .filter(not(contains(draft_choices::timespan, Utc::now())))
     //     .get_result(conn)
+}
+
+pub fn valid_timed_picks_from_team(
+    conn: &PgConnection,
+    fantasy_team_ids: &Vec<Uuid>,
+) -> Result<bool, diesel::result::Error> {
+    let sql = "select count(*) from draft_choices JOIN team_drafts USING(team_draft_id) WHERE fantasy_team_id = ANY($1) AND timespan @> now();";
+    sql_query(sql)
+        .bind::<sql_types::Array<sql_types::Uuid>, _>(fantasy_team_ids)
+        .get_result::<Count>(conn)
+        // each team should have one draft-choice where timespan contains now
+        .map(|x| x.inner == fantasy_team_ids.len() as i64)
+}
+
+#[derive(QueryableByName)]
+pub struct UuidWrapper {
+    #[sql_type = "sql_types::Uuid"]
+    pub inner: Uuid,
+}
+
+pub fn get_current_draft_choice_id(
+    conn: &PgConnection,
+    fantasy_team_id: &Uuid,
+) -> Result<Uuid, diesel::result::Error> {
+    let sql = "select draft_choice_id from draft_choices JOIN team_drafts USING(team_draft_id) WHERE fantasy_team_id = $1 AND timespan @> now());";
+    sql_query(sql)
+        .bind::<sql_types::Uuid, _>(fantasy_team_id)
+        // should diesel error if there's no matches
+        .get_result::<UuidWrapper>(conn).map(|x| x.inner)
+}
+
+pub fn get_period_timespan_from_draft(
+    conn: &PgConnection,
+    draft_id: &Uuid,
+) -> Result<DieselTimespan, diesel::result::Error> {
+    periods::table
+        .select(periods::timespan)
+        .inner_join(drafts::table)
+        .filter(drafts::draft_id.eq(draft_id))
+        .first(conn)
 }

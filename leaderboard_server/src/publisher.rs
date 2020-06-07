@@ -54,6 +54,32 @@ impl Publishable<SubType> for ApiLeaderboard {
     }
 }
 
+impl Publishable<SubType> for ApiLeaderboardLatest {
+    fn message_type<'a>() -> &'a str {
+        "leaderboard_latest"
+    }
+
+    // Can commonise in a generic func between Leaderboard types
+    // Would need to attach getters for league/leaderboard_id though
+    fn partial_subscribed_publishables<'b>(
+        publishables: &'b Vec<Self>,
+        sub: &mut Subscription,
+        sub_type: &SubType,
+        _: &Option<HashMap<Uuid, Uuid>>,
+    ) -> Vec<&'b Self> {
+        match sub_type {
+            SubType::League => publishables
+                .iter()
+                .filter(|x| sub.ids.contains(&x.league_id))
+                .collect(),
+            SubType::Leaderboard => publishables
+                .iter()
+                .filter(|x| sub.ids.contains(&x.leaderboard_id))
+                .collect(),
+        }
+    }
+}
+
 impl Publishable<SubType> for Stat {
     fn message_type<'a>() -> &'a str {
         "stat"

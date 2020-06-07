@@ -11,6 +11,7 @@ use crate::diesel::RunQueryDsl;  // imported here so that can run db macros
 use crate::diesel::ExpressionMethods;
 use warp_ws_server::{GetEz, sub, unsub, sub_all, publish};
 use std::collections::HashMap;
+use itertools::Itertools;
 
 pub async fn sub_leagues(method: &str, message_id: Uuid, data: SubLeague, conn: PgConn, ws_conns: &mut WSConnections_, user_ws_id: Uuid) -> Result<String, BoxError>{
     let mut hmmmm = ws_conns.lock().await;
@@ -96,25 +97,15 @@ pub async fn update_leaderboards(method: &str, message_id: Uuid, data: Vec<Leade
 
 pub async fn insert_stats(method: &str, message_id: Uuid, data: Vec<Stat>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
     let out: Vec<Stat> = insert!(&conn, stats::table, &data)?;
-
-    let id_map: HashMap<Uuid, Uuid> = db::get_league_ids_to_leaderboard_ids(
-        &conn,
-        data.iter().map(|s| s.leaderboard_id).collect(),
-    )?
-    .into_iter()
-    .collect();
-    let with_league_id = ApiStat::from_rows(db::get_stat_with_ids(
-        &conn,
-        data,
-    )?);
-    publish::<SubType, ApiStat>(
-        ws_conns, &with_league_id, SubType::League, Some(id_map)
+    let to_publish: Vec<ApiLeaderboardLatest> = db::latest_leaderboards(&conn, out.iter().map(|x| x.leaderboard_id).dedup().collect())?;
+    publish::<SubType, ApiLeaderboardLatest>(
+        ws_conns, &to_publish, SubType::League, None
     ).await?;
     // publish::<SubType, Stat>(
     //     ws_conns, &out, SubType::League, Some(id_map)
     // ).await?;
-    publish::<SubType, ApiStat>(
-        ws_conns, &with_league_id, SubType::Leaderboard, None
+    publish::<SubType, ApiLeaderboardLatest>(
+        ws_conns, &to_publish, SubType::Leaderboard, None
     ).await?;
     let resp_msg = WSMsgOut::resp(message_id, method, out);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())

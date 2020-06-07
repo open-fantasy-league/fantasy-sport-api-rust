@@ -82,6 +82,10 @@ pub enum WSReq {
         message_id: Uuid,
         data: Vec<Pick>,
     },
+    DraftPick {
+        message_id: Uuid,
+        data: DraftPick,
+    },
     PickUpdate {
         message_id: Uuid,
         data: Vec<PickUpdate>,
