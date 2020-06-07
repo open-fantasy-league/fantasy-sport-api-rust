@@ -407,12 +407,14 @@ pub fn get_teams_from_players(conn: &PgConn, player_ids_filt: Option<Vec<Uuid>>)
     let api_players = ApiPlayer::from_diesel_rows(grouped_players);
     let team_ids = team_players.iter().map(|tp| tp.team_id).dedup().collect_vec();
     let teams: Vec<Team> = schema::teams::table.filter(schema::teams::team_id.eq(any(&team_ids))).load(conn)?;
+    let team_names: Vec<TeamName> = TeamName::belonging_to(&teams).load(conn)?;
+    let nested_team_names = team_names.grouped_by(&teams);
+    let grouped_team_names: Vec<(Team, Vec<TeamName>)> = teams.into_iter().zip(nested_team_names).collect_vec();
     //use diesel::debug_query;
     //use diesel::pg::Pg;
     //let q = schema::teams::table.filter(schema::teams::team_id.eq(any(&team_ids)));
     //let debug = debug_query::<Pg, _>(&q);
     //println!("{}", debug);
-    dbg!(&teams);
     let mut teams_to_team_players: HashMap<Uuid, Vec<TeamPlayer>> = team_players.into_iter().fold(HashMap::new(), |mut hm, tp| {
         match hm.get_mut(&tp.team_id) {
             Some(v) => {
@@ -426,7 +428,7 @@ pub fn get_teams_from_players(conn: &PgConn, player_ids_filt: Option<Vec<Uuid>>)
     });
     let mut player_map: HashMap<Uuid, ApiPlayer> = api_players.into_iter().map(|p| (p.player_id, p)).collect();
     //let team_players_grouped = team_players.grouped_by(&teams);
-    let out = teams.into_iter().map(|t|{
+    let out = grouped_team_names.into_iter().map(|(t, team_names)|{
         let team_players = teams_to_team_players.remove(&t.team_id).unwrap_or(vec![]);
         let players = team_players.into_iter().map(|tp| {
             let api_player = player_map.remove(&tp.player_id).unwrap();
@@ -438,7 +440,7 @@ pub fn get_teams_from_players(conn: &PgConn, player_ids_filt: Option<Vec<Uuid>>)
         }).collect_vec();
         ApiTeamWithPlayersHierarchy{
             team_id: t.team_id,
-            names: None,
+            names: Some(team_names.into_iter().map(transform_from).collect_vec()),
             meta: t.meta,
             players: Some(players)
         }
