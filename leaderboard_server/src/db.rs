@@ -69,11 +69,19 @@ pub fn get_stat_with_ids(
 
 pub fn latest_leaderboards(
     conn: &PgConn,
-    leaderboard_ids: Vec<Uuid>,
+    league_id_filter: Option<Vec<&Uuid>>,
+    leaderboard_id_filter: Option<Vec<&Uuid>>,
 ) -> Result<Vec<ApiLeaderboardLatest>, diesel::result::Error> {
-    let leaderboards: Vec<Leaderboard> = schema::leaderboards::table
-        .filter(schema::leaderboards::leaderboard_id.eq(any(&leaderboard_ids)))
-        .load(conn)?;
+    let leaderboards: Vec<Leaderboard> = match (league_id_filter, leaderboard_id_filter) {
+        (None, None) => schema::leaderboards::table.load(conn),
+        (Some(league_ids), None) => schema::leaderboards::table
+            .filter(schema::leaderboards::league_id.eq(any(league_ids)))
+            .load(conn),
+        (None, Some(leaderboard_ids)) => schema::leaderboards::table
+            .filter(schema::leaderboards::leaderboard_id.eq(any(leaderboard_ids)))
+            .load(conn),
+        _ => panic!("cant be bothered."),
+    }?;
     let sql = "
         SELECT player_id, leaderboard_id, (MAX(ARRAY[EXTRACT('EPOCH' FROM timestamp)::float, points]))[2] AS points 
         FROM stats WHERE leaderboard_id = ANY($1) 
@@ -81,7 +89,7 @@ pub fn latest_leaderboards(
         ORDER BY points
     ";
     let stats: Vec<ApiLatestStat> = sql_query(sql)
-        .bind::<sql_types::Array<sql_types::Uuid>, _>(leaderboard_ids)
+        .bind::<sql_types::Array<sql_types::Uuid>, _>(leaderboards.iter().map(|l| l.leaderboard_id).collect_vec())
         .load::<ApiLatestStat>(conn)?;
     let mut grouped_stats: HashMap<Uuid, (Leaderboard, Vec<ApiLatestStat>)> = leaderboards
         .into_iter()

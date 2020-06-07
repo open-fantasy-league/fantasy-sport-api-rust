@@ -29,10 +29,10 @@ pub async fn sub_leagues(method: &str, message_id: Uuid, data: SubLeague, conn: 
     let subscription = ws_user.subscriptions.get_ez(&SubType::League);
     let data = match subscription.all{
         true => {
-            db::get_full_leagues(&conn, None, None)
+            db::latest_leaderboards(&conn, None, None)
         },
         false => {
-            db::get_full_leagues(&conn, Some(subscription.ids.iter().collect()), None)
+            db::latest_leaderboards(&conn, Some(subscription.ids.iter().collect()), None)
         }
     }?;
     let resp_msg = WSMsgOut::resp(message_id, method, data);
@@ -58,10 +58,10 @@ pub async fn sub_leaderboards(method: &str, message_id: Uuid, data: SubLeaderboa
     let subscription = ws_user.subscriptions.get_ez(&SubType::Leaderboard);
     let data = match subscription.all{
         true => {
-            db::get_full_leagues(&conn, None, None)
+            db::latest_leaderboards(&conn, None, None)
         },
         false => {
-            db::get_full_leagues(&conn, None, Some(subscription.ids.iter().collect()))
+            db::latest_leaderboards(&conn, None, Some(subscription.ids.iter().collect()))
         }
     }?;
     let resp_msg = WSMsgOut::resp(message_id, method, data);
@@ -97,7 +97,7 @@ pub async fn update_leaderboards(method: &str, message_id: Uuid, data: Vec<Leade
 
 pub async fn insert_stats(method: &str, message_id: Uuid, data: Vec<Stat>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
     let out: Vec<Stat> = insert!(&conn, stats::table, &data)?;
-    let to_publish: Vec<ApiLeaderboardLatest> = db::latest_leaderboards(&conn, out.iter().map(|x| x.leaderboard_id).dedup().collect())?;
+    let to_publish: Vec<ApiLeaderboardLatest> = db::latest_leaderboards(&conn, None, Some(out.iter().map(|x| &x.leaderboard_id).dedup().collect()))?;
     publish::<SubType, ApiLeaderboardLatest>(
         ws_conns, &to_publish, SubType::League, None
     ).await?;
@@ -112,7 +112,7 @@ pub async fn insert_stats(method: &str, message_id: Uuid, data: Vec<Stat>, conn:
 }
 
 pub async fn get_latest_leaderboards(method: &str, message_id: Uuid, data: Vec<Uuid>, conn: PgConn, _: &mut WSConnections_) -> Result<String, BoxError>{
-    let out: Vec<ApiLeaderboardLatest> = db::latest_leaderboards(&conn, data)?;
+    let out: Vec<ApiLeaderboardLatest> = db::latest_leaderboards(&conn, None, Some(data.iter().collect_vec()))?;
     let resp_msg = WSMsgOut::resp(message_id, method, out);
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
