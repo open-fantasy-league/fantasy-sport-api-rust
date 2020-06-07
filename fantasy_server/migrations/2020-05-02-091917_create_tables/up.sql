@@ -132,4 +132,4 @@ CREATE INDEX draft_choices_timespan_idx on draft_choices USING gist (timespan);
 CREATE INDEX active_picks_timespan_idx on active_picks USING gist (timespan);
 ALTER TABLE periods ADD CONSTRAINT non_overlap_period_timespan EXCLUDE USING gist (league_id WITH =, timespan WITH &&);
 ALTER TABLE active_picks ADD CONSTRAINT non_overlap_active_pick_timespan EXCLUDE USING gist (pick_id WITH =, timespan WITH &&);
-ALTER TABLE picks ADD CONSTRAINT non_overlap_pick_timespan EXCLUDE USING gist (player_id WITH =, timespan WITH &&);
+ALTER TABLE picks ADD CONSTRAINT non_overlap_pick_timespan EXCLUDE USING gist (player_id WITH =, fantasy_team_id WITH =, timespan WITH &&);
