@@ -111,6 +111,6 @@ pub struct ApiLatestStat {
     pub player_id: Uuid,
     #[sql_type = "sql_types::Uuid"]
     pub leaderboard_id: Uuid,
-    #[sql_type = "sql_types::Float"]
-    pub points: f32,
+    #[sql_type = "sql_types::Double"]
+    pub points: f64,
 }

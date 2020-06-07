@@ -75,10 +75,10 @@ pub fn latest_leaderboards(
         .filter(schema::leaderboards::leaderboard_id.eq(any(&leaderboard_ids)))
         .load(conn)?;
     let sql = "
-        SELECT player_id, leaderboard_id, (MAX(ARRAY[EXTRACT('EPOCH' FROM timestamp)::float, points]))[2] AS current_points 
+        SELECT player_id, leaderboard_id, (MAX(ARRAY[EXTRACT('EPOCH' FROM timestamp)::float, points]))[2] AS points 
         FROM stats WHERE leaderboard_id = ANY($1) 
         GROUP BY player_id, leaderboard_id
-        ORDER BY current_points
+        ORDER BY points
     ";
     let stats: Vec<ApiLatestStat> = sql_query(sql)
         .bind::<sql_types::Array<sql_types::Uuid>, _>(leaderboard_ids)
