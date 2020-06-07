@@ -106,11 +106,12 @@ pub fn get_valid_picks(
     valid_players::table
         .select(valid_players::player_id)
         .filter(valid_players::period_id.eq(period_id))
-        .filter(not(valid_players::player_id.eq(any(
-            picks::table.select(picks::player_id)
-            .inner_join(draft_choices::table.inner_join(team_drafts::table.inner_join(drafts::table)))
-            .filter(drafts::period_id.eq(period_id))
-        ))))
+        .filter(not(valid_players::player_id.eq(any(picks::table
+            .select(picks::player_id)
+            .inner_join(
+                draft_choices::table.inner_join(team_drafts::table.inner_join(drafts::table)),
+            )
+            .filter(drafts::period_id.eq(period_id))))))
         .load(conn)
 }
 

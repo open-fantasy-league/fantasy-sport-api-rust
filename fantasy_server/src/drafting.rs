@@ -411,9 +411,22 @@ fn position_team_counts(
     // TODO rust defaultdict?
     //https://github.com/rust-lang/rust/issues/42505
     // https://github.com/rust-lang/rust/issues/35463
+    let dummya = "".to_string();
+    let dummyb = Uuid::new_v4();
     player_ids.iter().for_each(|pick_id|{
         // pretty sure these unwraps are super-safe as we've built the maps ourselves with these pick-ids.
-        let (position, team) = (player_position_cache.get(&pick_id).unwrap(), player_team_cache.get(&pick_id).unwrap());
+        let (position, team) = (
+            player_position_cache.get(&pick_id).unwrap_or(
+            {
+                println!("failed unwrap in position_team_counts player_position_cache: {:#?}, \n pick_id: {}", player_position_cache, pick_id);
+                &dummya
+            }), 
+            player_team_cache.get(&pick_id).unwrap_or(
+                {
+                    println!("failed unwrap in position_team_counts player_team_cache: {:#?}, \n pick_id: {}", player_team_cache, pick_id);
+                    &dummyb
+                })
+        );
         match position_counts.get_mut(position) {
             Some(v) => {
                 *v = *v + 1;
