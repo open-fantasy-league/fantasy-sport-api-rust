@@ -62,6 +62,7 @@ impl WSHandler<subscriptions::SubType, Caches> for MyWsHandler{
             WSReq::ExternalUserUpdate{message_id, data} => update_external_users("ExternalUserUpdate", message_id, data, conn, ws_conns).await,
             WSReq::FantasyTeam{message_id, data} => insert_fantasy_teams("FantasyTeam", message_id, data, conn, ws_conns).await,
             WSReq::FantasyTeamUpdate{message_id, data} => update_fantasy_teams("FantasyTeam", message_id, data, conn, ws_conns).await,
+            WSReq::DraftUpdate{message_id, data} => update_drafts("DraftUpdate", message_id, data, conn, ws_conns).await,
             WSReq::DraftQueue{message_id, data} => insert_draft_queues("DraftQueue", message_id, data, conn, ws_conns).await,
             //WSReq::DraftQueueUpdate{message_id, data} => update_draft_queues("DraftQueueUpdate", message_id, data, conn, ws_conns).await,
             WSReq::DraftPick{message_id, data} => insert_draft_pick("DraftPick", message_id, data, conn, ws_conns, caches.0, caches.1).await,

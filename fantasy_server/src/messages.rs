@@ -70,6 +70,10 @@ pub enum WSReq {
         message_id: Uuid,
         data: Vec<ExternalUserUpdate>,
     },
+    DraftUpdate {
+        message_id: Uuid,
+        data: Vec<DraftUpdate>,
+    },
     DraftQueue {
         message_id: Uuid,
         data: Vec<DraftQueue>,

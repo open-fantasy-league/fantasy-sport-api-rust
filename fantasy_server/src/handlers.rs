@@ -144,6 +144,21 @@ pub async fn update_external_users(method: &str, message_id: Uuid, data: Vec<Ext
     serde_json::to_string(&resp_msg).map_err(|e| e.into())
 }
 
+pub async fn update_drafts(method: &str, message_id: Uuid, data: Vec<DraftUpdate>, conn: PgConn, ws_conns: &mut WSConnections_) -> Result<String, BoxError>{
+    println!("{:?}", &data);
+    let out: Vec<Draft> = conn.build_transaction().run(|| {
+        data.iter().map(|c| {
+        update!(&conn, drafts, draft_id, c)
+    }).collect()})?;
+    //let to_publish = db::get_full_leagues(&conn, Some(out.iter().map(|p|&p.league_id).collect_vec()))?;
+    // TODO work in publishing later. for now dont care, just need it for if server crashes, to reinit properly
+    // publish::<SubType, ApiLeague>(
+    //     ws_conns, &to_publish,  SubType::League, None
+    // ).await?;
+    let resp_msg = WSMsgOut::resp(message_id, method, out);
+    serde_json::to_string(&resp_msg).map_err(|e| e.into())
+}
+
 // TODO this should really be upsert
 pub async fn insert_draft_queues(method: &str, message_id: Uuid, data: Vec<DraftQueue>, conn: PgConn, _: &mut WSConnections_) -> Result<String, BoxError>{
     let out: Vec<DraftQueue> = insert!(&conn, draft_queues::table, data)?;
