@@ -106,11 +106,13 @@ pub async fn draft_builder(pg_pool: PgPool, mut ws_conns: WSConnections_, new_dr
             }
         };
         let waity_waity = || new_draft_notifier.notified();
+        //println!("Draft: generator pre join!(waity_waity(), wait_task)");
         println!("Draft: generator pre join!(waity_waity(), wait_task)");
-        let (_, err) = join!(waity_waity(), wait_task);
-        if let Err(_) = err{
-            println!("Unexpected task join error in draft builder")
-        };
+        join!(waity_waity());
+        // let (_, err) = join!(waity_waity(), wait_task);
+        // if let Err(_) = err{
+        //     println!("Unexpected task join error in draft builder")
+        // };
         println!("Draft: generator post join!(waity_waity(), wait_task)");
         timeout = None;
     }
@@ -304,12 +306,11 @@ pub async fn draft_handler(
             }
         };
         let waity_waity = || draft_choices_notifier.notified();
-        println!("Draft: handler pre join!(waity_waity(), wait_task)");
-        let (_, err) = join!(waity_waity(), wait_task);
-        if let Err(_) = err{
-            println!("Unexpected task join error in draft handler")
-        };
-        println!("Draft: handler post join!(waity_waity(), wait_task)");
+        //println!("Draft: handler pre join!(waity_waity(), wait_task)");
+        println!("Draft: handler pre join!");
+        // TODO get back errors from wait_task, without blocking.
+        join!(waity_waity());
+        println!("Draft: handler post join!(waity_waity())");
         timeout = None;
     }
     

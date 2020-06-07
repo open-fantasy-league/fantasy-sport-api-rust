@@ -10,7 +10,7 @@ use diesel::ExpressionMethods;
 use diesel::PgArrayExpressionMethods;
 use diesel::RunQueryDsl;
 use diesel::{sql_query, sql_types};
-use diesel_utils::{PgConn, DieselTimespan};
+use diesel_utils::{DieselTimespan, PgConn};
 use itertools::{izip, Itertools};
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -539,7 +539,8 @@ pub fn get_current_draft_choice_id(
     sql_query(sql)
         .bind::<sql_types::Uuid, _>(fantasy_team_id)
         // should diesel error if there's no matches
-        .get_result::<UuidWrapper>(conn).map(|x| x.inner)
+        .get_result::<UuidWrapper>(conn)
+        .map(|x| x.inner)
 }
 
 pub fn get_period_timespan_from_draft(
