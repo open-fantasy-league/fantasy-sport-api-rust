@@ -162,11 +162,12 @@ pub fn generate_drafts(
                 let _: Vec<TeamDraft> = insert!(&conn, schema::team_drafts::table, &team_drafts)?;
                 //let reversed_team_drafts: Vec<TeamDraft> = team_drafts.reverse().collect();
                 let mut choices: Vec<ApiDraftChoice> = Vec::with_capacity(squad_size * num_teams);
+                let mut j = 0i64;
                 for round in 0..squad_size {
                     let make_choices = |(i, t): (usize, &TeamDraft)| {
                         let start = period.draft_start
                             + chrono::Duration::seconds(
-                                (round * num_teams + i) as i64 * period.draft_interval_secs as i64,
+                                j * period.draft_interval_secs as i64,
                             );
                         let end = start + chrono::Duration::seconds(period.draft_interval_secs as i64);
                         let timespan = new_dieseltimespan(start, end);
@@ -175,6 +176,7 @@ pub fn generate_drafts(
                             t.team_draft_id,
                             timespan,
                         ));
+                        j += 1;
                     };
                     match round % 2 {
                         0 => team_drafts.iter().enumerate().for_each(make_choices),
@@ -219,6 +221,7 @@ pub async fn draft_handler(
         let conn = pg_pool.get().unwrap();
         let unchosen = db::get_unchosen_draft_choices(&conn);
         println!("Draft: length unchosen picks: {:?}", &unchosen.as_ref().map(|x|x.iter().map(|y|y.0.team_draft_id).collect_vec().len()));
+        //TODO if there's an error, the timeout gets fucked.
         match unchosen{
             // Want this to be resilient/not bring down whole service.....
             // maybe it should just be a separate service/binary.
@@ -233,8 +236,11 @@ pub async fn draft_handler(
                 all_unchosen.iter().map(|t| t.3.league_id).dedup().for_each(|lid|{
                     let max_pos_vec = db::get_max_per_position(&conn, lid).unwrap();
                     league_to_max_per_position.insert(lid, max_pos_vec.into_iter().map(|x| (x.position, x.squad_max)).collect());
-                }); 
+                });
+                let mut i = 0; 
                 for unchosen in all_unchosen.into_iter(){
+                    println!("{}", i);
+                    i += 1;
                     let (draft_choice, period, team_draft, league) = unchosen;
                     let raw_time = DieselTimespan::upper(draft_choice.timespan);
                     let time_to_unchosen = raw_time - Utc::now();
@@ -245,10 +251,10 @@ pub async fn draft_handler(
                         let player_team_cache_opt = player_team_cache_mut.lock().await;
                         match (player_position_cache_opt.as_ref(), player_team_cache_opt.as_ref()){
                             (Some(ref player_position_cache), Some(ref player_team_cache)) => {
-                                println!("Draft: Doing an auto-pick");
+                                println!("Draft: Picking from queue or random");
                                 let out: Result<(Pick, Option<ActivePick>), BoxError> = pick_from_queue_or_random(
                                     // TODO safetify these unwraps
-                                    pg_pool.get().unwrap(), team_draft.fantasy_team_id, draft_choice, period.timespan, period.period_id,
+                                    pg_pool.get().unwrap(), team_draft.fantasy_team_id, draft_choice, period.timespan, &team_draft.draft_id, period.period_id,
                                     &league.max_squad_players_same_team, league_to_max_per_position.get(&league.league_id).unwrap(),
                                     pick_straight_into_team,
                                     player_position_cache, player_team_cache
@@ -256,6 +262,7 @@ pub async fn draft_handler(
                                 match out
                                 {
                                     Ok((p, _)) => {
+                                        println!("{} PICKED {} for draft {}", team_draft.fantasy_team_id, p.player_id, team_draft.draft_id);
                                         // TODO no way should be doing this on every pick
                                         // Well maybe the publish part, but not the huge db query to get full hierarchy
                                         match publish_updated_pick(&mut ws_conns, p, team_draft.draft_id).await{
@@ -321,6 +328,7 @@ pub fn pick_from_queue_or_random(
     fantasy_team_id: Uuid,
     unchosen: DraftChoice,
     belongs_to_team_for: DieselTimespan,
+    draft_id: &Uuid,
     period_id: Uuid,
     max_squad_players_same_team: &i32,
     max_squad_players_same_position: &HashMap<String, i32>,
@@ -336,9 +344,9 @@ pub fn pick_from_queue_or_random(
         // use vec and set, because want fast-lookup when looping through draft queue,
         // but also need access random element if !picked
         //teams_and_players_mut
-        let valid_remaining_players: Vec<Uuid> = db::get_valid_picks(&conn, period_id)?;
+        let valid_remaining_players: Vec<Uuid> = db::get_valid_picks(&conn, draft_id, &period_id)?;
         let (positions, teams) = (player_position_cache, player_team_cache);
-        let current_squad = db::get_current_picks(&conn, fantasy_team_id, period_id)?;
+        let current_squad = db::get_current_players(&conn, fantasy_team_id, period_id)?;
         // TODO rust defaultdict?
         let (position_counts, team_counts) = position_team_counts(
             current_squad, player_position_cache, player_team_cache
@@ -348,6 +356,13 @@ pub fn pick_from_queue_or_random(
         let banned_positions: HashSet<String> = position_counts.into_iter()
             .filter(|(pos, count)| count > max_squad_players_same_position.get(pos).unwrap_or(&99i32)).map(|(pos, _)| pos).collect();
         let valid_remaining_players_hash: HashSet<&Uuid> = valid_remaining_players.iter().collect();
+        println!("banned_teams start");
+        banned_teams.iter().for_each(|v| println!("{}", v));
+        println!("banned_teams end");
+        println!("banned positions: {:?}", banned_positions);
+        println!("valid-remaining start");
+        valid_remaining_players_hash.iter().for_each(|v| println!("{}", v));
+        println!("valid-remaining end");
         // TODO do dumb then tidy
         let mut new_pick: Option<Pick> = None;
         for pick_id in draft_queue{
@@ -379,7 +394,9 @@ pub fn pick_from_queue_or_random(
             }
         }
         if new_pick.is_none(){
+            println!("random picking");
             if let Some(random_choice) = valid_remaining_players.choose(&mut rand::thread_rng()){
+                println!("random picked");
                 new_pick = Some(Pick{
                     pick_id: Uuid::new_v4(), fantasy_team_id: fantasy_team_id, draft_choice_id,
                     player_id: *random_choice, timespan: belongs_to_team_for
@@ -413,17 +430,19 @@ fn position_team_counts(
     // https://github.com/rust-lang/rust/issues/35463
     let dummya = "".to_string();
     let dummyb = Uuid::new_v4();
-    player_ids.iter().for_each(|pick_id|{
+    player_ids.iter().for_each(|pid|{
         // pretty sure these unwraps are super-safe as we've built the maps ourselves with these pick-ids.
         let (position, team) = (
-            player_position_cache.get(&pick_id).unwrap_or(
+            player_position_cache.get(&pid).unwrap_or(
             {
-                println!("failed unwrap in position_team_counts player_position_cache: {:#?}, \n pick_id: {}", player_position_cache, pick_id);
+                println!("failed unwrap in position_team_counts player_position_cache, pid: {}", pid);
+                player_position_cache.iter().for_each(|x| println!("{}", x.0));
                 &dummya
             }), 
-            player_team_cache.get(&pick_id).unwrap_or(
+            player_team_cache.get(&pid).unwrap_or(
                 {
-                    println!("failed unwrap in position_team_counts player_team_cache: {:#?}, \n pick_id: {}", player_team_cache, pick_id);
+                    println!("failed unwrap in position_team_counts player_team_cache, pid: {}", pid);
+                    player_team_cache.iter().for_each(|x| println!("{}", x.0));
                     &dummyb
                 })
         );

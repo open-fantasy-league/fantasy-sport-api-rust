@@ -193,14 +193,18 @@ pub async fn insert_draft_pick(
         //     return Err(Box::new(errors::InvalidInputError{description: "Pick not within valid timespan. Wait yer turn boy!"}) as BoxError)
         // };
         let draft_choice_id = db::get_current_draft_choice_id(&conn, &data.fantasy_team_id)?;
-        let period_timespan = db::get_period_timespan_from_draft(&conn, &data.draft_id)?;
-        let pick = Pick{pick_id: Uuid::new_v4(), fantasy_team_id: data.fantasy_team_id, player_id: data.player_id, timespan: period_timespan, draft_choice_id: draft_choice_id};
+        let period = db::get_period_from_draft(&conn, &data.draft_id)?;
+        let valid_remaining_players: Vec<Uuid> = db::get_valid_picks(&conn, &data.draft_id, &period.period_id)?;
+        if !valid_remaining_players.contains(&data.player_id){
+            return Err(Box::new(errors::InvalidInputError{description: "Not a valid pick. May already be owned by other player"}) as BoxError)
+        };
+        let pick = Pick{pick_id: Uuid::new_v4(), fantasy_team_id: data.fantasy_team_id, player_id: data.player_id, timespan: period.timespan, draft_choice_id: draft_choice_id};
         let picks: Vec<Pick> = insert!(&conn, picks::table, vec![&pick])?;
         // TODO this needs changing for when have squads and not just teams
         let active_picks = picks.iter().map(|p| ActivePick{active_pick_id: Uuid::new_v4(), pick_id: p.pick_id, timespan: p.timespan}).collect_vec();
         let _ = db::upsert_active_picks(&conn, &active_picks)?;
         let pick_ids = active_picks.iter().map(|ap|ap.pick_id).collect();
-        let all_teams = db::get_all_updated_teams(&conn, &pick_ids)?;
+        let all_teams = db::get_all_updated_teams_player_ids(&conn, &pick_ids)?;
         let leagues = db::get_leagues_for_picks(&conn, &pick_ids)?;
         if leagues.len() > 1{
             return Err(Box::new(errors::InvalidInputError{description: "Picks specified are from more than one league"}) as BoxError)
@@ -258,7 +262,7 @@ pub async fn insert_picks(
         let active_picks = picks.iter().map(|p| ActivePick{active_pick_id: Uuid::new_v4(), pick_id: p.pick_id, timespan: p.timespan}).collect_vec();
         let _ = db::upsert_active_picks(&conn, &active_picks)?;
         let pick_ids = active_picks.iter().map(|ap|ap.pick_id).collect();
-        let all_teams = db::get_all_updated_teams(&conn, &pick_ids)?;
+        let all_teams = db::get_all_updated_teams_player_ids(&conn, &pick_ids)?;
         let leagues = db::get_leagues_for_picks(&conn, &pick_ids)?;
         if leagues.len() > 1{
             return Err(Box::new(errors::InvalidInputError{description: "Active picks specified are from more than one league"}) as BoxError)
@@ -363,7 +367,7 @@ pub async fn upsert_active_picks(
         // ).await?;
         let _ = db::upsert_active_picks(&conn, &data)?;
         let pick_ids = &data.iter().map(|ap|ap.pick_id).collect();
-        let all_teams = db::get_all_updated_teams(&conn, pick_ids)?;
+        let all_teams = db::get_all_updated_teams_player_ids(&conn, pick_ids)?;
         let leagues = db::get_leagues_for_picks(&conn, pick_ids)?;
         if leagues.len() > 1{
             return Err(Box::new(errors::InvalidInputError{description: "Active picks specified are from more than one league"}) as BoxError)

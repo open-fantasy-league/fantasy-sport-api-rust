@@ -101,17 +101,16 @@ pub fn get_undrafted_periods(conn: PgConn) -> Result<Vec<Period>, diesel::result
 
 pub fn get_valid_picks(
     conn: &PgConnection,
-    period_id: Uuid,
+    draft_id: &Uuid,
+    period_id: &Uuid,
 ) -> Result<Vec<Uuid>, diesel::result::Error> {
     valid_players::table
         .select(valid_players::player_id)
         .filter(valid_players::period_id.eq(period_id))
         .filter(not(valid_players::player_id.eq(any(picks::table
             .select(picks::player_id)
-            .inner_join(
-                draft_choices::table.inner_join(team_drafts::table.inner_join(drafts::table)),
-            )
-            .filter(drafts::period_id.eq(period_id))))))
+            .inner_join(draft_choices::table.inner_join(team_drafts::table))
+            .filter(team_drafts::draft_id.eq(draft_id))))))
         .load(conn)
 }
 
@@ -191,13 +190,13 @@ pub fn get_draft_queue_for_choice(
         .get_result(conn)
 }
 
-pub fn get_current_picks(
+pub fn get_current_players(
     conn: &PgConnection,
     fantasy_team_id: Uuid,
     period_id: Uuid,
 ) -> Result<Vec<Uuid>, diesel::result::Error> {
     picks::table
-        .select(picks::pick_id)
+        .select(picks::player_id)
         .filter(picks::fantasy_team_id.eq(fantasy_team_id))
         .inner_join(draft_choices::table.inner_join(team_drafts::table.inner_join(drafts::table)))
         .filter(drafts::period_id.eq(period_id))
@@ -235,6 +234,34 @@ pub fn get_all_updated_teams(
          from active_picks t2
          where t2.timespan @> lower(t1.timespan)) as lower_ids,
         (select array_agg(t3.pick_id) 
+         from active_picks t3
+         where t3.timespan @> upper(t1.timespan)) as upper_ids
+        from (
+            select timespan
+            from active_picks where pick_id = ANY($1)
+        ) as t1)
+
+        select distinct ids from 
+        (select lower_ids as ids, lower(timespan) as ttime from upper_and_lower 
+        union 
+            select upper_ids as ids, upper(timespan) as ttime from upper_and_lower
+        ) as final_sub;
+    ";
+    sql_query(sql)
+        .bind::<sql_types::Array<sql_types::Uuid>, _>(ids)
+        .load::<VecUuid>(conn)
+}
+pub fn get_all_updated_teams_player_ids(
+    conn: &PgConnection,
+    ids: &Vec<Uuid>,
+) -> Result<Vec<VecUuid>, diesel::result::Error> {
+    // https://www.reddit.com/r/PostgreSQL/comments/gjsham/query_to_list_combinations_of_band_members/
+    let sql = "
+        WITH upper_and_lower AS (select t1.timespan,
+        (select array_agg(t2.player_id) 
+         from active_picks t2
+         where t2.timespan @> lower(t1.timespan)) as lower_ids,
+        (select array_agg(t3.player_id) 
          from active_picks t3
          where t3.timespan @> upper(t1.timespan)) as upper_ids
         from (
@@ -549,12 +576,12 @@ pub fn get_current_draft_choice_id(
         .map(|x| x.inner)
 }
 
-pub fn get_period_timespan_from_draft(
+pub fn get_period_from_draft(
     conn: &PgConnection,
     draft_id: &Uuid,
-) -> Result<DieselTimespan, diesel::result::Error> {
+) -> Result<Period, diesel::result::Error> {
     periods::table
-        .select(periods::timespan)
+        .select(periods::all_columns)
         .inner_join(drafts::table)
         .filter(drafts::draft_id.eq(draft_id))
         .first(conn)
