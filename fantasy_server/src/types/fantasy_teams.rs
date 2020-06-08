@@ -84,3 +84,15 @@ pub struct ActivePickUpdate {
     pub active_pick_id: Uuid,
     pub timespan: DieselTimespan,
 }
+
+// #[derive(Serialize, Debug)]
+// pub struct LatestTeams {
+//     pub draft_id: Uuid,
+//     pub teams: Vec<ApiTeam>,
+// }
+
+#[derive(Serialize, Debug)]
+pub struct ApiTeam {
+    pub fantasy_team_id: Uuid,
+    pub players: Vec<Uuid>,
+}

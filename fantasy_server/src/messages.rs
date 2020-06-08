@@ -34,6 +34,10 @@ pub struct SubLeague {
 #[derive(Deserialize)]
 #[serde(tag = "method")]
 pub enum WSReq {
+    LatestTeam {
+        message_id: Uuid,
+        data: Option<Uuid>,
+    },
     League {
         message_id: Uuid,
         data: Vec<League>,

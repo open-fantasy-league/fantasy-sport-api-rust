@@ -251,7 +251,7 @@ pub async fn draft_handler(
                         let player_team_cache_opt = player_team_cache_mut.lock().await;
                         match (player_position_cache_opt.as_ref(), player_team_cache_opt.as_ref()){
                             (Some(ref player_position_cache), Some(ref player_team_cache)) => {
-                                println!("Draft: Picking from queue or random");
+                                println!("Draft: Picking from queue or random for team_id {}", &team_draft.fantasy_team_id);
                                 let out: Result<(Pick, Option<ActivePick>), BoxError> = pick_from_queue_or_random(
                                     // TODO safetify these unwraps
                                     pg_pool.get().unwrap(), team_draft.fantasy_team_id, draft_choice, period.timespan, &team_draft.draft_id, period.period_id,
@@ -339,7 +339,7 @@ pub fn pick_from_queue_or_random(
     conn.build_transaction().run(||{
         // TODO deal with squads not just teams
         let draft_choice_id = unchosen.draft_choice_id;
-        let draft_queue = db::get_draft_queue_for_choice(&conn, unchosen)?;
+        let draft_queue_opt = db::get_draft_queue_for_choice(&conn, unchosen)?;
         // If its a hashmap rather than set, can include player-info grabbed from other api.
         // use vec and set, because want fast-lookup when looping through draft queue,
         // but also need access random element if !picked
@@ -365,32 +365,34 @@ pub fn pick_from_queue_or_random(
         println!("valid-remaining end");
         // TODO do dumb then tidy
         let mut new_pick: Option<Pick> = None;
-        for pick_id in draft_queue{
-            if let Some(_) = valid_remaining_players_hash.get(&pick_id) 
-            {
-                let (position, team) = match (positions.get(&pick_id), teams.get(&pick_id)){
-                    (None, _) => {
-                        println!("Draft: Could not find player {:?} in player_position_cache", pick_id);
-                        dbg!(player_position_cache);
-                        continue;
-                    },
-                    (_, None) => {
-                        println!("Draft: Could not find player {:?} in player_team_cache", pick_id);
-                        dbg!(player_team_cache);
-                        continue;
-                    },
-                    (Some(pos), Some(team)) => (pos, team)
-                };
-                if (banned_positions.get(position).is_none())
-                && (banned_teams.get(team).is_none())
+        if let Some(draft_queue) = draft_queue_opt{
+            for pick_id in draft_queue{
+                if let Some(_) = valid_remaining_players_hash.get(&pick_id) 
                 {
-                    new_pick = Some(Pick{
-                        pick_id: Uuid::new_v4(), fantasy_team_id: fantasy_team_id, draft_choice_id,
-                        player_id: pick_id, timespan: belongs_to_team_for
-                    });
-                    break
+                    let (position, team) = match (positions.get(&pick_id), teams.get(&pick_id)){
+                        (None, _) => {
+                            println!("Draft: Could not find player {:?} in player_position_cache", pick_id);
+                            dbg!(player_position_cache);
+                            continue;
+                        },
+                        (_, None) => {
+                            println!("Draft: Could not find player {:?} in player_team_cache", pick_id);
+                            dbg!(player_team_cache);
+                            continue;
+                        },
+                        (Some(pos), Some(team)) => (pos, team)
+                    };
+                    if (banned_positions.get(position).is_none())
+                    && (banned_teams.get(team).is_none())
+                    {
+                        new_pick = Some(Pick{
+                            pick_id: Uuid::new_v4(), fantasy_team_id: fantasy_team_id, draft_choice_id,
+                            player_id: pick_id, timespan: belongs_to_team_for
+                        });
+                        break
+                    }
+                    
                 }
-                
             }
         }
         if new_pick.is_none(){
@@ -430,16 +432,16 @@ fn position_team_counts(
     // https://github.com/rust-lang/rust/issues/35463
     let dummya = "".to_string();
     let dummyb = Uuid::new_v4();
-    player_ids.iter().for_each(|pid|{
+    player_ids.into_iter().for_each(|pid|{
         // pretty sure these unwraps are super-safe as we've built the maps ourselves with these pick-ids.
         let (position, team) = (
-            player_position_cache.get(&pid).unwrap_or(
+            player_position_cache.get(&pid).unwrap_or_else(||
             {
                 println!("failed unwrap in position_team_counts player_position_cache, pid: {}", pid);
                 player_position_cache.iter().for_each(|x| println!("{}", x.0));
                 &dummya
             }), 
-            player_team_cache.get(&pid).unwrap_or(
+            player_team_cache.get(&pid).unwrap_or_else(||
                 {
                     println!("failed unwrap in position_team_counts player_team_cache, pid: {}", pid);
                     player_team_cache.iter().for_each(|x| println!("{}", x.0));

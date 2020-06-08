@@ -1,7 +1,7 @@
 use crate::schema::{self, *};
 use crate::types::{drafts::*, fantasy_teams::*, leagues::*, users::*};
-use chrono::Utc;
-use diesel::dsl::{count, not, now};
+use chrono::{DateTime, Utc};
+use diesel::dsl::{count, max, not, now};
 //use diesel::expression_methods::PgRangeExpressionMethods;
 use diesel::pg::expression::dsl::any;
 use diesel::pg::upsert::excluded;
@@ -36,6 +36,8 @@ use uuid::Uuid;
 //     let deserialized: Vec<Model> = serde_json::from_value(req.data)?;
 //     Ok(diesel::insert_into(table).values(deserialized).get_results(&conn)?)
 // }
+
+sql_function!(fn upper(x: sql_types::Range<sql_types::Timestamptz>) -> sql_types::Timestamptz);
 
 pub fn get_full_leagues(
     conn: &PgConnection,
@@ -123,7 +125,6 @@ pub fn get_unchosen_draft_choices(
     // TODO this is way too heavyweight for being called every draft-choice
     // really once draft is fixed, the max_per_blah settings shouldnt be changing. Same for period timespan.
     // When fantasy-teams/users are locked in for draft, then settings should lock as well, and be pulled into memory
-    sql_function!(fn upper(x: sql_types::Range<sql_types::Timestamptz>) -> sql_types::Timestamptz);
     draft_choices::table
         .left_join(picks::table)
         .filter(picks::pick_id.is_null())
@@ -180,14 +181,14 @@ pub fn get_league_squad_size(
 pub fn get_draft_queue_for_choice(
     conn: &PgConnection,
     unchosen: DraftChoice,
-) -> Result<Vec<Uuid>, diesel::result::Error> {
+) -> Result<Option<Vec<Uuid>>, diesel::result::Error> {
     // maybe no queue been upserted. could be empty, could be missing?
     schema::team_drafts::table
         .inner_join(schema::fantasy_teams::table.inner_join(schema::draft_queues::table))
         .inner_join(schema::draft_choices::table)
         .filter(schema::team_drafts::team_draft_id.eq(unchosen.team_draft_id))
         .select(schema::draft_queues::player_ids)
-        .get_result(conn)
+        .get_result(conn).optional()
 }
 
 pub fn get_current_players(
@@ -610,4 +611,42 @@ pub fn get_period_from_draft(
         .inner_join(drafts::table)
         .filter(drafts::draft_id.eq(draft_id))
         .first(conn)
+}
+
+// #[derive(QueryableByName)]
+// pub struct{
+//     #[sql_type = "sql_types::Timestamptz"]
+//     pub inner: Uuid,
+// }
+
+// TODO restrict to specific league
+pub fn get_latest_teams(
+    conn: &PgConnection,
+) -> Result<HashMap<Uuid, Vec<Uuid>>, diesel::result::Error> {
+    let max_timespan: Option<DateTime<Utc>> = picks::table
+        .select(max(upper(picks::timespan)))
+        .first(conn)?;
+    match max_timespan {
+        None => Ok(HashMap::new()),
+        Some(maxt) => {
+            let rows: Vec<(Uuid, Uuid)> = team_drafts::table
+                .inner_join(draft_choices::table.inner_join(picks::table))
+                .select((team_drafts::fantasy_team_id, picks::player_id))
+                .filter(upper(picks::timespan).eq(maxt))
+                .load(conn)?;
+            Ok(rows
+                .into_iter()
+                .fold(HashMap::new(), |mut hm, (team_id, player_id)| {
+                    match hm.get_mut(&team_id) {
+                        Some(v) => {
+                            v.push(player_id);
+                        }
+                        None => {
+                            hm.insert(team_id, vec![player_id]);
+                        }
+                    };
+                    hm
+                }))
+        }
+    }
 }

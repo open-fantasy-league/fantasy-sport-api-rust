@@ -46,6 +46,7 @@ impl WSHandler<subscriptions::SubType, Caches> for MyWsHandler{
         let req: WSReq = serde_json::from_str(&msg)?;
         match req{
             // For hardcoding method str, reflection in rust difficult
+            WSReq::LatestTeam{message_id, data} => get_latest_teams("LatestTeam", message_id, data, conn).await,
             WSReq::SubLeague{message_id, data} => sub_leagues("SubLeagues", message_id, data, conn, ws_conns, user_ws_id).await,
             WSReq::SubDraft{message_id, data} => sub_drafts("SubDrafts", message_id, data, conn, ws_conns, user_ws_id).await,
             WSReq::SubUser{message_id, data} => sub_external_users("SubUsers", message_id, data, conn, ws_conns, user_ws_id).await,

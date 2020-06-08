@@ -549,3 +549,9 @@ pub async fn sub_external_users(method: &str, message_id: Uuid, data: SubUser, c
         }
     }
 }
+
+pub async fn get_latest_teams(method: &str, message_id: Uuid, data: Option<Uuid>, conn: PgConn) -> Result<String, BoxError>{
+    let latest_teams = db::get_latest_teams(&conn)?;
+    let resp_msg = WSMsgOut::resp(message_id, method, latest_teams);
+    serde_json::to_string(&resp_msg).map_err(|e| e.into())
+}
