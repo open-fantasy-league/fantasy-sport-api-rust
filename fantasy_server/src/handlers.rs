@@ -203,10 +203,11 @@ pub async fn insert_draft_pick(
     player_position_cache_mut: Arc<Mutex<Option<HashMap<Uuid, String>>>>, 
     player_team_cache_mut: Arc<Mutex<Option<HashMap<Uuid, Uuid>>>>
 ) -> Result<String, BoxError>{
+    // if !db::get_current_draft_choice_id(&conn, &data.fantasy_team_id)?{
+    //     return Err(Box::new(errors::InvalidInputError{description: "Pick not within valid timespan. Wait yer turn boy!"}) as BoxError)
+    // };
+    let (player_position_cache_opt, player_team_cache_opt) = get_cache_mutexs(&player_position_cache_mut, &player_team_cache_mut).await;
     let pick_ids = conn.build_transaction().run(|| {
-        // if !db::get_current_draft_choice_id(&conn, &data.fantasy_team_id)?{
-        //     return Err(Box::new(errors::InvalidInputError{description: "Pick not within valid timespan. Wait yer turn boy!"}) as BoxError)
-        // };
         let draft_choice_id = db::get_current_draft_choice_id(&conn, &data.fantasy_team_id)?;
         let period = db::get_period_from_draft(&conn, &data.draft_id)?;
         let valid_remaining_players: Vec<Uuid> = db::get_valid_picks(&conn, &data.draft_id, &period.period_id)?;
@@ -217,9 +218,11 @@ pub async fn insert_draft_pick(
         let picks: Vec<Pick> = insert!(&conn, picks::table, vec![&pick])?;
         // TODO this needs changing for when have squads and not just teams
         let active_picks = picks.iter().map(|p| ActivePick{active_pick_id: Uuid::new_v4(), pick_id: p.pick_id, timespan: p.timespan}).collect_vec();
-        let _ = db::upsert_active_picks(&conn, &active_picks)?;
+        // TODO unfudge
+        //let _ = db::upsert_active_picks(&conn, &active_picks)?;
+        let _: Vec<ActivePick> = insert!(&conn, active_picks::table, &active_picks)?;
         let pick_ids = active_picks.iter().map(|ap|ap.pick_id).collect();
-        let all_teams = db::get_all_updated_teams_player_ids(&conn, &pick_ids)?;
+        let all_teams = vec![db::VecUuid{inner: db::get_singular_updated_teams_player_ids(&conn, &pick.pick_id, &pick.timespan)?}];
         let leagues = db::get_leagues_for_picks(&conn, &pick_ids)?;
         if leagues.len() > 1{
             return Err(Box::new(errors::InvalidInputError{description: "Picks specified are from more than one league"}) as BoxError)
@@ -234,9 +237,6 @@ pub async fn insert_draft_pick(
         // This essentially forces an async func, into a synchronous context.
         // Diesel doesnt support async in transactions yet.
         // https://docs.rs/tokio/0.2.21/tokio/runtime/struct.Handle.html#method.current
-        let (player_position_cache_opt, player_team_cache_opt) = Handle::current().block_on(
-            get_cache_mutexs(&player_position_cache_mut, &player_team_cache_mut)
-        );
         match (player_position_cache_opt.as_ref(), player_team_cache_opt.as_ref()){
             (Some(ref player_position_cache), Some(ref player_team_cache)) => {
                 let max_pos_vec = db::get_max_per_position(&conn, league.league_id).unwrap();

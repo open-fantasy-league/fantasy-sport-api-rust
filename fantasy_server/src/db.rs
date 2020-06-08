@@ -210,14 +210,15 @@ pub fn upsert_active_picks(
     diesel::insert_into(active_picks::table)
         .values(data)
         // constraint unique pick-with timespan (want same on pick itself so only 1 of player in squad)
-        .on_conflict((active_picks::pick_id, active_picks::timespan))
+        //.on_conflict((active_picks::pick_id, active_picks::timespan))
+        .on_conflict(active_picks::active_pick_id)
         .do_update()
         .set(active_picks::timespan.eq(excluded(active_picks::timespan)))
         //.set(name.eq(coalesce::<sql_types::Text>(excluded(name), name)))
         .get_results(conn)
 }
 
-#[derive(QueryableByName)]
+#[derive(QueryableByName, Debug)]
 pub struct VecUuid {
     #[sql_type = "sql_types::Array<sql_types::Uuid>"]
     pub inner: Vec<Uuid>,
@@ -231,17 +232,17 @@ pub fn get_all_updated_teams(
     let sql = "
         WITH upper_and_lower AS (select t1.timespan,
         (select array_agg(t2.pick_id) 
-         from active_picks t2
+         from picks t2
          where t2.timespan @> lower(t1.timespan)) as lower_ids,
         (select array_agg(t3.pick_id) 
-         from active_picks t3
+         from picks t3
          where t3.timespan @> upper(t1.timespan)) as upper_ids
         from (
             select timespan
-            from active_picks where pick_id = ANY($1)
+            from picks where pick_id = ANY($1)
         ) as t1)
 
-        select distinct ids from 
+        select distinct ids as inner from 
         (select lower_ids as ids, lower(timespan) as ttime from upper_and_lower 
         union 
             select upper_ids as ids, upper(timespan) as ttime from upper_and_lower
@@ -256,28 +257,52 @@ pub fn get_all_updated_teams_player_ids(
     ids: &Vec<Uuid>,
 ) -> Result<Vec<VecUuid>, diesel::result::Error> {
     // https://www.reddit.com/r/PostgreSQL/comments/gjsham/query_to_list_combinations_of_band_members/
+    println!("in get_all_updated_teams_player_ids");
+    let picks: Vec<Pick> = picks::table
+        .filter(picks::pick_id.eq(any(ids)))
+        .load(conn)?;
+    picks
+        .iter()
+        .for_each(|x| println!("{}, {:?}", x.pick_id, x.timespan));
+    ids.iter().for_each(|x| println!("{}", x));
     let sql = "
         WITH upper_and_lower AS (select t1.timespan,
         (select array_agg(t2.player_id) 
-         from active_picks t2
+         from picks t2
          where t2.timespan @> lower(t1.timespan)) as lower_ids,
         (select array_agg(t3.player_id) 
-         from active_picks t3
+         from picks t3
          where t3.timespan @> upper(t1.timespan)) as upper_ids
         from (
             select timespan
-            from active_picks where pick_id = ANY($1)
+            from picks where pick_id = ANY($1)
         ) as t1)
 
-        select distinct ids from 
+        select distinct ids as inner from 
         (select lower_ids as ids, lower(timespan) as ttime from upper_and_lower 
         union 
             select upper_ids as ids, upper(timespan) as ttime from upper_and_lower
         ) as final_sub;
     ";
-    sql_query(sql)
+    let out = sql_query(sql)
         .bind::<sql_types::Array<sql_types::Uuid>, _>(ids)
-        .load::<VecUuid>(conn)
+        .load::<VecUuid>(conn);
+    println!("get_all_updated_teams_player_ids: {:?}", out);
+    out
+}
+
+pub fn get_singular_updated_teams_player_ids(
+    conn: &PgConnection,
+    id: &Uuid,
+    timespan: &DieselTimespan,
+) -> Result<Vec<Uuid>, diesel::result::Error> {
+    // https://www.reddit.com/r/PostgreSQL/comments/gjsham/query_to_list_combinations_of_band_members/
+    println!("in get_singular_updated_teams_player_ids");
+    picks::table
+        .select(picks::player_id)
+        .filter(picks::pick_id.eq(id))
+        .filter(picks::timespan.eq(timespan))
+        .load(conn)
 }
 
 pub fn get_leagues_for_picks(
@@ -425,7 +450,7 @@ pub fn get_full_drafts(
     let grouped_active_picks = active_picks.grouped_by(&picks);
     let pick_level: Vec<(Pick, Vec<ActivePick>)> =
         picks.into_iter().zip(grouped_active_picks).collect_vec();
-    let grouped_picks = pick_level.grouped_by(&fantasy_teams);
+    let grouped_picks = pick_level.grouped_by(&draft_choices);
     let draft_choices_and_picks: Vec<(DraftChoice, Vec<(Pick, Vec<ActivePick>)>)> =
         draft_choices.into_iter().zip(grouped_picks).collect();
     let grouped_draft_choices = draft_choices_and_picks.grouped_by(&team_drafts);
@@ -520,7 +545,7 @@ pub fn num_invalid_timed_picks(
     conn: &PgConnection,
     draft_choice_ids: &Vec<Uuid>,
 ) -> Result<i64, diesel::result::Error> {
-    let sql = "select count(*) from draft_choices WHERE draft_choice_id = ANY($1) AND NOT timespan @> now();";
+    let sql = "select count(*) as inner from draft_choices WHERE draft_choice_id = ANY($1) AND NOT timespan @> now();";
     sql_query(sql)
         .bind::<sql_types::Array<sql_types::Uuid>, _>(draft_choice_ids)
         .get_result::<Count>(conn)
@@ -550,7 +575,7 @@ pub fn valid_timed_picks_from_team(
     conn: &PgConnection,
     fantasy_team_ids: &Vec<Uuid>,
 ) -> Result<bool, diesel::result::Error> {
-    let sql = "select count(*) from draft_choices JOIN team_drafts USING(team_draft_id) WHERE fantasy_team_id = ANY($1) AND timespan @> now();";
+    let sql = "select count(*) as inner from draft_choices JOIN team_drafts USING(team_draft_id) WHERE fantasy_team_id = ANY($1) AND timespan @> now();";
     sql_query(sql)
         .bind::<sql_types::Array<sql_types::Uuid>, _>(fantasy_team_ids)
         .get_result::<Count>(conn)
@@ -568,7 +593,7 @@ pub fn get_current_draft_choice_id(
     conn: &PgConnection,
     fantasy_team_id: &Uuid,
 ) -> Result<Uuid, diesel::result::Error> {
-    let sql = "select draft_choice_id from draft_choices JOIN team_drafts USING(team_draft_id) WHERE fantasy_team_id = $1 AND timespan @> now());";
+    let sql = "select draft_choice_id as inner from draft_choices JOIN team_drafts USING(team_draft_id) WHERE fantasy_team_id = $1 AND timespan @> now();";
     sql_query(sql)
         .bind::<sql_types::Uuid, _>(fantasy_team_id)
         // should diesel error if there's no matches
