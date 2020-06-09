@@ -222,7 +222,7 @@ pub async fn insert_draft_pick(
         //let _ = db::upsert_active_picks(&conn, &active_picks)?;
         let _: Vec<ActivePick> = insert!(&conn, active_picks::table, &active_picks)?;
         let pick_ids = active_picks.iter().map(|ap|ap.pick_id).collect();
-        let all_teams = vec![db::VecUuid{inner: db::get_singular_updated_teams_player_ids(&conn, &pick.pick_id, &pick.timespan)?}];
+        let all_teams = vec![db::VecUuid{inner: db::get_singular_updated_teams_player_ids(&conn, &data.fantasy_team_id, &pick.timespan)?}];
         let leagues = db::get_leagues_for_picks(&conn, &pick_ids)?;
         if leagues.len() > 1{
             return Err(Box::new(errors::InvalidInputError{description: "Picks specified are from more than one league"}) as BoxError)

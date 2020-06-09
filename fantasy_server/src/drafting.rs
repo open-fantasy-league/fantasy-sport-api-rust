@@ -480,11 +480,15 @@ pub fn verify_teams(
     max_team_players_same_position: &HashMap<String, i32>,
     max_team_size: &i32
 ) -> Result<bool, BoxError>{
+    println!("all teams");
+    all_teams.iter().nth(0).map(|t|t.inner.iter().for_each(|t|println!("{}", t)));
     for team in all_teams{
         let team_len = team.inner.len() as i32;
+        println!("team_len: {}, max_team_size: {}", team_len, max_team_size);
         let (position_counts, team_counts) = position_team_counts(
             team.inner, player_position_cache, player_team_cache
         );
+        println!("position_counts: {:?}", position_counts);
         if &team_len > max_team_size {
             return Err(Box::new(errors::InvalidTeamError{description: format!("Team cannot be larger than {}", max_team_size)}) as BoxError)
         }

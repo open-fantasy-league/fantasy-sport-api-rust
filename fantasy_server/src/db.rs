@@ -188,7 +188,8 @@ pub fn get_draft_queue_for_choice(
         .inner_join(schema::draft_choices::table)
         .filter(schema::team_drafts::team_draft_id.eq(unchosen.team_draft_id))
         .select(schema::draft_queues::player_ids)
-        .get_result(conn).optional()
+        .get_result(conn)
+        .optional()
 }
 
 pub fn get_current_players(
@@ -294,16 +295,19 @@ pub fn get_all_updated_teams_player_ids(
 
 pub fn get_singular_updated_teams_player_ids(
     conn: &PgConnection,
-    id: &Uuid,
+    fantasy_team_id: &Uuid,
     timespan: &DieselTimespan,
 ) -> Result<Vec<Uuid>, diesel::result::Error> {
     // https://www.reddit.com/r/PostgreSQL/comments/gjsham/query_to_list_combinations_of_band_members/
     println!("in get_singular_updated_teams_player_ids");
-    picks::table
+    let out = picks::table
         .select(picks::player_id)
-        .filter(picks::pick_id.eq(id))
+        .filter(picks::fantasy_team_id.eq(fantasy_team_id))
         .filter(picks::timespan.eq(timespan))
-        .load(conn)
+        .load(conn)?;
+    println!("singular_updated_teams_player_ids {}", out.len());
+    println!("singular_updated_teams_player_ids: {:?}", out);
+    Ok(out)
 }
 
 pub fn get_leagues_for_picks(
@@ -594,12 +598,14 @@ pub fn get_current_draft_choice_id(
     conn: &PgConnection,
     fantasy_team_id: &Uuid,
 ) -> Result<Uuid, diesel::result::Error> {
-    let sql = "select draft_choice_id as inner from draft_choices JOIN team_drafts USING(team_draft_id) WHERE fantasy_team_id = $1 AND timespan @> now();";
+    let sql = "select draft_choices.draft_choice_id as inner from draft_choices 
+        LEFT JOIN picks using(draft_choice_id) 
+        JOIN team_drafts USING(team_draft_id) WHERE team_drafts.fantasy_team_id = $1 AND draft_choices.timespan @> now() AND pick_id IS null;";
     sql_query(sql)
         .bind::<sql_types::Uuid, _>(fantasy_team_id)
         // should diesel error if there's no matches
         .get_result::<UuidWrapper>(conn)
-        .map(|x| x.inner)
+        .map(|x| {println!("get_current_draft_choice_id: {}", x.inner); x.inner})
 }
 
 pub fn get_period_from_draft(
